@@ -1423,7 +1423,37 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         : "ContentProvider IPC (verified Discord UID; allow-listed lifecycle events only)")
                 .append('\n')
                 .append(chineseUi ? "Xposed 设置服务：" : "Xposed settings service: ")
-                .append(connectionState);
+                .append(connectionState)
+                .append("\\n\\n--- ").append(chineseUi ? "Hook 分阶段确认" : "Hook stage checkpoints")
+                .append(" ---\\n");
+        boolean providerConnected = transportPingAt > 0L;
+        appendDiagnosticStage(display, chineseUi ? "模块进入进程" : "Module entry loaded",
+                "module lifecycle entered", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "Discord 包生命周期" : "Discord package lifecycle",
+                "Discord package lifecycle entered", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "Application.attach Hook 安装" : "Application.attach Hook installed",
+                "Application.attach bootstrap hook installed", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "Application.attach Hook 触发" : "Application.attach Hook triggered",
+                "Discord Application.attach hook triggered", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "Discord 版本配置识别" : "Discord version profile selected",
+                "Discord hook profile selected", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "业务 Hook 安装并启用" : "Required Hooks installed and runtime activated",
+                "Discord required hooks installed and runtime activated", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "Activity.onResume Hook 触发" : "Activity.onResume Hook triggered",
+                "Discord Activity.onResume hook triggered", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "聊天输入 Activity 进入" : "Chat input Activity reached",
+                "Discord chat input Activity attach entered", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "输入框获得焦点" : "Chat input editor focused",
+                "Discord chat input editor focused", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "发送控件识别" : "Native send control found",
+                "Discord chat input send control found", logs, providerConnected);
+        appendDiagnosticStage(display, chineseUi ? "翻译按钮注入" : "Translation button injected",
+                "Discord translation button attached", logs, providerConnected);
+        if (!providerConnected) {
+            display.append(chineseUi
+                    ? "\\nProvider 尚未完成握手：以上阶段无法通过此页面读取。请在 LSPosed 管理器的 Xposed 日志中搜索 DiscordAutoTranslate，查看模块入口、包生命周期及 Application.attach Hook 安装记录。\\n"
+                    : "\\nThe provider handshake is not confirmed, so this page cannot read the stages above. Check the LSPosed Xposed log for DiscordAutoTranslate to verify module entry, package lifecycle, and Application.attach Hook installation.\\n");
+        }
 
         final String displayed = display.toString();
         TextView content = new TextView(this);
@@ -1448,6 +1478,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .setNeutralButton(chineseUi ? "刷新" : "Refresh", (d, which) -> showProjectLogs())
                 .create();
         dialog.show();
+    }
+
+    private void appendDiagnosticStage(StringBuilder display, String label, String event,
+                                       String logs, boolean providerConnected) {
+        boolean confirmed = logs.contains("DiscordAutoTranslate: " + event);
+        display.append(label).append(chineseUi ? "：" : ": ");
+        if (confirmed) {
+            display.append(chineseUi ? "已确认" : "CONFIRMED");
+        } else {
+            display.append(!providerConnected
+                    ? (chineseUi ? "无法读取（IPC 未握手）" : "UNAVAILABLE (IPC not connected)")
+                    : (chineseUi ? "尚未记录" : "NOT RECORDED"));
+        }
+        display.append('\\n');
     }
 
     private void updateStatus(String status) {
