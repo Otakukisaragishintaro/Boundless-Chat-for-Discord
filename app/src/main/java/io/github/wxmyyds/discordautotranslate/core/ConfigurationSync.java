@@ -14,7 +14,7 @@ public final class ConfigurationSync {
             Config.KEY_ENABLED, Config.KEY_LOGGING_ENABLED, Config.KEY_TRANSLATION_SCOPE, Config.KEY_API_URL,
             Config.KEY_API_KEY, Config.KEY_MODEL,
             Config.KEY_TARGET_LANG, Config.KEY_SEND_TARGET_LANG,
-            Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT,
+            Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT, Config.KEY_SEND_SYSTEM_PROMPT,
             Config.KEY_PROTOCOL, Config.KEY_STREAMING, Config.KEY_TIMEOUT_MS,
             Config.KEY_MAX_CONCURRENCY));
     private static final String KEY_LOCAL_INITIALIZED = "settings_initialized";
@@ -226,6 +226,8 @@ public final class ConfigurationSync {
                     Config.DEF_EXTRA_HEADERS);
             putUnlessDefault(raw, Config.KEY_SYSTEM_PROMPT, snapshot.systemPrompt,
                     Config.DEF_SYSTEM_PROMPT);
+            putUnlessDefault(raw, Config.KEY_SEND_SYSTEM_PROMPT, snapshot.sendSystemPrompt,
+                    Config.DEF_SEND_SYSTEM_PROMPT);
             putUnlessDefault(raw, Config.KEY_TIMEOUT_MS, snapshot.timeoutMs, Config.DEF_TIMEOUT_MS);
             putUnlessDefault(raw, Config.KEY_MAX_CONCURRENCY, snapshot.maxConcurrency,
                     Config.DEF_MAX_CONCURRENCY);
