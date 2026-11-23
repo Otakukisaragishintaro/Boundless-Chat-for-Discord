@@ -1344,10 +1344,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 && source.contains(Config.KEY_LOGGING_ENABLED);
         boolean remoteConfigLoggingEnabled = source != null
                 && source.getBoolean(Config.KEY_LOGGING_ENABLED, false);
-        boolean moduleLoggingEnabled = source != null
-                && source.getBoolean("__project_log_module_enabled", false);
         long configuredAt = source == null ? 0L
                 : source.getLong("__project_log_configured_at", 0L);
+        // A missing acknowledgement is UNKNOWN, not OFF. The Discord process may
+        // have failed before remote preferences became available, so false is not proof.
+        boolean moduleLoggingEnabled = configuredAt > 0L && source != null
+                && source.getBoolean("__project_log_module_enabled", false);
         String storageError = source == null ? "" : source.getString("__project_log_storage_error", "");
         String logs = source == null ? "" : source.getString("__project_log_buffer_v1", "");
         if (logs == null) logs = "";
@@ -1361,11 +1363,19 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .append(!remoteConfigHasLoggingSetting ? "MISSING"
                         : remoteConfigLoggingEnabled ? "ON" : "OFF").append('\n')
                 .append(chineseUi ? "Discord 进程日志开关：" : "Discord process logging: ")
-                .append(moduleLoggingEnabled ? "ON" : "OFF").append('\n')
+                .append(configuredAt == 0L
+                        ? (chineseUi ? "UNKNOWN（未收到 Discord 进程回执，不能判定 OFF）"
+                                : "UNKNOWN (no Discord-process acknowledgement; OFF cannot be inferred)")
+                        : moduleLoggingEnabled ? "ON" : "OFF").append('\n')
                 .append(chineseUi ? "模块配置时间：" : "Module config time: ")
-                .append(configuredAt == 0L ? (chineseUi ? "尚未收到配置" : "not received")
+                .append(configuredAt == 0L ? (chineseUi ? "尚未收到 Discord 进程回执" : "no Discord-process acknowledgement")
                         : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                                 .format(new java.util.Date(configuredAt))).append('\n')
+                .append(chineseUi ? "独立诊断通道：" : "Independent diagnostics: ")
+                .append(chineseUi
+                        ? "Discord 进程会直接写入 Android Logcat（标签：DiscordAutoTranslate），不依赖远程设置存储。"
+                        : "Discord writes bootstrap checkpoints directly to Android Logcat (tag: DiscordAutoTranslate), independent of remote preferences.")
+                .append('\n')
                 .append(chineseUi ? "设置连接：" : "Settings connection: ")
                 .append(connectionState);
         if (storageError != null && !storageError.trim().isEmpty()) {
