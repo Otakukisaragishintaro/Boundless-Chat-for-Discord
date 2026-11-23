@@ -9,6 +9,8 @@ import android.view.View;
 import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.widget.EditText;
 import android.widget.FrameLayout;
 import android.widget.TextView;
@@ -47,6 +49,8 @@ public final class ChatInputTranslateButton {
         final ViewTreeObserver.OnGlobalFocusChangeListener focusListener;
         final ViewTreeObserver.OnGlobalLayoutListener layoutListener;
         ButtonBinding binding;
+        EditText pendingEditor;
+        TextWatcher pendingTextWatcher;
 
         Registration(View decor, ViewTreeObserver observer,
                      ViewTreeObserver.OnGlobalFocusChangeListener focusListener,
@@ -205,6 +209,7 @@ public final class ChatInputTranslateButton {
 
     private static void updateFocusedEditor(Activity activity, Registration registration, View focused) {
         if (!(focused instanceof EditText)) {
+            clearPendingEditorWatcher(registration);
             if (focused != null) {
                 ProjectLog.infoOnce("chat-input-non-edittext-focus",
                         "chat input focus target is not EditText class="
@@ -217,6 +222,7 @@ public final class ChatInputTranslateButton {
             return;
         }
         EditText editor = (EditText) focused;
+        ensurePendingEditorWatcher(activity, registration, editor);
         ProjectLog.infoOnce("diagnostic.chatInputEditorFocused",
                 "Discord chat input editor focused");
         if (registration.binding != null && registration.binding.editor == editor
@@ -284,6 +290,7 @@ public final class ChatInputTranslateButton {
             ButtonBinding binding = new ButtonBinding(activity, editor, overlay,
                     candidate.sendView, button);
             registration.binding = binding;
+            clearPendingEditorWatcher(registration);
             button.setOnClickListener(view -> startTranslation(binding));
             ProjectLog.infoOnce("diagnostic.translationButtonAttached",
                     "Discord translation button attached");
@@ -321,6 +328,7 @@ public final class ChatInputTranslateButton {
     }
 
     private static void removeBinding(Registration registration) {
+        clearPendingEditorWatcher(registration);
         ButtonBinding binding = registration.binding;
         registration.binding = null;
         if (binding == null) return;
@@ -335,7 +343,7 @@ public final class ChatInputTranslateButton {
 
     /** Position the action in the window overlay, independently of Discord's composer layout. */
     private static void positionButton(ButtonBinding binding) {
-        if (binding == null || !isComposerVisible(binding.editor)
+        if (binding == null || !isComposerUsable(binding.editor)
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
         // Keep the last stable position during transient IME/layout frames. Using
         // the editor as a fallback anchor caused the action to jump across the screen.
@@ -382,8 +390,7 @@ public final class ChatInputTranslateButton {
 
     private static void startTranslation(ButtonBinding binding) {
         if (binding == null || binding.inFlight || !binding.requestValid.get()
-                || !binding.editor.isAttachedToWindow()
-                || !binding.sendView.isAttachedToWindow()) return;
+                || !isComposerUsable(binding.editor)) return;
 
         String source = binding.editor.getText() == null
                 ? "" : binding.editor.getText().toString();
@@ -445,10 +452,28 @@ public final class ChatInputTranslateButton {
                         // Let React Native's TextWatcher/event bridge receive the new text first.
                         binding.editor.postDelayed(() -> {
                             if (!binding.requestValid.get()
-                                    || !binding.editor.isAttachedToWindow()
-                                    || !binding.sendView.isAttachedToWindow()
+                                    || !isComposerUsable(binding.editor)
                                     || !result.contentEquals(binding.editor.getText())) {
                                 return;
+                            }
+                            // Discord may recreate or detach its native send view while
+                            // the IME is visible. Resolve the current control at send time.
+                            Candidate currentCandidate = findSendCandidate(binding.editor);
+                            if (currentCandidate == null
+                                    || !currentCandidate.sendView.isAttachedToWindow()) {
+                                binding.editor.setText(source);
+                                binding.editor.setSelection(source.length());
+                                Toast.makeText(binding.activity,
+                                        "已翻译，但未找到当前发送按钮；已恢复原文",
+                                        Toast.LENGTH_SHORT).show();
+                                return;
+                            }
+                            if (binding.sendView != currentCandidate.sendView) {
+                                binding.sendView.removeOnLayoutChangeListener(
+                                        binding.positionListener);
+                                binding.sendView = currentCandidate.sendView;
+                                binding.sendView.addOnLayoutChangeListener(
+                                        binding.positionListener);
                             }
                             boolean sent = false;
                             try {
@@ -561,15 +586,47 @@ public final class ChatInputTranslateButton {
                 || normalized.equals("отправить");
     }
 
+    /** A usable editor may be temporarily clipped while Android is resizing for the IME. */
+    private static boolean isComposerUsable(EditText editor) {
+        return editor != null && editor.isAttachedToWindow()
+                && editor.getVisibility() == View.VISIBLE && editor.isShown()
+                && editor.getWidth() > 0 && editor.getHeight() > 0;
+    }
+
+    /** Strict visibility check is reserved for deciding whether navigation left the composer. */
     private static boolean isComposerVisible(EditText editor) {
-        if (editor == null || !editor.isAttachedToWindow()
-                || editor.getVisibility() != View.VISIBLE || !editor.isShown()
-                || editor.getWidth() <= 0 || editor.getHeight() <= 0) {
-            return false;
-        }
+        if (!isComposerUsable(editor)) return false;
         Rect visible = new Rect();
         return editor.getGlobalVisibleRect(visible)
                 && visible.width() > 0 && visible.height() > 0;
+    }
+
+    private static void ensurePendingEditorWatcher(Activity activity,
+                                                   Registration registration,
+                                                   EditText editor) {
+        if (registration.pendingEditor == editor
+                && registration.pendingTextWatcher != null) return;
+        clearPendingEditorWatcher(registration);
+        registration.pendingEditor = editor;
+        registration.pendingTextWatcher = new TextWatcher() {
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
+            @Override public void afterTextChanged(Editable editable) {
+                if (registration.binding == null && editor.hasFocus()
+                        && isComposerUsable(editor)) {
+                    updateFocusedEditor(activity, registration, editor);
+                }
+            }
+        };
+        editor.addTextChangedListener(registration.pendingTextWatcher);
+    }
+
+    private static void clearPendingEditorWatcher(Registration registration) {
+        if (registration == null || registration.pendingEditor == null
+                || registration.pendingTextWatcher == null) return;
+        registration.pendingEditor.removeTextChangedListener(registration.pendingTextWatcher);
+        registration.pendingEditor = null;
+        registration.pendingTextWatcher = null;
     }
 
     private static Rect boundsOnScreen(View view) {
