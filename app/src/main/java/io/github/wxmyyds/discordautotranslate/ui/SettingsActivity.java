@@ -1372,16 +1372,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             display.append(logs);
         } else if (transportPingAt > 0L || appendAt > 0L || configureAt > 0L) {
             display.append(chineseUi
-                    ? "Provider 已收到 Discord 进程请求，但目前没有可显示的白名单诊断日志。请检查下面的调用状态。\\n\\n"
-                    : "The provider received a Discord-process request, but no allow-listed log is available. Check the call status below.\\n\\n");
+                    ? "Provider 已收到 Discord 进程请求，但目前没有可显示的白名单诊断日志。请检查下面的调用状态。\n\n"
+                    : "The provider received a Discord-process request, but no allow-listed log is available. Check the call status below.\n\n");
         } else if (rejectAt > 0L) {
             display.append(chineseUi
-                    ? "Provider 收到过请求，但调用方身份校验未通过。请检查下面的拒绝记录。\\n\\n"
-                    : "The provider received a request but rejected caller authentication. Check the rejection record below.\\n\\n");
+                    ? "Provider 收到过请求，但调用方身份校验未通过。请检查下面的拒绝记录。\n\n"
+                    : "The provider received a request but rejected caller authentication. Check the rejection record below.\n\n");
         } else {
             display.append(chineseUi
-                    ? "模块端尚未观察到 Discord 诊断 Provider 的任何调用。此状态不能单独判断 Hook 是否执行；请查看下面的分阶段状态。\\n\\n"
-                    : "No diagnostic-provider call has been observed by the module. This alone cannot determine whether the hook ran; inspect the stage details below.\\n\\n");
+                    ? "模块端尚未观察到 Discord 诊断 Provider 的任何调用。此状态不能单独判断 Hook 是否执行；请查看下面的分阶段状态。\n\n"
+                    : "No diagnostic-provider call has been observed by the module. This alone cannot determine whether the hook ran; inspect the stage details below.\n\n");
         }
         display.append("\n--- ").append(chineseUi ? "诊断状态" : "Diagnostic status").append(" ---\n")
                 .append(chineseUi ? "设置页日志开关：" : "Settings toggle: ")
