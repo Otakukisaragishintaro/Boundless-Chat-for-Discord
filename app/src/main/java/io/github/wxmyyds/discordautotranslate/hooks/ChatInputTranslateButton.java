@@ -382,7 +382,7 @@ public final class ChatInputTranslateButton {
         }
     }
 
-    /** Position each translation action beside Discord's native send control.
+    /** Position each translation action above Discord's native send control.
      *
      * The editor is only used to identify the composer and perform translation.
      * It is deliberately NOT a positioning anchor: its measured width/scroll state
@@ -768,9 +768,7 @@ public final class ChatInputTranslateButton {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
             @Override public void afterTextChanged(Editable editable) {
-                if (registration.bindings.isEmpty() && editor.hasFocus()
-                        && isComposerUsable(editor)) {
-                    cancelSendCandidateRetry(registration);
+                if (editor.hasFocus() && isComposerUsable(editor)) {
                     updateFocusedEditor(activity, registration, editor);
                 }
             }
