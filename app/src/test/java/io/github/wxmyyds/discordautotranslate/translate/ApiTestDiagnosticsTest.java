@@ -686,7 +686,7 @@ public class ApiTestDiagnosticsTest {
         assertEquals(reason, result.failure.reason);
         assertEquals(status, result.failure.httpStatus);
         assertEquals(exceptionType, result.failure.exceptionType);
-        // Inspect retained state: only upstreamErrorBody may carry content; no exception message/cause.
+        // Inspect retained state: detail is reserved for safe validation reasons; no cause is retained.
         Set<String> fields = new HashSet<>();
         for (Field field : ApiTester.Failure.class.getDeclaredFields()) {
             if (Modifier.isStatic(field.getModifiers())) continue;
@@ -705,7 +705,7 @@ public class ApiTestDiagnosticsTest {
             fields.add(field.getName());
         }
         assertEquals(new HashSet<>(Arrays.asList("kind", "reason", "httpStatus", "exceptionType",
-                "upstreamErrorBody")), fields);
+                "upstreamErrorBody", "detail")), fields);
     }
 
     private static void assertResponseFailure(String protocol, boolean streaming, String response,
