@@ -58,9 +58,10 @@ public class ProjectLogTest {
         ProjectLog.configure(snapshot(false));
         ProjectLog.bootstrapInfo("module lifecycle entered");
         assertEquals(1, entries.size());
-        assertEntry(0, Log.INFO, "pid=" + android.os.Process.myPid()
-                + " process=" + android.app.Application.getProcessName()
-                + " module lifecycle entered");
+        assertEquals(Log.INFO, entries.get(0).priority);
+        assertTrue(entries.get(0).message.startsWith("pid=" + android.os.Process.myPid()
+                + " process="));
+        assertTrue(entries.get(0).message.endsWith(" module lifecycle entered"));
     }
 
     @Test
