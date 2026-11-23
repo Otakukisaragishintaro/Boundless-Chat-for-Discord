@@ -27,13 +27,13 @@
 
 工作流将密钥写入 runner 临时目录，通过 `KEYSTORE_PROPERTIES` 提供给 `app/build.gradle`。Debug/Release 使用同一证书；缺配置明确失败，不产生替代签名。密钥及 properties 不提交、不输出，原始 keystore 应独立离线备份。旧版本覆盖升级要求包名和签名一致。
 
-发布版本名：stable 填 `X.Y.Z`，须高于最近正式版；prerelease 填 `X.Y.Z-rc.N`，基础版本按工作流校验。versionCode 从全部发布 tag 的高水位递增，tag 为 `<versionCode>-<versionName>`。版本修改只记录到 tag 引用的发布提交，不改写 main，不维护长期发布分支。发布前将来源分支解析并固定到完整 commit SHA，拒绝 tag 作为来源；stable 同步到 `Xposed-Modules-Repo/io.github.wxmyyds.discordautotranslate`，仅创建新发布，已存在或同步出错时明确失败、不覆盖；prerelease 仅发布到源码仓库。运行发布会创建外部产物，须遵循当前用户授权范围。
+发布版本名：stable 填 `X.Y.Z`，须高于最近正式版；prerelease 填 `X.Y.Z-rc.N`，基础版本按工作流校验。versionCode 从全部发布 tag 的高水位递增，tag 为 `<versionCode>-<versionName>`。版本修改只记录到 tag 引用的发布提交，不改写 main，不维护长期发布分支。发布前将来源分支解析并固定到完整 commit SHA，拒绝 tag 作为来源。stable 与 prerelease 均只发布到本项目源码仓库，不会向原作者的 LSPosed 模块仓库写入或覆盖发布。运行发布会创建外部产物，须遵循当前用户授权范围。
 
 ## 更新日志
 
 [docs/releases/Update-Log.md](releases/Update-Log.md) 是唯一的发布变更摘要来源。每次准备发布时只更新这个文件，**替换为本次面向用户的变化及必要注意事项**，不追加历史版本、内部提交列表或构建信息。使用二级及以下标题，不写版本主标题；版本在手动发布时填写，标题及版本号、来源 SHA、构建链接由工作流自动附加。
 
-stable 读取 `main` 中的文件，prerelease 读取所选分支/SHA 中的文件；正式版条目必须先经 PR 合入 `main`。两种发布模式共用同一校验/生成脚本；正式版同步到 LSPosed 时使用同一份正文。文件缺失、非普通文件、无有效内容、存在 TODO/TBD 或“待补充/待填写”、包含一级标题或下划线式标题时直接失败，禁止回退到提交、PR 或其他文件。旧来源若没有该文件或脚本，也不能发布。
+stable 读取 `main` 中的文件，prerelease 读取所选分支/SHA 中的文件；正式版条目必须先经 PR 合入 `main`。两种发布模式共用同一校验/生成脚本；stable 与 prerelease 均使用同一套发布说明生成流程。文件缺失、非普通文件、无有效内容、存在 TODO/TBD 或“待补充/待填写”、包含一级标题或下划线式标题时直接失败，禁止回退到提交、PR 或其他文件。旧来源若没有该文件或脚本，也不能发布。
 
 `Check release notes` 工作流在 GitHub Actions 中测试共享脚本，并上传 stable/prerelease 两份 Markdown 预览，内容来自当前来源的同一个更新日志；示例版本及 versionCode 仅验证格式，不预占版本、不创建 tag/Release、不同步 LSPosed。实际发布的正文也会在打包及推 tag 前写入步骤摘要。**该操作需要通过 GitHub Actions 执行。** 校验不能判断说明是否过时或描述准确，发版前仍需人工确认内容与所选源码一致；历史说明由已有 GitHub Releases 保留。
 
