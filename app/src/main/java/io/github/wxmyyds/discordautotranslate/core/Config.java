@@ -26,6 +26,15 @@ public final class Config {
     // ---- 翻译范围（默认策略、服务器及频道规则）----
     public static final String KEY_TRANSLATION_SCOPE = "translation_scope";
 
+    // ---- Optional local translation cache ----
+    public static final String KEY_CACHE_ENABLED = "translation_cache_enabled";
+    public static final boolean DEF_CACHE_ENABLED = false;
+    public static final String KEY_CACHE_LIMIT = "translation_cache_limit";
+    public static final int DEF_CACHE_LIMIT = 100000;
+    public static final int MAX_CACHE_LIMIT = 1000000;
+    /** One-shot command toggled by the settings UI; deliberately excluded from config sync. */
+    public static final String KEY_CACHE_CLEAR_REQUEST = "translation_cache_clear_request";
+
     // ---- 项目日志（不参与翻译配置版本）----
     public static final String KEY_LOGGING_ENABLED = "logging_enabled";
     public static final boolean DEF_LOGGING_ENABLED = false;
@@ -165,6 +174,8 @@ public final class Config {
     public static class Snapshot {
         public final boolean enabled;
         public final boolean loggingEnabled;
+        public final boolean cacheEnabled;
+        public final int cacheLimit;
         public final TranslationScope translationScope;
         public final String apiUrl;
         public final String apiKey;
@@ -197,6 +208,8 @@ public final class Config {
         Snapshot(SharedPreferences p) {
             enabled = readBoolean(p, KEY_ENABLED, DEF_ENABLED);
             loggingEnabled = readBoolean(p, KEY_LOGGING_ENABLED, DEF_LOGGING_ENABLED);
+            cacheEnabled = readBoolean(p, KEY_CACHE_ENABLED, DEF_CACHE_ENABLED);
+            cacheLimit = boundedCacheLimit(p);
             translationScope = p.contains(KEY_TRANSLATION_SCOPE)
                     ? TranslationScope.parse(p.getString(KEY_TRANSLATION_SCOPE, null)) : TranslationScope.ALL;
             apiUrl = str(p, KEY_API_URL, DEF_API_URL);
@@ -233,6 +246,8 @@ public final class Config {
         private Snapshot(String error) {
             enabled = DEF_ENABLED;
             loggingEnabled = DEF_LOGGING_ENABLED;
+            cacheEnabled = DEF_CACHE_ENABLED;
+            cacheLimit = DEF_CACHE_LIMIT;
             translationScope = TranslationScope.ALL;
             apiUrl = DEF_API_URL;
             apiKey = DEF_API_KEY;
@@ -307,6 +322,15 @@ public final class Config {
             return value;
         }
 
+        private static int boundedCacheLimit(SharedPreferences p) {
+            if (!p.contains(KEY_CACHE_LIMIT)) return DEF_CACHE_LIMIT;
+            int value = p.getInt(KEY_CACHE_LIMIT, DEF_CACHE_LIMIT);
+            if (value != 100000 && value != 1000000) {
+                throw new IllegalArgumentException(KEY_CACHE_LIMIT + " 无效");
+            }
+            return Math.min(value, MAX_CACHE_LIMIT);
+        }
+
         private static int boundedPercent(SharedPreferences p, String key, int def) {
             if (!p.contains(key)) return def;
             int value = p.getInt(key, def);
@@ -368,6 +392,8 @@ public final class Config {
         private Snapshot(Snapshot source, @Nullable OutboundButtonConfig outboundButton) {
             enabled = source.enabled;
             loggingEnabled = source.loggingEnabled;
+            cacheEnabled = source.cacheEnabled;
+            cacheLimit = source.cacheLimit;
             translationScope = source.translationScope;
             apiUrl = source.apiUrl;
             apiKey = source.apiKey;
