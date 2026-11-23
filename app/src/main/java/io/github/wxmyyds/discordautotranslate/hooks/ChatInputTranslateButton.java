@@ -269,7 +269,10 @@ public final class ChatInputTranslateButton {
             }
             if (refreshedSendView == null) {
                 ProjectLog.infoOnce("diagnostic.chatInputSendControlTemporarilyMissing",
-                        "Discord native send control temporarily unavailable; translation buttons are hidden until it is available");
+                        "Discord native send control temporarily unavailable; using stable composer fallback anchor");
+                scheduleSendCandidateRetry(activity, registration, editor);
+            } else {
+                cancelSendCandidateRetry(registration);
             }
             reportHierarchyIfEnabled(editor);
             return;
@@ -281,9 +284,9 @@ public final class ChatInputTranslateButton {
             ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
                     "Discord chat input send control found");
         } else {
-            // The native send control is normally hidden while the composer is empty.
-            // Attach the bindings so they can follow the native control when Discord
-            // creates it. positionButton keeps the injected actions hidden until then.
+            // Attach immediately on editor focus. If Discord has not created its native
+            // send action yet, positionButton uses the stable composer container instead
+            // of waiting for an IME hide/show cycle.
             ProjectLog.infoOnce("diagnostic.chatInputFallbackAnchor",
                     "Discord translation button binding attached; waiting for native send control anchor");
         }
@@ -341,8 +344,9 @@ public final class ChatInputTranslateButton {
                     }
                 });
             }
-            cancelSendCandidateRetry(registration);
-            clearPendingEditorWatcher(registration);
+            scheduleSendCandidateRetry(activity, registration, editor);
+            // Keep the text watcher active for the lifetime of the binding. Discord can
+            // replace its native send control as the composer text changes.
             ProjectLog.infoOnce("diagnostic.translationButtonAttached",
                     "Discord outbound translation buttons attached count=" + outboundButtons.size());
             reportHierarchyIfEnabled(editor);
@@ -389,8 +393,7 @@ public final class ChatInputTranslateButton {
     private static void positionButton(ButtonBinding binding) {
         if (binding == null) return;
         if (!isComposerUsable(binding.editor)
-                || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0
-                || !isUsableSendAnchor(binding.sendView)) {
+                || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) {
             binding.positioned = false;
             if (binding.button.getVisibility() != View.INVISIBLE) {
                 binding.button.setVisibility(View.INVISIBLE);
@@ -398,10 +401,8 @@ public final class ChatInputTranslateButton {
             return;
         }
 
-        Rect sendScreen = boundsOnScreen(binding.sendView);
         Rect overlayScreen = boundsOnScreen(binding.overlay);
-        if (sendScreen.width() <= 0 || sendScreen.height() <= 0
-                || overlayScreen.width() <= 0 || overlayScreen.height() <= 0) {
+        if (overlayScreen.width() <= 0 || overlayScreen.height() <= 0) {
             binding.positioned = false;
             binding.button.setVisibility(View.INVISIBLE);
             return;
@@ -411,14 +412,35 @@ public final class ChatInputTranslateButton {
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
         int stackOffset = binding.buttonIndex * (height + dp(binding.activity, 4));
-
-        // Place the translation action immediately to the left of Discord's send
-        // control. Align the first action vertically to the native control's center.
-        int left = sendScreen.left - margin - width - overlayScreen.left;
-        int top = sendScreen.top + (sendScreen.height() - height) / 2
-                - stackOffset - overlayScreen.top;
-        if (top < 0) {
-            top = sendScreen.bottom + margin + stackOffset - overlayScreen.top;
+        int left;
+        int top;
+        if (isUsableSendAnchor(binding.sendView)) {
+            Rect sendScreen = boundsOnScreen(binding.sendView);
+            if (sendScreen.width() <= 0 || sendScreen.height() <= 0) {
+                binding.positioned = false;
+                binding.button.setVisibility(View.INVISIBLE);
+                return;
+            }
+            // Stack each translation action ABOVE Discord's native send button.
+            left = sendScreen.centerX() - width / 2 - overlayScreen.left;
+            top = sendScreen.top - margin - height - stackOffset - overlayScreen.top;
+            if (top < 0) {
+                top = sendScreen.bottom + margin + stackOffset - overlayScreen.top;
+            }
+        } else {
+            // No native send view yet (typically an empty composer): anchor to the
+            // composer container's right edge, never to the caret or its scroll offset.
+            View fallback = findComposerFallbackAnchor(binding.editor);
+            if (fallback == null || !fallback.isAttachedToWindow()
+                    || !fallback.isShown() || fallback.getWidth() <= 0) {
+                binding.positioned = false;
+                binding.button.setVisibility(View.INVISIBLE);
+                return;
+            }
+            Rect fallbackScreen = boundsOnScreen(fallback);
+            Rect editorScreen = boundsOnScreen(binding.editor);
+            left = fallbackScreen.right - width - margin - overlayScreen.left;
+            top = editorScreen.top - margin - height - stackOffset - overlayScreen.top;
         }
 
         int maxLeft = Math.max(0, binding.overlay.getWidth() - width);
@@ -453,6 +475,29 @@ public final class ChatInputTranslateButton {
         return sendView != null && sendView.isAttachedToWindow()
                 && sendView.getVisibility() == View.VISIBLE && sendView.isShown()
                 && sendView.getWidth() > 0 && sendView.getHeight() > 0;
+    }
+
+    /** Find the nearest stable layout container around the editor, not the moving caret. */
+    private static View findComposerFallbackAnchor(EditText editor) {
+        if (editor == null) return null;
+        Rect editorBounds = boundsOnScreen(editor);
+        ViewParent parent = editor.getParent();
+        for (int depth = 0; depth < 6 && parent instanceof View; depth++) {
+            View candidate = (View) parent;
+            if (candidate instanceof ViewGroup && candidate.isAttachedToWindow()
+                    && candidate.isShown() && candidate.getWidth() >= editor.getWidth()
+                    && candidate.getHeight() > 0) {
+                Rect bounds = boundsOnScreen(candidate);
+                if (bounds.right >= editorBounds.right
+                        && bounds.left <= editorBounds.left
+                        && bounds.bottom >= editorBounds.top
+                        && bounds.top <= editorBounds.bottom) {
+                    return candidate;
+                }
+            }
+            parent = candidate.getParent();
+        }
+        return editor;
     }
 
     private static void startTranslation(ButtonBinding binding) {
@@ -682,12 +727,18 @@ public final class ChatInputTranslateButton {
             @Override public void run() {
                 if (registration.retryEditor != editor) return;
                 registration.retryRunnable = null;
-                if (!registration.bindings.isEmpty() || !editor.hasFocus()
-                        || !isComposerUsable(editor)) {
+                if (!editor.hasFocus() || !isComposerUsable(editor)) {
                     cancelSendCandidateRetry(registration);
                     return;
                 }
                 updateFocusedEditor(activity, registration, editor);
+                if (!registration.bindings.isEmpty()
+                        && registration.bindings.get(0).sendView != null
+                        && isUsableSendAnchor(registration.bindings.get(0).sendView)) {
+                    cancelSendCandidateRetry(registration);
+                } else if (registration.retryCount < MAX_SEND_CANDIDATE_RETRIES) {
+                    scheduleSendCandidateRetry(activity, registration, editor);
+                }
             }
         };
         registration.retryRunnable = retry;
