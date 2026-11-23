@@ -620,7 +620,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 markSpinnerDirty();
-                if (!loadingUi && hasUnsavedChanges) save();
+                if (!loadingUi && hasUnsavedChanges) saveOptionsOnly();
             }
 
             @Override
@@ -817,7 +817,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstLanguage));
                     updateOutboundButtonsSummary();
                     markDirty();
-                    save();
+                    saveOptionsOnly();
                 });
         outboundButtonsDialog.setOnDismissListener(dialog -> outboundButtonsDialog = null);
     }
