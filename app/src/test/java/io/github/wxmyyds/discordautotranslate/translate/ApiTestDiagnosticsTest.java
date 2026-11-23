@@ -279,9 +279,17 @@ public class ApiTestDiagnosticsTest {
                     });
                     assertSuccess(harness.call(ApiTester.TestKind.CONNECTION, PRIVATE_INPUT),
                             ApiTester.TestKind.CONNECTION, null);
-                    assertFailure(harness.call(ApiTester.TestKind.TRANSLATION, ApiTester.DEFAULT_TEST_TEXT),
-                            ApiTester.TestKind.TRANSLATION, TranslationException.Kind.PARSE,
-                            TranslationException.Reason.TRANSLATION_INVALID, 200, "TranslationException");
+                    if ("<translate>你好</translate>".equals(text)) {
+                        // One exact outer wrapper pair is normalized before validation.
+                        assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
+                                ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, null);
+                    } else {
+                        assertFailure(harness.call(ApiTester.TestKind.TRANSLATION,
+                                ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION,
+                                TranslationException.Kind.PARSE,
+                                TranslationException.Reason.TRANSLATION_INVALID, 200,
+                                "TranslationException");
+                    }
                     harness.assertReleased(2);
                     JSONObject connectionBody = new JSONObject(connections.get(0).output.toString("UTF-8"));
                     JSONObject translationBody = new JSONObject(connections.get(1).output.toString("UTF-8"));
