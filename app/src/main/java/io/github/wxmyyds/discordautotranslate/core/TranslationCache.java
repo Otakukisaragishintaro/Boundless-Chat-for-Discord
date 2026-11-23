@@ -103,7 +103,10 @@ public final class TranslationCache {
             touch.put("last_access", System.currentTimeMillis());
             db.update(TABLE, touch, "cache_key=?", new String[]{key});
             return cached;
-        } catch (Throwable ignored) {
+        } catch (Throwable failure) {
+            ProjectLog.warnOnce("cache.read.failed",
+                    "local translation cache read failed errorClass="
+                            + failure.getClass().getSimpleName());
             // A damaged/unavailable cache must never prevent a normal API translation.
             return null;
         } finally {
@@ -124,9 +127,17 @@ public final class TranslationCache {
     }
 
     /** 设置跨进程缓存数量监听；仅发布计数，不暴露原文或译文。 */
-    public void setCountListener(@Nullable java.util.function.IntConsumer listener) {
+    public synchronized void setCountListener(@Nullable java.util.function.IntConsumer listener) {
         countListener = listener;
-        if (listener != null) listener.accept(getEntryCount());
+        if (listener != null) {
+            try {
+                listener.accept(getEntryCount());
+                ProjectLog.info("local translation cache count listener initialized");
+            } catch (Throwable failure) {
+                ProjectLog.warn("local translation cache count listener failed errorClass="
+                        + failure.getClass().getSimpleName());
+            }
+        }
     }
 
     /** 返回持久化译文条目数，供设置页展示。 */
@@ -166,7 +177,10 @@ public final class TranslationCache {
             db.execSQL("DELETE FROM " + TABLE
                     + " WHERE cache_key NOT IN (SELECT cache_key FROM " + TABLE
                     + " ORDER BY last_access DESC LIMIT " + maxDiskEntries + ")");
-        } catch (Throwable ignored) {
+        } catch (Throwable failure) {
+            ProjectLog.warnOnce("cache.prune.failed",
+                    "local translation cache prune failed errorClass="
+                            + failure.getClass().getSimpleName());
             // Capacity maintenance must not interrupt translation.
         }
     }
@@ -177,7 +191,11 @@ public final class TranslationCache {
         memory.put(key, translated);
 
         SQLiteDatabase db = database();
-        if (db == null) return;
+        if (db == null) {
+            ProjectLog.warnOnce("cache.write.database_unavailable",
+                    "local translation cache write skipped reason=database_unavailable");
+            return;
+        }
         try {
             // REPLACE also updates existing rows. Distinguish inserts so the visible count
             // advances only for a genuinely new persisted translation.
@@ -197,7 +215,10 @@ public final class TranslationCache {
             values.put("last_access", System.currentTimeMillis());
             long rowId = db.insertWithOnConflict(
                     TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
-            if (rowId == -1L) return;
+            if (rowId == -1L) {
+                ProjectLog.warn("local translation cache write failed reason=sqlite_insert_rejected");
+                return;
+            }
 
             if (!alreadyStored && diskEntryCount >= 0) {
                 diskEntryCount++;
@@ -208,12 +229,17 @@ public final class TranslationCache {
                 writesSincePrune = 0;
                 prune(db);
                 refreshEntryCount(db);
-                publishEntryCount();
-            } else if (!alreadyStored) {
+            }
+
+            if (!alreadyStored) {
                 // Notify immediately when a new row is saved; do not wait for 32 writes.
                 publishEntryCount();
             }
-        } catch (Throwable ignored) {
+            ProjectLog.info("local translation cache write status=STORED newEntry="
+                    + !alreadyStored + " entryCount=" + getEntryCount());
+        } catch (Throwable failure) {
+            ProjectLog.warn("local translation cache write failed errorClass="
+                    + failure.getClass().getSimpleName());
             // Memory cache remains useful even when persistent storage is unavailable.
         }
     }
@@ -262,8 +288,11 @@ public final class TranslationCache {
             if (helper == null) helper = new DatabaseHelper(context);
             database = helper.getWritableDatabase();
             return database;
-        } catch (Throwable ignored) {
+        } catch (Throwable failure) {
             database = null;
+            ProjectLog.warnOnce("cache.database.open.failed",
+                    "local translation cache database open failed errorClass="
+                            + failure.getClass().getSimpleName());
             return null;
         }
     }
