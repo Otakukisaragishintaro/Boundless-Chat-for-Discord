@@ -1692,7 +1692,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private void updateSaveButtonState() {
         boolean available = started && !destroyed && prefs != null && configurationLoaded
                 && !persistence.isLoading() && !saveInProgress && !syncInProgress;
-        boolean formAvailable = configurationLoaded && !persistedConfigInvalid;
+        boolean formAvailable = configurationLoaded && !persistedConfigInvalid
+                && !persistence.isLoading() && !saveInProgress && !syncInProgress;
         if (saveButton != null) {
             saveButton.setEnabled(available && !persistedConfigInvalid);
         }
