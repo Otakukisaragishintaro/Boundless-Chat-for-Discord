@@ -1324,25 +1324,47 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     }
 
     private void showProjectLogs() {
+        String connectionState;
         SharedPreferences source = remotePrefs;
-        String logs = source == null ? "" : source.getString("__project_log_buffer_v1", "");
-        if (logs == null || logs.trim().isEmpty()) {
-            String state;
-            if (source == null) {
-                state = chineseUi ? "远程设置连接：未连接" : "Remote settings: disconnected";
-            } else {
-                boolean enabled = source.getBoolean(Config.KEY_LOGGING_ENABLED, false);
-                state = chineseUi
-                        ? "远程设置连接：已连接\n项目日志开关：" + (enabled ? "已开启" : "未开启")
-                        : "Remote settings: connected\nProject logging: " + (enabled ? "enabled" : "disabled");
+        if (service != null) {
+            try {
+                source = service.getRemotePreferences(Config.GROUP);
+                remotePrefs = source;
+                connectionState = chineseUi ? "已重新连接远程设置" : "Remote preferences refreshed";
+            } catch (Throwable failure) {
+                connectionState = (chineseUi ? "远程设置读取失败：" : "Remote preferences unavailable: ")
+                        + failure.getClass().getSimpleName();
+                source = null;
             }
-            logs = (chineseUi ? "目前日志缓冲区为空。\n" : "The diagnostic log buffer is empty.\n")
-                    + state + "\n"
-                    + (chineseUi
-                        ? "请把上面显示的连接状态和开关状态告诉我。不要反复重装或清除设置。"
-                        : "Tell me the connection and switch states shown above. Do not reinstall or clear settings.");
+        } else {
+            connectionState = chineseUi ? "设置服务尚未连接" : "Settings service is not connected";
         }
-        final String displayed = logs;
+        boolean uiLoggingEnabled = loggingInput != null && loggingInput.isChecked();
+        boolean moduleLoggingEnabled = source != null
+                && source.getBoolean("__project_log_module_enabled", false);
+        long configuredAt = source == null ? 0L
+                : source.getLong("__project_log_configured_at", 0L);
+        String storageError = source == null ? "" : source.getString("__project_log_storage_error", "");
+        String logs = source == null ? "" : source.getString("__project_log_buffer_v1", "");
+        if (logs == null) logs = "";
+        StringBuilder display = new StringBuilder();
+        if (!logs.trim().isEmpty()) display.append(logs);
+        else display.append(chineseUi ? "目前没有收集到日志。\n\n" : "No diagnostic entries collected yet.\n\n");
+        display.append("\n--- ").append(chineseUi ? "诊断状态" : "Diagnostic status").append(" ---\n")
+                .append(chineseUi ? "设置页日志开关：" : "Settings toggle: ")
+                .append(uiLoggingEnabled ? "ON" : "OFF").append('\n')
+                .append(chineseUi ? "Discord 进程日志开关：" : "Discord process logging: ")
+                .append(moduleLoggingEnabled ? "ON" : "OFF").append('\n')
+                .append(chineseUi ? "模块配置时间：" : "Module config time: ")
+                .append(configuredAt == 0L ? (chineseUi ? "尚未收到配置" : "not received")
+                        : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                                .format(new java.util.Date(configuredAt))).append('\n')
+                .append(chineseUi ? "设置连接：" : "Settings connection: ")
+                .append(connectionState);
+        if (storageError != null && !storageError.trim().isEmpty()) {
+            display.append('\n').append(chineseUi ? "日志存储错误：" : "Log storage error: ").append(storageError);
+        }
+        final String displayed = display.toString();
         TextView content = new TextView(this);
         content.setText(displayed);
         content.setTextIsSelectable(true);
