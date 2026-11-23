@@ -26,7 +26,7 @@ public final class Config {
     // ---- 翻译范围（默认策略、服务器及频道规则）----
     public static final String KEY_TRANSLATION_SCOPE = "translation_scope";
 
-    // ---- Optional local translation cache ----
+    // ---- 可选的本地翻译缓存 ----
     public static final String KEY_CACHE_ENABLED = "translation_cache_enabled";
     public static final boolean DEF_CACHE_ENABLED = false;
     public static final String KEY_CACHE_LIMIT = "translation_cache_limit";
@@ -34,7 +34,7 @@ public final class Config {
     public static final int MAX_CACHE_LIMIT = 1000000;
     /** Discord 侧向设置页同步的缓存条目数（只读状态，不参与配置版本）。 */
     public static final String KEY_CACHE_ENTRY_COUNT = "translation_cache_entry_count";
-    /** One-shot command toggled by the settings UI; deliberately excluded from config sync. */
+    /** 设置页通过此一次性命令请求清空缓存；该命令不参与普通配置同步。 */
     public static final String KEY_CACHE_CLEAR_REQUEST = "translation_cache_clear_request";
 
     // ---- 项目日志（不参与翻译配置版本）----
