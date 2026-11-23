@@ -5,7 +5,7 @@
 ## 当前已建立的目录
 
 ```text
-io/github/wxmyyds/discordautotranslate/
+io/github/otakukisaragishintaro/boundlesschatdiscord/
 ├── core/                 # 通用配置、同步、缓存、调度、状态和文本处理
 ├── translate/            # 通用 API、协议编码/解析、流式请求和测试
 ├── ui/                   # Android 设置页和通用设置编辑器
