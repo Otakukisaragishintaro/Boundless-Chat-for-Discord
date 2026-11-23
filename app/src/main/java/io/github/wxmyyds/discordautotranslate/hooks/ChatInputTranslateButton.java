@@ -179,6 +179,7 @@ public final class ChatInputTranslateButton {
             registration.observer.removeOnGlobalFocusChangeListener(registration.focusListener);
             registration.observer.removeOnGlobalLayoutListener(registration.layoutListener);
         }
+        clearPendingEditorWatcher(registration);
         removeBinding(registration);
     }
 
@@ -201,6 +202,7 @@ public final class ChatInputTranslateButton {
                     registration.observer.removeOnGlobalFocusChangeListener(registration.focusListener);
                     registration.observer.removeOnGlobalLayoutListener(registration.layoutListener);
                 }
+                clearPendingEditorWatcher(registration);
                 removeBinding(registration);
             }
             REGISTRATIONS.clear();
@@ -328,7 +330,6 @@ public final class ChatInputTranslateButton {
     }
 
     private static void removeBinding(Registration registration) {
-        clearPendingEditorWatcher(registration);
         ButtonBinding binding = registration.binding;
         registration.binding = null;
         if (binding == null) return;
