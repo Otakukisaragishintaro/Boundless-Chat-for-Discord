@@ -251,7 +251,6 @@ public final class ChatInputTranslateButton {
                 && registration.bindings.get(0).editor == editor
                 && registration.bindings.get(0).button.getParent()
                         == registration.bindings.get(0).overlay) {
-            cancelSendCandidateRetry(registration);
             Candidate refreshed = findSendCandidate(editor);
             View refreshedSendView = refreshed != null && refreshed.sendView.isAttachedToWindow()
                     ? refreshed.sendView : null;
