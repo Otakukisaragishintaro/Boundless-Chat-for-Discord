@@ -4,8 +4,8 @@
 
 **Boundless Chat for Discord** is an independently maintained Android LSPosed translation module by **Kuorshin**, and the first project in the **Boundless Chat** series. It is an independent downstream project based on WXM YYDS's original DiscordAutoTranslate and uses LibXposed API 102. Eligible message text is sent to a translation service configured by the user.
 
-- [Latest release](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/releases/latest)
-- [GitHub Actions builds](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/actions)
+- [Latest release](https://github.com/Otakukisaragishintaro/Boundless-Chat-for-Discord/releases/latest)
+- [GitHub Actions builds](https://github.com/Otakukisaragishintaro/Boundless-Chat-for-Discord/actions)
 - [Project origin and licensing](NOTICE.md)
 
 ## Features
