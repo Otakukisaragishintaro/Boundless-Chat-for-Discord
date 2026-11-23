@@ -33,6 +33,7 @@ import androidx.annotation.Nullable;
 
 import io.github.wxmyyds.discordautotranslate.R;
 import io.github.wxmyyds.discordautotranslate.core.Config;
+import io.github.wxmyyds.discordautotranslate.core.CacheCountProvider;
 import io.github.wxmyyds.discordautotranslate.core.OutboundButtonConfig;
 import io.github.wxmyyds.discordautotranslate.core.TranslationScope;
 import io.github.wxmyyds.discordautotranslate.core.ConfigurationSync;
@@ -86,10 +87,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private SharedPreferences prefs;
     @Nullable
     private SharedPreferences remotePrefs;
-    /** 监听 Discord 进程同步的缓存数量，只刷新只读文本，不触发配置保存。 */
+    @Nullable
+    private SharedPreferences cacheCountPrefs;
+    /** Listen to the count persisted by CacheCountProvider in this app's private preferences. */
     private final SharedPreferences.OnSharedPreferenceChangeListener cacheCountListener =
             (shared, key) -> {
-                if (Config.KEY_CACHE_ENTRY_COUNT.equals(key)) {
+                if (CacheCountProvider.KEY_ENTRY_COUNT.equals(key)) {
                     mainHandler.post(this::updateCacheEntryCount);
                 }
             };
@@ -200,6 +203,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
         setContentView(buildContentView());
         prefs = getSharedPreferences(LOCAL_PREFS_NAME, MODE_PRIVATE);
+        cacheCountPrefs = getSharedPreferences(CacheCountProvider.PREFERENCES_NAME, MODE_PRIVATE);
         installDirtyTracking();
         restoreDraft(savedInstanceState);
         pendingScopeEditor = savedInstanceState == null ? null : savedInstanceState.getBundle(STATE_SCOPE_EDITOR);
@@ -229,7 +233,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         != XposedServiceConnectionHolder.connectionGeneration())) {
             onServiceDied(service);
         }
-        if (remotePrefs != null) remotePrefs.registerOnSharedPreferenceChangeListener(cacheCountListener);
+        if (cacheCountPrefs != null) {
+            cacheCountPrefs.registerOnSharedPreferenceChangeListener(cacheCountListener);
+        }
+        updateCacheEntryCount();
         XposedServiceConnectionHolder.bind(this);
         persistence.start();
         if (pendingScopeEditor != null && configurationLoaded && !persistence.isLoading()) openScopeEditor();
@@ -252,7 +259,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             advancedSettingsDialog.dismiss();
             advancedSettingsDialog = null;
         }
-        if (remotePrefs != null) remotePrefs.unregisterOnSharedPreferenceChangeListener(cacheCountListener);
+        if (cacheCountPrefs != null) {
+            cacheCountPrefs.unregisterOnSharedPreferenceChangeListener(cacheCountListener);
+        }
         XposedServiceConnectionHolder.unbind(this);
         cancelPendingTest();
         updateSaveButtonState();
@@ -375,7 +384,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         syncInProgress = false;
         try {
             remotePrefs = connectedService.getRemotePreferences(Config.GROUP);
-            if (remotePrefs != null) remotePrefs.registerOnSharedPreferenceChangeListener(cacheCountListener);
             updateCacheEntryCount();
         } catch (Throwable t) {
             remotePrefs = null;
@@ -474,7 +482,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             return;
         }
         service = null;
-        if (remotePrefs != null) remotePrefs.unregisterOnSharedPreferenceChangeListener(cacheCountListener);
         remotePrefs = null;
         serviceGeneration++;
         syncJobGeneration++;
@@ -1464,14 +1471,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
     }
 
-    /** 从 Discord 进程同步的只读计数，离线时保留最近一次同步值。 */
+    /** Read the last persistent cache count published by the Discord process. */
     private void updateCacheEntryCount() {
         if (cacheEntryCountText == null) return;
-        if (remotePrefs == null) {
-            cacheEntryCountText.setText(R.string.label_cache_count_unavailable);
-            return;
-        }
-        int count = remotePrefs.getInt(Config.KEY_CACHE_ENTRY_COUNT, 0);
+        int count = cacheCountPrefs == null
+                ? 0 : cacheCountPrefs.getInt(CacheCountProvider.KEY_ENTRY_COUNT, 0);
         cacheEntryCountText.setText(getString(R.string.label_cache_entry_count, count));
     }
 

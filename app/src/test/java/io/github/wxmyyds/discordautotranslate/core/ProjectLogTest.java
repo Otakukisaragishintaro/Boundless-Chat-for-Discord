@@ -225,7 +225,7 @@ public class ProjectLogTest {
     private void assertEntry(int index, int priority, String message) {
         Entry entry = entries.get(index);
         assertEquals(priority, entry.priority);
-        assertEquals("DiscordAutoTranslate", entry.tag);
+        assertEquals("BoundlessChatDiscord", entry.tag);
         assertEquals(message, entry.message);
     }
 

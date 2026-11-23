@@ -13,7 +13,7 @@ import java.util.Set;
  * No cross-process diagnostic provider or export buffer is maintained.
  */
 public final class ProjectLog {
-    private static final String TAG = "DiscordAutoTranslate";
+    private static final String TAG = "BoundlessChatDiscord";
     private static final Set<String> REPORTED = new HashSet<>();
     private static boolean enabled;
     @Nullable private static Output framework;

@@ -10,6 +10,8 @@ import androidx.annotation.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 /**
  * 有容量上限的双层翻译缓存。
@@ -27,13 +29,57 @@ public final class TranslationCache {
     private static final String TABLE = "translations";
 
     private static volatile Context sContext;
+    @Nullable private static volatile String sModulePackageName;
     private static volatile TranslationCache sInstance;
+    private static final ExecutorService COUNT_PUBLISHER =
+            Executors.newSingleThreadExecutor(runnable -> {
+                Thread thread = new Thread(runnable, "BoundlessChat-CacheCount");
+                thread.setDaemon(true);
+                return thread;
+            });
 
     /** 安装翻译 Hook 前，使用目标应用 Context 初始化数据库存储位置。 */
-    public static void initialize(@Nullable Context context) {
+    public static void initialize(@Nullable Context context, @Nullable String modulePackageName) {
         if (context == null) return;
         sContext = context.getApplicationContext() == null
                 ? context : context.getApplicationContext();
+        sModulePackageName = modulePackageName;
+    }
+
+    /**
+     * Publish only the persistent entry count to the module app. The ContentProvider call is
+     * dispatched on a dedicated worker so a cache write never blocks Discord's main thread.
+     */
+    public static void publishEntryCountToModule(int count) {
+        if (count < 0) return;
+        try {
+            COUNT_PUBLISHER.execute(() -> {
+                Context context = sContext;
+                String modulePackageName = sModulePackageName;
+                if (context == null || modulePackageName == null || modulePackageName.isEmpty()) {
+                    ProjectLog.warnOnce("cache.count.publish.context_missing",
+                            "local translation cache count publish skipped reason=module_endpoint_unavailable");
+                    return;
+                }
+                try {
+                    boolean published = CacheCountProvider.publish(context, modulePackageName, count);
+                    if (published) {
+                        ProjectLog.info("local translation cache count published count=" + count);
+                    } else {
+                        ProjectLog.warnOnce("cache.count.publish.rejected",
+                                "local translation cache count publish failed reason=provider_rejected");
+                    }
+                } catch (Throwable failure) {
+                    ProjectLog.warnOnce("cache.count.publish.failed",
+                            "local translation cache count publish failed errorClass="
+                                    + failure.getClass().getSimpleName());
+                }
+            });
+        } catch (Throwable failure) {
+            ProjectLog.warnOnce("cache.count.publish.schedule_failed",
+                    "local translation cache count publish scheduling failed errorClass="
+                            + failure.getClass().getSimpleName());
+        }
     }
 
     public static TranslationCache get() {
