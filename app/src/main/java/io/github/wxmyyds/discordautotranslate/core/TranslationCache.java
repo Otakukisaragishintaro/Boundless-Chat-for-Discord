@@ -65,6 +65,7 @@ public final class TranslationCache {
 
     private final int maxMemoryEntries;
     private volatile int maxDiskEntries = DEFAULT_DISK_ENTRIES;
+    private int writesSincePrune;
     private final LinkedHashMap<String, String> memory;
     private DatabaseHelper helper;
     private SQLiteDatabase database;
@@ -139,8 +140,11 @@ public final class TranslationCache {
             values.put("translated", translated);
             values.put("last_access", System.currentTimeMillis());
             db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
-            // Keep the persistent cache bounded using least-recently-used access timestamps.
-            prune(db);
+            // Batch LRU maintenance to avoid a full-table prune on every insert at 1M entries.
+            if (++writesSincePrune >= 128) {
+                writesSincePrune = 0;
+                prune(db);
+            }
         } catch (Throwable ignored) {
             // Memory cache remains useful even when persistent storage is unavailable.
         }
@@ -162,6 +166,7 @@ public final class TranslationCache {
     /** Explicit full clear; normal configuration changes do not call this. */
     public synchronized void clear() {
         memory.clear();
+        writesSincePrune = 0;
         SQLiteDatabase db = database();
         if (db != null) {
             try {
