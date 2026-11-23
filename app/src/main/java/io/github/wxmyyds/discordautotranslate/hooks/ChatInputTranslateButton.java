@@ -221,8 +221,6 @@ public final class ChatInputTranslateButton {
         button.setBackground(createButtonBackground(activity));
         button.setClickable(true);
         button.setFocusable(false);
-        button.setOnClickListener(view -> startTranslation(registration.binding));
-
         ViewGroup.LayoutParams params = copyLayoutParams(candidate.parent, candidate.branch);
         params.width = dp(activity, BUTTON_WIDTH_DP);
         params.height = dp(activity, BUTTON_HEIGHT_DP);
@@ -297,7 +295,9 @@ public final class ChatInputTranslateButton {
                         && binding.editor.isAttachedToWindow()
                         && source.contentEquals(binding.editor.getText())
                         && base.version().equals(io.github.wxmyyds.discordautotranslate.hooks
-                                .HookBridge.get().configSnapshot().version()),
+                                .HookBridge.get().configSnapshot().version())
+                        && base.sendTargetLang.equals(io.github.wxmyyds.discordautotranslate.hooks
+                                .HookBridge.get().configSnapshot().sendTargetLang),
                 (identity, accepted, translated, error) -> {
                     try (HookRuntime.Lease lease = HookRuntime.enter()) {
                         if (lease == null || !requestId.equals(binding.requestId)) return;
