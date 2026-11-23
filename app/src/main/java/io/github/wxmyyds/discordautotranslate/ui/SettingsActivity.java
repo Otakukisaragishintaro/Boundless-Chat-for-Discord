@@ -130,6 +130,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private EditText modelInput;
     private EditText headersInput;
     private EditText systemPromptInput;
+    private EditText sendSystemPromptInput;
+    private Button resetSystemPromptButton;
+    private Button resetSendSystemPromptButton;
     private EditText timeoutInput;
     private EditText concurrencyInput;
     private Switch enabledInput;
@@ -538,6 +541,15 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         systemPromptInput = addField(root, getString(R.string.label_system_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        resetSystemPromptButton = addPromptResetButton(root, systemPromptInput,
+                Config.DEF_SYSTEM_PROMPT);
+        sendSystemPromptInput = addField(root,
+                chineseUi ? "发送翻译系统提示词" : "Outbound translation system prompt",
+                chineseUi ? "可使用 {{target_language}} 自动替换为发送目标语言。" :
+                        "Use {{target_language}} to insert the selected send target language.",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        resetSendSystemPromptButton = addPromptResetButton(root, sendSystemPromptInput,
+                Config.DEF_SEND_SYSTEM_PROMPT);
         timeoutInput = addField(root, getString(R.string.label_timeout),
                 String.valueOf(Config.DEF_TIMEOUT_MS), InputType.TYPE_CLASS_NUMBER);
         concurrencyInput = addField(root, getString(R.string.label_concurrency),
@@ -678,6 +690,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         updateSaveButtonState();
     }
 
+    private Button addPromptResetButton(LinearLayout parent, EditText input, String defaultPrompt) {
+        Button button = new Button(this);
+        button.setText(chineseUi ? "恢复默认提示词" : "Restore default prompt");
+        button.setOnClickListener(view -> input.setText(defaultPrompt));
+        parent.addView(button, matchWrap());
+        return button;
+    }
+
     private EditText addField(LinearLayout parent, String label, String hint, int inputType) {
         TextView tv = new TextView(this);
         tv.setText(label);
@@ -745,6 +765,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         modelInput.addTextChangedListener(watcher);
         headersInput.addTextChangedListener(watcher);
         systemPromptInput.addTextChangedListener(watcher);
+        sendSystemPromptInput.addTextChangedListener(watcher);
         timeoutInput.addTextChangedListener(watcher);
         concurrencyInput.addTextChangedListener(watcher);
         testTextInput.addTextChangedListener(watcher);
@@ -827,7 +848,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private EditText[] configurationFields() {
         return new EditText[] {urlInput, keyInput, modelInput, headersInput,
-                systemPromptInput, timeoutInput, concurrencyInput, testTextInput};
+                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput, testTextInput};
     }
 
     /** 无效快照的占位值不是用户保存的设置；锁定页面直到用户明确重置。 */
@@ -930,7 +951,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             ensureTargetLanguageAvailable(snapshot.sendTargetLang);
             sendTargetLanguageSpinner.setSelection(targetLanguagePosition(snapshot.sendTargetLang));
             setTextOrPlaceholder(headersInput, snapshot.extraHeaders, Config.DEF_EXTRA_HEADERS);
-            setTextOrPlaceholder(systemPromptInput, snapshot.systemPrompt, Config.DEF_SYSTEM_PROMPT);
+            systemPromptInput.setText(snapshot.systemPrompt);
+            sendSystemPromptInput.setText(snapshot.sendSystemPrompt);
             setTextOrPlaceholder(timeoutInput, String.valueOf(snapshot.timeoutMs),
                     String.valueOf(Config.DEF_TIMEOUT_MS));
             setTextOrPlaceholder(concurrencyInput, String.valueOf(snapshot.maxConcurrency),
@@ -1143,6 +1165,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
         }
+        if (resetSystemPromptButton != null) resetSystemPromptButton.setEnabled(formAvailable);
+        if (resetSendSystemPromptButton != null) resetSendSystemPromptButton.setEnabled(formAvailable);
         updateStreamingAvailability();
         setTestButtonsEnabled(testFuture == null);
     }
@@ -1194,6 +1218,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_EXTRA_HEADERS, headersInput.getText().toString());
         memoryPrefs.put(Config.KEY_SYSTEM_PROMPT,
                 promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
+        memoryPrefs.put(Config.KEY_SEND_SYSTEM_PROMPT,
+                promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT));
         memoryPrefs.put(Config.KEY_TIMEOUT_MS, parseIntInput(timeoutInput, Config.DEF_TIMEOUT_MS));
         memoryPrefs.put(Config.KEY_MAX_CONCURRENCY,
                 parseIntInput(concurrencyInput, Config.DEF_MAX_CONCURRENCY));
