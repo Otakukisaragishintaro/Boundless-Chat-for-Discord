@@ -36,6 +36,19 @@ public final class ProjectLog {
         storage = preferences;
     }
 
+    /**
+     * Emit a fixed lifecycle diagnostic even when the user log gate is disabled or
+     * remote preferences could not be acquired. This path never records user content.
+     */
+    public static synchronized void bootstrapWarn(String message) {
+        write(Log.WARN, message, true);
+    }
+
+    /** Record a lifecycle checkpoint without depending on the configurable log gate. */
+    public static synchronized void bootstrapInfo(String message) {
+        write(Log.INFO, message, true);
+    }
+
     /** Invalid configuration cannot enable logging. Toggling never changes translation state. */
     public static synchronized void configure(Config.Snapshot snapshot) {
         boolean next = snapshot.configError == null && snapshot.loggingEnabled;
@@ -78,6 +91,11 @@ public final class ProjectLog {
     /** Serialize gate and both outputs: disabling waits for an already-started write. */
     private static synchronized void emit(int priority, @Nullable String key, String message) {
         if (!enabled || (key != null && !REPORTED.add(key))) return;
+        write(priority, message, false);
+    }
+
+    /** Shared output path. Bootstrap entries are fixed lifecycle facts, never message data. */
+    private static void write(int priority, String message, boolean force) {
         if (storage != null) {
             try {
                 String previous = storage.getString(STORAGE_KEY, "");
@@ -92,28 +110,21 @@ public final class ProjectLog {
                     }
                 }
                 boolean stored = storage.edit().putString(STORAGE_KEY, updated).commit();
-                if (!stored) {
-                    Log.w(TAG, "diagnostic buffer commit returned false");
-                }
+                if (!stored) Log.w(TAG, "diagnostic buffer commit returned false");
             } catch (Throwable failure) {
                 try {
                     storage.edit().putString("__project_log_storage_error",
-                            failure.getClass().getSimpleName() + ": "
-                                    + String.valueOf(failure.getMessage())).commit();
+                            failure.getClass().getSimpleName()).commit();
                 } catch (Throwable ignored) { }
             }
         }
         try {
             Log.println(priority, TAG, message);
-        } catch (Throwable ignored) {
-            // Log output must not alter the host operation.
-        }
+        } catch (Throwable ignored) { }
         if (framework != null) {
             try {
                 framework.write(priority, TAG, message);
-            } catch (Throwable ignored) {
-                // Each destination is diagnostic only; failure never changes business state.
-            }
+            } catch (Throwable ignored) { }
         }
     }
 }
