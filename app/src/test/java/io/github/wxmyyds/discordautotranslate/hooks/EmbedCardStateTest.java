@@ -52,6 +52,7 @@ public class EmbedCardStateTest {
         previousEngine = (Scheduler.Engine) bridgeField("engine").get(bridge);
         bridgeField("config").set(bridge, Config.read(new MemoryPrefs()
                 .put(Config.KEY_ENABLED, true)
+                .put(Config.KEY_CACHE_ENABLED, true)
                 .put(Config.KEY_API_URL, "https://example.invalid/unused")
                 .put(Config.KEY_TARGET_LANG, "Simplified Chinese")));
         installEngine(false);
