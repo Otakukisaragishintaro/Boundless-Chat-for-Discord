@@ -333,13 +333,22 @@ public final class ChatInputTranslateButton {
         top = Math.max(0, Math.min(top, binding.overlay.getHeight() - height));
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)
                 binding.button.getLayoutParams();
-        params.width = width;
-        params.height = height;
-        params.gravity = Gravity.TOP | Gravity.LEFT;
-        params.leftMargin = left;
-        params.topMargin = top;
-        binding.button.setLayoutParams(params);
-        binding.button.bringToFront();
+        boolean changed = params.width != width || params.height != height
+                || params.gravity != (Gravity.TOP | Gravity.LEFT)
+                || params.leftMargin != left || params.topMargin != top;
+        if (changed) {
+            params.width = width;
+            params.height = height;
+            params.gravity = Gravity.TOP | Gravity.LEFT;
+            params.leftMargin = left;
+            params.topMargin = top;
+            binding.button.setLayoutParams(params);
+        }
+        // Avoid requesting another layout pass when the overlay is already topmost.
+        int childCount = binding.overlay.getChildCount();
+        if (childCount > 0 && binding.overlay.getChildAt(childCount - 1) != binding.button) {
+            binding.button.bringToFront();
+        }
     }
 
     private static void startTranslation(ButtonBinding binding) {
