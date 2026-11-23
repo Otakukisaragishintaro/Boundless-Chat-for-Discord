@@ -47,6 +47,8 @@
     <string name="label_api_key">API 密钥（仅保存在本机）</string>
     <string name="label_model">模型</string>
     <string name="label_target_language">目标语言</string>
+    <string name="label_send_target_language">发送翻译目标语言</string>
+    <string name="hint_send_target_language">仅用于“翻译发送”按钮，不会改变接收消息的翻译目标语言。</string>
     <string name="legacy_language">旧版自定义语言</string>
     <string name="label_headers">额外请求头（每行 Name: Value）</string>
     <string name="label_system_prompt">系统提示词</string>
