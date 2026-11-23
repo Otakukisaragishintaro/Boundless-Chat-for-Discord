@@ -115,7 +115,10 @@ public final class TranslationCache {
         int bounded = Math.max(1, Math.min(maxEntries, 1000000));
         maxDiskEntries = bounded;
         SQLiteDatabase db = database();
-        if (db != null) prune(db);
+        if (db != null) {
+            prune(db);
+            publishEntryCount();
+        }
     }
 
     /** 设置跨进程缓存数量监听；仅发布计数，不暴露原文或译文。 */
