@@ -148,7 +148,7 @@ public final class HookBridge {
         }
         Config.Snapshot old = this.config;
         this.config = c;
-        if (c.cacheEnabled) TranslationCache.get().setMaxDiskEntries(c.cacheLimit);
+        TranslationCache.get().setMaxDiskEntries(c.cacheLimit);
 
         // 并发上限即时生效（需求 §5.7 普通配置变更尽量即时生效）。
         Scheduler.get().setMaxConcurrency(c.maxConcurrency);
