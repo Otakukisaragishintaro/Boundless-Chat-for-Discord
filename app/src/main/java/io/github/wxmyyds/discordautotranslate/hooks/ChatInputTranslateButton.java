@@ -78,6 +78,7 @@ public final class ChatInputTranslateButton {
         final FrameLayout overlay;
         View sendView;
         final TextView button;
+        final View.OnLayoutChangeListener positionListener;
         final AtomicBoolean requestValid = new AtomicBoolean(true);
         boolean inFlight;
         String requestId;
@@ -89,6 +90,12 @@ public final class ChatInputTranslateButton {
             this.overlay = overlay;
             this.sendView = sendView;
             this.button = button;
+            this.positionListener = (view, left, top, right, bottom,
+                                     oldLeft, oldTop, oldRight, oldBottom) ->
+                    positionButton(this);
+            this.editor.addOnLayoutChangeListener(positionListener);
+            this.overlay.addOnLayoutChangeListener(positionListener);
+            this.sendView.addOnLayoutChangeListener(positionListener);
         }
     }
 
@@ -221,7 +228,13 @@ public final class ChatInputTranslateButton {
                         "Discord chat input send control disappeared after binding");
                 return;
             }
-            registration.binding.sendView = refreshed.sendView;
+            if (registration.binding.sendView != refreshed.sendView) {
+                registration.binding.sendView.removeOnLayoutChangeListener(
+                        registration.binding.positionListener);
+                registration.binding.sendView = refreshed.sendView;
+                registration.binding.sendView.addOnLayoutChangeListener(
+                        registration.binding.positionListener);
+            }
             positionButton(registration.binding);
             reportHierarchyIfEnabled(editor);
             return;
@@ -309,6 +322,9 @@ public final class ChatInputTranslateButton {
         registration.binding = null;
         if (binding == null) return;
         binding.requestValid.set(false);
+        binding.editor.removeOnLayoutChangeListener(binding.positionListener);
+        binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
+        binding.overlay.removeOnLayoutChangeListener(binding.positionListener);
         if (binding.button.getParent() instanceof ViewGroup) {
             ((ViewGroup) binding.button.getParent()).removeView(binding.button);
         }
@@ -476,12 +492,11 @@ public final class ChatInputTranslateButton {
 
     /**
      * Find Discord's actual send action by its accessibility label, not by proximity.
-     * The emoji button is closer to the editor on current Discord layouts, so distance
-     * alone is not a valid way to distinguish the send action.
+     * Keep disabled send controls eligible: Discord disables the native send action
+     * while the editor is empty, but the translation action must still be available.
      */
     private static View findSendAction(View view, Rect inputBounds, int depth) {
-        if (view == null || depth > 7 || view.getVisibility() != View.VISIBLE
-                || !view.isEnabled()) return null;
+        if (view == null || depth > 7 || view.getVisibility() != View.VISIBLE) return null;
 
         if (view.isClickable() && isSendActionLabel(sendActionLabel(view))) {
             Rect rect = boundsOnScreen(view);
