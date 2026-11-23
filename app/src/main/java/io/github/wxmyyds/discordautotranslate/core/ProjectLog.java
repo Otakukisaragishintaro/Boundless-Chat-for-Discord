@@ -80,7 +80,10 @@ public final class ProjectLog {
                         updated = updated.substring(firstBreak + 1);
                     }
                 }
-                storage.edit().putString(STORAGE_KEY, updated).apply();
+                boolean stored = storage.edit().putString(STORAGE_KEY, updated).commit();
+                if (!stored) {
+                    Log.w(TAG, "diagnostic buffer commit returned false");
+                }
             } catch (Throwable ignored) {
                 // Persistent diagnostics are optional and must never affect Discord.
             }
