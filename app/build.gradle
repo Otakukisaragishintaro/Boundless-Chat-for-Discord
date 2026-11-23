@@ -1,0 +1,96 @@
+// Discord 自动翻译模块
+//
+// 构建说明：本仓库禁止本地构建，所有编译/打包必须通过 GitHub Actions 执行。
+// 见 .github/workflows/build.yml
+plugins {
+    id "com.android.application"
+}
+
+// 所有构建使用 Actions 注入的同一签名，不生成调试证书或未签名产物。
+def keystorePropsPath = System.getenv("KEYSTORE_PROPERTIES")
+if (keystorePropsPath == null || keystorePropsPath.isBlank()) {
+    throw new GradleException("KEYSTORE_PROPERTIES is required; build through GitHub Actions")
+}
+def propsFile = new File(keystorePropsPath)
+if (!propsFile.isFile() || !propsFile.canRead()) {
+    throw new GradleException("Signing properties are missing or unreadable")
+}
+def signingProps = new Properties()
+propsFile.withInputStream { signingProps.load(it) }
+for (key in ["storeFile", "storePassword", "keyAlias", "keyPassword"]) {
+    if (signingProps.getProperty(key) == null || signingProps.getProperty(key).isBlank()) {
+        throw new GradleException("Required signing property is missing: " + key)
+    }
+}
+def signingStoreFile = new File(propsFile.parentFile, signingProps.storeFile)
+if (!signingStoreFile.isFile() || !signingStoreFile.canRead()) {
+    throw new GradleException("Signing keystore is missing or unreadable")
+}
+
+android {
+    namespace "io.github.wxmyyds.discordautotranslate"
+    // compileSdk 37 为强制项：io.github.libxposed:api:102.0.0 与 :service:102.0.0
+    // 的 AAR 元数据均声明 minCompileSdk=37，低于该值 Gradle 会直接报错。
+    compileSdk 37
+
+    signingConfigs {
+        release {
+            storeFile signingStoreFile
+            storePassword signingProps.storePassword
+            keyAlias signingProps.keyAlias
+            keyPassword signingProps.keyPassword
+        }
+    }
+
+    defaultConfig {
+        applicationId "io.github.wxmyyds.discordautotranslate"
+        // libxposed api/service 的 AAR 均声明 minSdkVersion 26。
+        minSdk 26
+        targetSdk 37
+        versionCode 1
+        versionName "0.1.0-stage1"
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.release
+        }
+        release {
+            // Hook 依赖宿主类名和反射成员，当前不启用混淆。
+            minifyEnabled false
+            shrinkResources false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    testOptions {
+        unitTests {
+            // 纯逻辑单测（协议请求构造、路径提取、调度语义、缓存）不依赖 Android 框架，
+            // 只需 org.json（JDK 自带的 JSON 实现来自 Android，单测环境不可用）。
+            returnDefaultValues = true
+        }
+    }
+}
+
+dependencies {
+    // 模块运行在 Discord 进程内，XposedModule/XposedInterface 由 LSPosed 框架提供，
+    // 因此用 compileOnly，不打包进 APK。
+    compileOnly "io.github.libxposed:api:102.0.0"
+
+    // 设置 Activity 运行在模块自身进程，需要 XposedService/XposedProvider（服务端通信），
+    // 必须打进 APK，因此用 implementation。该 AAR 自带 XposedProvider 的 manifest 声明。
+    implementation "io.github.libxposed:service:102.0.0"
+
+    // api 与 service 的 AAR 均未传递 androidx.annotation，但其 API 使用 @NonNull 等注解，
+    // 因此显式声明注解库。annotation 是纯注解 jar，compileOnly 即可。
+    compileOnly "androidx.annotation:annotation:1.9.1"
+
+    // 单元测试：org.json 在 Android 上由系统提供，在 JVM 单测环境需要显式依赖。
+    testImplementation "org.json:json:20260814"
+    testImplementation "junit:junit:4.13.2"
+}
