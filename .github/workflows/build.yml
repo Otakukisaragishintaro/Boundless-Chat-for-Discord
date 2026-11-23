@@ -121,7 +121,7 @@ jobs:
             exit 1
           fi
 
-          printf 'storeFile=kuroshinkey.jks\\nstorePassword=%s\\nkeyAlias=kuroshinkey\\nkeyPassword=%s\\n' \
+          printf 'storeFile=kuroshinkey.jks\nstorePassword=%s\nkeyAlias=kuroshinkey\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEYSTORE_PASSWORD" \
             > "$RUNNER_TEMP/keystore/keystore.properties"
           chmod 600 "$RUNNER_TEMP/keystore/keystore.properties"
