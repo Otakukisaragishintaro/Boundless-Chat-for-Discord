@@ -22,8 +22,7 @@ on:
         default: 'main'
 
 env:
-  APP_NAME: DiscordAutoTranslate
-  LSPOSED_REPO: Xposed-Modules-Repo/io.github.wxmyyds.discordautotranslate
+  APP_NAME: Boundless-Chat-for-Discord
 
 permissions:
   contents: write
@@ -231,20 +230,6 @@ jobs:
             --output "$RUNNER_TEMP/release-notes.md"
           cat "$RUNNER_TEMP/release-notes.md" >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Verify release synchronization configuration
-        if: inputs.mode == 'stable'
-        env:
-          LSPOSED_REPO_TOKEN: ${{ secrets.LSPOSED_REPO_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [[ -z "${LSPOSED_REPO_TOKEN:-}" ]]; then
-            echo "::error::缺少 Secret LSPOSED_REPO_TOKEN，无法同步到 $LSPOSED_REPO"
-            echo "请配置对 $LSPOSED_REPO 具有 Contents: Read and write 权限的 GitHub token"
-            exit 1
-          fi
-          CAN_PUSH=$(GH_TOKEN="$LSPOSED_REPO_TOKEN" gh api "repos/$LSPOSED_REPO" --jq '.permissions.push')
-          [[ "$CAN_PUSH" == "true" ]] || { echo "::error::LSPOSED_REPO_TOKEN 没有目标仓库写权限"; exit 1; }
-
       # 所有发布版本都必须签名。测试和打包配置使用同一份 Actions 注入的签名。
       - name: Materialize release keystore
         shell: bash
@@ -290,7 +275,7 @@ jobs:
           "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
 
       # Version changes go in a commit referenced only by the tag, leaving main unchanged.
-      # LSPosed 仓库会读取该 Release 的 APK 与 tag；tag 格式 {versionCode}-{versionName}。
+      # This independent downstream publishes only to its own repository; it never writes to the upstream LSPosed module repository.
       - name: Tag and publish GitHub release
         shell: bash
         env:
@@ -299,7 +284,6 @@ jobs:
           VERSION: ${{ steps.resolve.outputs.version }}
           VERSION_CODE: ${{ steps.resolve.outputs.versionCode }}
           TAG: ${{ steps.resolve.outputs.tag }}
-          LSPOSED_REPO_TOKEN: ${{ secrets.LSPOSED_REPO_TOKEN }}
         run: |
           set -euo pipefail
 
@@ -322,16 +306,6 @@ jobs:
               --notes-file "$RUNNER_TEMP/release-notes.md" \
               "$APP_NAME.apk"
 
-            # Keep the LSPosed Modules Repo release in sync with the source release.
-            # The target repository is intentionally updated only for stable releases.
-            echo "同步正式版到 $LSPOSED_REPO：$TAG"
-            GH_TOKEN="$LSPOSED_REPO_TOKEN" gh release create "$TAG" \
-              --repo "$LSPOSED_REPO" \
-              --target main \
-              --title "$APP_NAME $VERSION" \
-              --notes-file "$RUNNER_TEMP/release-notes.md" \
-              "$APP_NAME.apk"
-            echo "已同步 $LSPOSED_REPO 发布：$TAG"
           else
             gh release create "$TAG" \
               --title "$APP_NAME $VERSION（预发布）" \
