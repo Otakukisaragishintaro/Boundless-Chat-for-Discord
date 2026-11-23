@@ -485,11 +485,22 @@ public final class HookBridge {
                         ? ((TranslationException) error).kind().name() : "none")
                 + " causeClass=" + (error == null || error.getCause() == null
                         ? "none" : error.getCause().getClass().getSimpleName()));
-        boolean admitted = accepted && translationAllowed(task.messageId, config);
+        Config.Snapshot resultConfig = config;
+        boolean admitted = accepted && translationAllowed(task.messageId, resultConfig);
         boolean success = admitted && error == null && translated != null && !translated.isEmpty();
         if (!StateStore.get().complete(task, admitted, translated,
-                success ? null : admitted ? describe(error) : null)) return;
-        if (success && config.cacheEnabled) TranslationCache.get().put(task.contentHash, translated);
+                success ? null : admitted ? describe(error) : null)) {
+            ProjectLog.info("translation result discarded reason=stale_task");
+            return;
+        }
+        if (success) {
+            if (resultConfig.cacheEnabled) {
+                ProjectLog.info("translation result accepted; persistent cache write requested");
+                TranslationCache.get().put(task.contentHash, translated);
+            } else {
+                ProjectLog.info("translation result accepted; cache skipped reason=disabled");
+            }
+        }
         refreshTranslation(task.messageId);
     }
 
