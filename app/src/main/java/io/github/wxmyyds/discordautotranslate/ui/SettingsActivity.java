@@ -700,6 +700,163 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         return scroll;
     }
 
+    private void updateOutboundButtonsSummary() {
+        if (outboundButtonsSummary == null) return;
+        if (outboundButtonsDraft.isEmpty()) {
+            outboundButtonsSummary.setText(chineseUi ? "未启用任何发送按钮" : "No outbound buttons enabled");
+            return;
+        }
+        StringBuilder summary = new StringBuilder();
+        for (OutboundButtonConfig button : outboundButtonsDraft) {
+            if (summary.length() > 0) summary.append("、");
+            summary.append(button.label).append("（").append(button.targetLanguage).append("）");
+        }
+        outboundButtonsSummary.setText(summary.toString());
+    }
+
+    private void openOutboundButtonsEditor() {
+        if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
+                || persistence.isLoading() || saveInProgress || syncInProgress
+                || outboundButtonsDialog != null) return;
+        String[] labels = chineseUi ? TARGET_LANGUAGE_LABELS_ZH : TARGET_LANGUAGE_LABELS_EN;
+        outboundButtonsDialog = OutboundButtonsEditor.show(this,
+                new ArrayList<>(outboundButtonsDraft), TARGET_LANGUAGE_VALUES, labels,
+                promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT),
+                updated -> {
+                    outboundButtonsDraft.clear();
+                    outboundButtonsDraft.addAll(updated);
+                    String firstLanguage = selectedSendTargetLanguage();
+                    ensureTargetLanguageAvailable(firstLanguage);
+                    sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstLanguage));
+                    updateOutboundButtonsSummary();
+                    markDirty();
+                });
+        outboundButtonsDialog.setOnDismissListener(dialog -> outboundButtonsDialog = null);
+    }
+
+    private void openAdvancedSettings() {
+        if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
+                || persistence.isLoading() || saveInProgress || syncInProgress
+                || advancedSettingsDialog != null) return;
+
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+
+        EditText incomingPrompt = addField(form,
+                chineseUi ? "接收翻译系统提示词" : "Incoming translation system prompt",
+                getString(R.string.hint_system_prompt),
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        incomingPrompt.setMinLines(7);
+        incomingPrompt.setText(promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
+        Button resetIncoming = new Button(this);
+        resetIncoming.setText(chineseUi ? "恢复接收提示词默认值" : "Restore incoming prompt");
+        resetIncoming.setOnClickListener(v -> incomingPrompt.setText(Config.DEF_SYSTEM_PROMPT));
+        form.addView(resetIncoming, matchWrap());
+
+        EditText newButtonPrompt = addField(form,
+                chineseUi ? "新建发送按钮的默认提示词" : "Default prompt for new send buttons",
+                chineseUi ? "支持 {{target_language}}。" : "Supports {{target_language}}.",
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        newButtonPrompt.setMinLines(7);
+        newButtonPrompt.setText(promptOrDefault(sendSystemPromptInput,
+                Config.DEF_SEND_SYSTEM_PROMPT));
+        Button resetOutbound = new Button(this);
+        resetOutbound.setText(chineseUi ? "恢复新建按钮提示词默认值" : "Restore new-button prompt");
+        resetOutbound.setOnClickListener(v ->
+                newButtonPrompt.setText(Config.DEF_SEND_SYSTEM_PROMPT));
+        form.addView(resetOutbound, matchWrap());
+
+        TextView filterTitle = new TextView(this);
+        filterTitle.setText(chineseUi ? "译文防损坏校验" : "Translation integrity checks");
+        filterTitle.setTextSize(16f);
+        filterTitle.setPadding(0, dp(12), 0, dp(4));
+        form.addView(filterTitle, matchWrap());
+        TextView filterHint = new TextView(this);
+        filterHint.setTextSize(12f);
+        filterHint.setText(chineseUi
+                ? "每项可以独立关闭。关闭检查可能放行格式损坏、漏译或重复内容；空响应始终无效。"
+                : "Checks can be disabled independently. Disabling them may allow malformed, incomplete, or repeated output; empty responses remain invalid.");
+        form.addView(filterHint, matchWrap());
+
+        Switch wrapper = addDialogSwitch(form, chineseUi ? "检查包装标签" : "Check wrapper tags",
+                checkWrapperInput.isChecked());
+        Switch strip = addDialogSwitch(form,
+                chineseUi ? "自动移除完整的外层包装标签" : "Strip one exact outer wrapper pair",
+                stripOuterWrapperInput.isChecked());
+        Switch segments = addDialogSwitch(form,
+                chineseUi ? "检查残留分段标记" : "Check leftover segment markers",
+                checkSegmentMarkersInput.isChecked());
+        Switch placeholders = addDialogSwitch(form,
+                chineseUi ? "检查模板占位符" : "Check template placeholders",
+                checkPlaceholdersInput.isChecked());
+        Switch retained = addDialogSwitch(form,
+                chineseUi ? "检查保留节点定位标记" : "Check retained-node markers",
+                checkRetainedMarkersInput.isChecked());
+        Switch length = addDialogSwitch(form,
+                chineseUi ? "检查译文长度比例" : "Check translation length ratio",
+                checkLengthInput.isChecked());
+        EditText minPercent = addField(form,
+                chineseUi ? "译文最小长度（原文百分比）" : "Minimum translation length (% of source)",
+                String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
+        minPercent.setText(minLengthPercentInput.getText().toString());
+        EditText maxPercent = addField(form,
+                chineseUi ? "译文最大长度（原文百分比）" : "Maximum translation length (% of source)",
+                String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
+        maxPercent.setText(maxLengthPercentInput.getText().toString());
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(chineseUi ? "提示词与译文过滤设置" : "Prompts and translation filters")
+                .setView(scroll)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(chineseUi ? "应用到待保存设置" : "Apply to draft", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    int min;
+                    int max;
+                    try {
+                        min = Integer.parseInt(minPercent.getText().toString().trim());
+                        max = Integer.parseInt(maxPercent.getText().toString().trim());
+                    } catch (NumberFormatException invalid) {
+                        Toast.makeText(this, "长度比例必须填写整数", Toast.LENGTH_SHORT).show();
+                        return;
+                    }
+                    if (min < 0 || max > 1000 || min > max) {
+                        Toast.makeText(this, "长度比例需在 0～1000 之间，且最小值不能大于最大值",
+                                Toast.LENGTH_LONG).show();
+                        return;
+                    }
+                    systemPromptInput.setText(incomingPrompt.getText().toString());
+                    sendSystemPromptInput.setText(newButtonPrompt.getText().toString());
+                    checkWrapperInput.setChecked(wrapper.isChecked());
+                    stripOuterWrapperInput.setChecked(strip.isChecked());
+                    checkSegmentMarkersInput.setChecked(segments.isChecked());
+                    checkPlaceholdersInput.setChecked(placeholders.isChecked());
+                    checkRetainedMarkersInput.setChecked(retained.isChecked());
+                    checkLengthInput.setChecked(length.isChecked());
+                    minLengthPercentInput.setText(String.valueOf(min));
+                    maxLengthPercentInput.setText(String.valueOf(max));
+                    markDirty();
+                    dialog.dismiss();
+                }));
+        advancedSettingsDialog = dialog;
+        dialog.setOnDismissListener(ignored -> advancedSettingsDialog = null);
+        dialog.show();
+    }
+
+    private Switch addDialogSwitch(LinearLayout parent, String label, boolean checked) {
+        Switch input = new Switch(this);
+        input.setText(label);
+        input.setShowText(false);
+        input.setChecked(checked);
+        input.setMinimumHeight(dp(48));
+        parent.addView(input, matchWrap());
+        return input;
+    }
+
     private Switch addValidationSwitch(LinearLayout parent, String label, boolean defaultValue) {
         Switch input = new Switch(this);
         input.setText(label);
