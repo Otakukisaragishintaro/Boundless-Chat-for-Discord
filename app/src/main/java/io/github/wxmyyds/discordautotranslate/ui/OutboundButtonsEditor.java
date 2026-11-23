@@ -74,14 +74,18 @@ public final class OutboundButtonsEditor {
                         ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 Button delete = new Button(activity);
                 delete.setText("删除");
-                delete.setOnClickListener(v -> new AlertDialog.Builder(activity)
-                        .setTitle("删除发送按钮")
-                        .setMessage("确定删除「" + item.label + "」吗？")
-                        .setNegativeButton(android.R.string.cancel, null)
-                        .setPositiveButton("删除", (d, which) -> {
-                            draft.remove(index);
-                            refresh[0].run();
-                        }).show());
+                delete.setOnClickListener(v -> {
+                    AlertDialog confirm = new AlertDialog.Builder(activity)
+                            .setTitle("删除发送按钮")
+                            .setMessage("确定删除「" + item.label + "」吗？")
+                            .setNegativeButton(android.R.string.cancel, null)
+                            .setPositiveButton("删除", (d, which) -> {
+                                draft.remove(index);
+                                refresh[0].run();
+                            }).create();
+                    confirm.show();
+                    SettingsUiStyle.styleDialog(activity, confirm);
+                });
                 actions.addView(delete, new LinearLayout.LayoutParams(0,
                         ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
                 row.addView(actions, match());
@@ -104,6 +108,7 @@ public final class OutboundButtonsEditor {
         };
         refresh[0].run();
         dialog.show();
+        SettingsUiStyle.styleDialog(activity, dialog);
         return dialog;
     }
 
@@ -181,6 +186,7 @@ public final class OutboundButtonsEditor {
                     }
                 }));
         editor.show();
+        SettingsUiStyle.styleDialog(activity, editor);
     }
 
     private static void editPrompt(Activity activity, String[] prompt, Button owner) {
@@ -199,14 +205,16 @@ public final class OutboundButtonsEditor {
         reset.setText("恢复默认提示词");
         reset.setOnClickListener(v -> input.setText(Config.DEF_SEND_SYSTEM_PROMPT));
         layout.addView(reset, match());
-        new AlertDialog.Builder(activity)
+        AlertDialog promptDialog = new AlertDialog.Builder(activity)
                 .setTitle("此语言按钮的独立提示词")
                 .setView(layout)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton("确定", (d, which) -> {
                     prompt[0] = input.getText().toString();
                     owner.setText("编辑此按钮的独立提示词（" + prompt[0].length() + " 字符）");
-                }).show();
+                }).create();
+        promptDialog.show();
+        SettingsUiStyle.styleDialog(activity, promptDialog);
     }
 
     private static LinearLayout.LayoutParams match() {

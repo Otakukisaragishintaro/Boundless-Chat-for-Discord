@@ -51,6 +51,7 @@ final class TranslationScopeEditor {
         Window window = Objects.requireNonNull(dialog.getWindow());
         window.getDecorView().setPadding(0, 0, 0, 0);
         window.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+        SettingsUiStyle.styleFullscreenDialog(activity, dialog);
         return dialog;
     }
 
