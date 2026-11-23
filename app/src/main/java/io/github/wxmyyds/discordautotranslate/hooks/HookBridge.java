@@ -148,6 +148,8 @@ public final class HookBridge {
         }
         Config.Snapshot old = this.config;
         this.config = c;
+        ProjectLog.info("local translation cache configured enabled=" + c.cacheEnabled
+                + " diskLimit=" + c.cacheLimit);
         TranslationCache.get().setMaxDiskEntries(c.cacheLimit);
 
         // 并发上限即时生效（需求 §5.7 普通配置变更尽量即时生效）。
@@ -444,7 +446,15 @@ public final class HookBridge {
         }
 
         // 缓存命中：直接出结果，不发请求（需求 §5.6）。
-        String cached = cfg.cacheEnabled ? TranslationCache.get().get(hash) : null;
+        String cached = null;
+        if (cfg.cacheEnabled) {
+            cached = TranslationCache.get().get(hash);
+            ProjectLog.info("local translation cache lookup status="
+                    + (cached == null ? "MISS" : "HIT"));
+        } else {
+            ProjectLog.infoOnce("translation.cache.disabled",
+                    "local translation cache lookup skipped reason=disabled");
+        }
         if (cached != null) {
             if (StateStore.get().useCached(entry, cached)) refreshTranslation(messageId);
             return;
