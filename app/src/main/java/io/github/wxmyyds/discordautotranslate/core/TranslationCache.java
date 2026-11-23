@@ -12,6 +12,7 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 有容量上限的双层翻译缓存。
@@ -31,12 +32,6 @@ public final class TranslationCache {
     private static volatile Context sContext;
     @Nullable private static volatile String sModulePackageName;
     private static volatile TranslationCache sInstance;
-    private static final ExecutorService COUNT_PUBLISHER =
-            Executors.newSingleThreadExecutor(runnable -> {
-                Thread thread = new Thread(runnable, "BoundlessChat-CacheCount");
-                thread.setDaemon(true);
-                return thread;
-            });
 
     /** 安装翻译 Hook 前，使用目标应用 Context 初始化数据库存储位置。 */
     public static void initialize(@Nullable Context context, @Nullable String modulePackageName) {
@@ -50,10 +45,10 @@ public final class TranslationCache {
      * Publish only the persistent entry count to the module app. The ContentProvider call is
      * dispatched on a dedicated worker so a cache write never blocks Discord's main thread.
      */
-    public static void publishEntryCountToModule(int count) {
+    public void publishEntryCountToModule(int count) {
         if (count < 0) return;
         try {
-            COUNT_PUBLISHER.execute(() -> {
+            countPublisher.execute(() -> {
                 Context context = sContext;
                 String modulePackageName = sModulePackageName;
                 if (context == null || modulePackageName == null || modulePackageName.isEmpty()) {
@@ -104,11 +99,15 @@ public final class TranslationCache {
         synchronized (TranslationCache.class) {
             TranslationCache old = sInstance;
             sInstance = null;
-            if (old != null) old.closeDatabase();
+            if (old != null) {
+                old.closeDatabase();
+                old.closeCountPublisher();
+            }
         }
     }
 
     private final int maxMemoryEntries;
+    private final ExecutorService countPublisher;
     private volatile int maxDiskEntries = DEFAULT_DISK_ENTRIES;
     private int writesSincePrune;
     /** -1 means not loaded yet; after initialization this tracks SQLite rows incrementally. */
@@ -120,6 +119,11 @@ public final class TranslationCache {
 
     TranslationCache(int maxEntries) {
         maxMemoryEntries = Math.max(1, maxEntries);
+        countPublisher = Executors.newSingleThreadExecutor(runnable -> {
+            Thread thread = new Thread(runnable, "BoundlessChat-CacheCount");
+            thread.setDaemon(true);
+            return thread;
+        });
         memory = new LinkedHashMap<String, String>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
@@ -364,6 +368,19 @@ public final class TranslationCache {
                 // Best-effort close during runtime teardown.
             }
             helper = null;
+        }
+    }
+
+    /** Stop IPC work owned by this cache generation during LSPosed hot reload. */
+    private void closeCountPublisher() {
+        countPublisher.shutdownNow();
+        try {
+            if (!countPublisher.awaitTermination(500L, TimeUnit.MILLISECONDS)) {
+                ProjectLog.warnOnce("cache.count.publisher.shutdown_timeout",
+                        "local translation cache count publisher shutdown timed out");
+            }
+        } catch (InterruptedException interrupted) {
+            Thread.currentThread().interrupt();
         }
     }
 

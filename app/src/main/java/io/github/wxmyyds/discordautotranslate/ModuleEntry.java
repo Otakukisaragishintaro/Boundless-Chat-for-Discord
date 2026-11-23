@@ -506,7 +506,8 @@ public class ModuleEntry extends XposedModule {
      */
     private void attachCacheCountPublisher() {
         try {
-            TranslationCache.get().setCountListener(TranslationCache::publishEntryCountToModule);
+            TranslationCache cache = TranslationCache.get();
+            cache.setCountListener(cache::publishEntryCountToModule);
             ProjectLog.info("local translation cache count publisher attached");
         } catch (Throwable failure) {
             ProjectLog.warn("cache count publisher attach failed errorClass="
