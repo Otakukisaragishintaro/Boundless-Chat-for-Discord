@@ -209,6 +209,7 @@ public class ModuleEntry extends XposedModule {
                                     // diagnostics. Remote Xposed preferences are read-only in hooked apps.
                                     ProjectLog.setTransport(context, getModuleApplicationInfo().packageName);
                                     configureLogging();
+                                    ProjectLog.bootstrapInfo("Discord Application.attach hook triggered");
                                     ProjectLog.bootstrapInfo("Discord Application.attach reached; remote configuration acquisition retried");
                                     ProjectLog.info("Application.attach reached for Discord");
                                     installForApplication(context, context.getClassLoader());
@@ -255,8 +256,8 @@ public class ModuleEntry extends XposedModule {
                     }));
 
             bootstrapInstalled = true;
-            ProjectLog.info("Application.attach and Application.onCreate bootstrap hooks installed");
-            ProjectLog.bootstrapInfo("waiting for Discord Application.attach or Application.onCreate");
+            ProjectLog.bootstrapInfo("Application.attach bootstrap hook installed");
+            ProjectLog.bootstrapInfo("waiting for Discord Application.attach");
         } catch (Throwable t) {
             ProjectLog.warn("bootstrap hook installation failed errorClass="
                     + t.getClass().getSimpleName());
@@ -283,8 +284,10 @@ public class ModuleEntry extends XposedModule {
                 ProjectLog.bootstrapWarn("no hook profile matches installed Discord version");
                 return;
             }
+            ProjectLog.bootstrapInfo("Discord hook profile selected");
             install(cl, config);
             installed = true;
+            ProjectLog.bootstrapInfo("Discord required hooks installed and runtime activated");
         } catch (Throwable t) {
             ProjectLog.warn("configured hook installation failed errorClass="
                     + t.getClass().getSimpleName() + "; restart Discord required");
@@ -351,6 +354,8 @@ public class ModuleEntry extends XposedModule {
                         Object result = chain.proceed();
                         try (HookRuntime.Lease lease = HookRuntime.enter()) {
                             if (lease != null && chain.getThisObject() instanceof Activity) {
+                                ProjectLog.infoOnce("diagnostic.activityResume",
+                                        "Discord Activity.onResume hook triggered");
                                 ChatInputTranslateButton.attach((Activity) chain.getThisObject());
                             }
                         }
@@ -367,6 +372,8 @@ public class ModuleEntry extends XposedModule {
                         if (Boolean.TRUE.equals(chain.getArg(0))) {
                             try (HookRuntime.Lease lease = HookRuntime.enter()) {
                                 if (lease != null && chain.getThisObject() instanceof Activity) {
+                                    ProjectLog.infoOnce("diagnostic.windowFocus",
+                                            "Discord Activity window-focus hook triggered");
                                     ChatInputTranslateButton.attach(
                                             (Activity) chain.getThisObject());
                                 }
