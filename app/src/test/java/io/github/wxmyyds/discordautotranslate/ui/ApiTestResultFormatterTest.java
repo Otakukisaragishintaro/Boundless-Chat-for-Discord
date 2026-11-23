@@ -173,6 +173,22 @@ public class ApiTestResultFormatterTest {
     }
 
     @Test
+    public void translationValidationDetailIsShownWithoutExposingOtherExceptionMessages() throws Exception {
+        String detail = "译文未通过防损坏校验：译文长度异常（5/40）：疑似内容丢失";
+        Constructor<ApiTester.Failure> constructor = ApiTester.Failure.class.getDeclaredConstructor(
+                TranslationException.Kind.class, TranslationException.Reason.class,
+                int.class, String.class, String.class, String.class);
+        constructor.setAccessible(true);
+        ApiTester.Failure failure = constructor.newInstance(TranslationException.Kind.PARSE,
+                TranslationException.Reason.TRANSLATION_INVALID, 200, "TranslationException",
+                null, detail);
+        RecordingStrings strings = new RecordingStrings();
+        String output = ApiTestResultFormatter.format(
+                result(ApiTester.TestKind.SEND_TRANSLATION, null, 8L, failure), strings);
+        assertTrue(output.contains(detail));
+    }
+
+    @Test
     public void absentHttpStatusAndExceptionTypeDoNotProduceInventedDetails() throws Exception {
         RecordingStrings strings = new RecordingStrings();
         ApiTestResultFormatter.format(result(ApiTester.TestKind.TRANSLATION, null, 0L,
@@ -220,9 +236,9 @@ public class ApiTestResultFormatterTest {
             TranslationException.Reason reason, int status, String type, String upstreamBody) throws Exception {
         Constructor<ApiTester.Failure> constructor = ApiTester.Failure.class.getDeclaredConstructor(
                 TranslationException.Kind.class, TranslationException.Reason.class,
-                int.class, String.class, String.class);
+                int.class, String.class, String.class, String.class);
         constructor.setAccessible(true);
-        return constructor.newInstance(kind, reason, status, type, upstreamBody);
+        return constructor.newInstance(kind, reason, status, type, upstreamBody, "");
     }
 
     private static ApiTester.Result result(ApiTester.TestKind kind, String translated, long elapsed,
