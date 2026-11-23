@@ -204,6 +204,7 @@
     <string name="hint_cache_limit">输入 1 到 1,000,000 之间的整数。关闭缓存时也可以提前修改容量。</string>
     <string name="hint_cache_recommended">建议设置为 100,000 到 1,000,000 条。实际占用取决于译文长度和 SQLite 存储开销。</string>
     <string name="label_cache_entry_count">已保存的译文：%1$d 条</string>
+    <string name="label_cache_count_unavailable">当前未连接 Discord，暂时无法读取缓存数量。</string>
     <string name="error_cache_limit">请输入 1 到 1,000,000 之间的整数。</string>
     <string name="button_apply_cache_limit">应用容量设置</string>
     <string name="menu_translation_cache">本地翻译缓存设置…</string>
