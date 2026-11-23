@@ -38,6 +38,9 @@ final class ApiTestResultFormatter {
         StringBuilder message = new StringBuilder(strings.get(R.string.result_test_failure,
                 strings.get(testKindResource(result.testKind)), result.elapsedMs));
         message.append('\n').append(strings.get(reasonResource(failure)));
+        if (!failure.detail.isEmpty()) {
+            message.append("\\n").append(failure.detail);
+        }
         message.append(strings.get(R.string.result_failure_category,
                 strings.get(categoryResource(failure.kind)), failure.kind.name()));
         message.append(strings.get(R.string.result_failure_reason, failure.reason.name()));
