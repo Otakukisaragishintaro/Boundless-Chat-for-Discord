@@ -259,8 +259,7 @@ public class ModuleEntry extends XposedModule {
                 return;
             }
             ProjectLog.bootstrapInfo("Discord hook profile selected");
-            // Keep the translation cache in Discord's private app storage so it survives
-            // Discord relogins and process restarts without exposing it to another app.
+            // 将缓存保存在 Discord 私有目录中，使其跨重新登录和进程重启保留，其他应用无法直接访问。
             TranslationCache.initialize(context);
             attachCacheCommandListener(context);
             install(cl, config);
@@ -485,7 +484,7 @@ public class ModuleEntry extends XposedModule {
             }
             cacheCommandPreferences = remote;
             remote.registerOnSharedPreferenceChangeListener(cacheCommandListener);
-            // Also consume a request issued while Discord was not running.
+            // 同时处理 Discord 未运行期间由设置页发出的清空请求。
             TranslationCache.get().setCountListener(count -> {
                 try { remote.edit().putInt(Config.KEY_CACHE_ENTRY_COUNT, count).apply(); }
                 catch (Throwable ignored) { /* 计数同步失败不影响翻译。 */ }
