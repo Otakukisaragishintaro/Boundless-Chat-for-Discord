@@ -1351,6 +1351,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         boolean remoteConfigLoggingEnabled = remote != null
                 && remote.getBoolean(Config.KEY_LOGGING_ENABLED, false);
         long configuredAt = diagnostics.getLong(DiagnosticProvider.KEY_CONFIGURED_AT, 0L);
+        long transportPingAt = diagnostics.getLong("transport_last_ping_at", 0L);
         boolean moduleLoggingEnabled = diagnostics.getBoolean(
                 DiagnosticProvider.KEY_MODULE_ENABLED, false);
         boolean configValid = diagnostics.getBoolean(DiagnosticProvider.KEY_CONFIG_VALID, false);
@@ -1375,6 +1376,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .append(configuredAt == 0L ? (chineseUi ? "尚未收到" : "not received")
                         : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                                 .format(new java.util.Date(configuredAt))).append('\n')
+                .append(chineseUi ? "IPC 通道握手：" : "IPC transport handshake: ")
+                .append(transportPingAt == 0L ? (chineseUi ? "尚未成功" : "not confirmed")
+                        : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
+                                .format(new java.util.Date(transportPingAt))).append('\n')
                 .append(chineseUi ? "独立诊断通道：" : "Independent diagnostics: ")
                 .append(chineseUi
                         ? "ContentProvider IPC（仅接受已验证的 Discord UID 和白名单生命周期事件）"
