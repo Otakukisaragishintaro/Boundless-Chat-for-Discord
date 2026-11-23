@@ -121,15 +121,6 @@ public final class ChatInputTranslateButton {
     /** Called from Activity.onResume on the main thread. */
     public static void attach(Activity activity) {
         if (activity == null || activity.getWindow() == null) return;
-        ProjectLog.infoOnce("diagnostic.chatInputActivityAttach",
-                "Discord chat input Activity attach entered");
-        // Diagnostics must never prevent the actual button hook from attaching.
-        try {
-            ChatInputViewDiagnostics.attach(activity);
-        } catch (Throwable failure) {
-            ProjectLog.warn("chat input hierarchy diagnostics failed errorClass="
-                    + failure.getClass().getSimpleName());
-        }
         View decor = activity.getWindow().getDecorView();
         ViewTreeObserver observer = decor.getViewTreeObserver();
         if (!observer.isAlive()) return;
@@ -180,7 +171,6 @@ public final class ChatInputTranslateButton {
 
     /** Called from Activity.onDestroy on the main thread. */
     public static void detach(Activity activity) {
-        ChatInputViewDiagnostics.detach(activity);
         if (activity == null) return;
         synchronized (REGISTRATIONS) {
             detachLocked(activity);
@@ -201,7 +191,6 @@ public final class ChatInputTranslateButton {
 
     /** Remove every listener and injected button before the runtime dispatcher is shut down. */
     public static void clear() {
-        ChatInputViewDiagnostics.clear();
         synchronized (REGISTRATIONS) {
             if (REGISTRATIONS.isEmpty()) return;
         }
@@ -245,8 +234,6 @@ public final class ChatInputTranslateButton {
         }
         EditText editor = (EditText) focused;
         ensurePendingEditorWatcher(activity, registration, editor);
-        ProjectLog.infoOnce("diagnostic.chatInputEditorFocused",
-                "Discord chat input editor focused");
         if (!registration.bindings.isEmpty()
                 && registration.bindings.get(0).editor == editor
                 && registration.bindings.get(0).button.getParent()
@@ -267,27 +254,20 @@ public final class ChatInputTranslateButton {
                 positionButton(binding);
             }
             if (refreshedSendView == null) {
-                ProjectLog.infoOnce("diagnostic.chatInputSendControlTemporarilyMissing",
-                        "Discord native send control temporarily unavailable; using stable composer fallback anchor");
                 scheduleSendCandidateRetry(activity, registration, editor);
             } else {
                 cancelSendCandidateRetry(registration);
             }
-            reportHierarchyIfEnabled(editor);
             return;
         }
         removeBinding(registration);
 
         Candidate candidate = findSendCandidate(editor);
         if (candidate != null) {
-            ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
-                    "Discord chat input send control found");
         } else {
             // Attach immediately on editor focus. If Discord has not created its native
             // send action yet, positionButton uses the stable composer container instead
             // of waiting for an IME hide/show cycle.
-            ProjectLog.infoOnce("diagnostic.chatInputFallbackAnchor",
-                    "Discord translation button binding attached; waiting for native send control anchor");
         }
 
         if (!(registration.decor instanceof FrameLayout)) {
@@ -346,13 +326,8 @@ public final class ChatInputTranslateButton {
             scheduleSendCandidateRetry(activity, registration, editor);
             // Keep the text watcher active for the lifetime of the binding. Discord can
             // replace its native send control as the composer text changes.
-            ProjectLog.infoOnce("diagnostic.translationButtonAttached",
-                    "Discord outbound translation buttons attached count=" + outboundButtons.size());
-            reportHierarchyIfEnabled(editor);
         } catch (Throwable failure) {
             removeBinding(registration);
-            ProjectLog.infoOnce("diagnostic.translationButtonAttachFailed",
-                    "Discord translation button attach failed");
             ProjectLog.warn("chat input translate button attach failed errorClass="
                     + failure.getClass().getSimpleName());
         }
@@ -476,27 +451,38 @@ public final class ChatInputTranslateButton {
                 && sendView.getWidth() > 0 && sendView.getHeight() > 0;
     }
 
-    /** Find the nearest stable layout container around the editor, not the moving caret. */
+    /**
+     * Find the composer row that reserves horizontal space for Discord's send action.
+     * An empty React editor can shrink to its text width; anchoring to that editor or its
+     * immediate wrapper makes the overlay drift toward the middle of the screen.
+     */
     private static View findComposerFallbackAnchor(EditText editor) {
         if (editor == null) return null;
         Rect editorBounds = boundsOnScreen(editor);
+        int requiredTrailingSpace = dp(editor.getContext(), BUTTON_WIDTH_DP + 16);
         ViewParent parent = editor.getParent();
-        for (int depth = 0; depth < 6 && parent instanceof View; depth++) {
+        View best = null;
+        int bestExtraWidth = Integer.MAX_VALUE;
+        for (int depth = 0; depth < 8 && parent instanceof View; depth++) {
             View candidate = (View) parent;
             if (candidate instanceof ViewGroup && candidate.isAttachedToWindow()
-                    && candidate.isShown() && candidate.getWidth() >= editor.getWidth()
-                    && candidate.getHeight() > 0) {
+                    && candidate.isShown() && candidate.getHeight() > 0) {
                 Rect bounds = boundsOnScreen(candidate);
-                if (bounds.right >= editorBounds.right
-                        && bounds.left <= editorBounds.left
-                        && bounds.bottom >= editorBounds.top
-                        && bounds.top <= editorBounds.bottom) {
-                    return candidate;
+                int trailingSpace = bounds.right - editorBounds.right;
+                boolean containsEditor = bounds.left <= editorBounds.left
+                        && bounds.top <= editorBounds.top
+                        && bounds.bottom >= editorBounds.bottom;
+                if (containsEditor && trailingSpace >= requiredTrailingSpace) {
+                    int extraWidth = bounds.width() - editorBounds.width();
+                    if (extraWidth < bestExtraWidth) {
+                        best = candidate;
+                        bestExtraWidth = extraWidth;
+                    }
                 }
             }
             parent = candidate.getParent();
         }
-        return editor;
+        return best;
     }
 
     private static void startTranslation(ButtonBinding binding) {
@@ -810,17 +796,4 @@ public final class ChatInputTranslateButton {
         return Math.round(value * activity.getResources().getDisplayMetrics().density);
     }
 
-    private static void reportHierarchyIfEnabled(EditText editor) {
-        if (!ProjectLog.isEnabled()) return;
-        StringBuilder report = new StringBuilder("chat-input-editor class=")
-                .append(editor.getClass().getName())
-                .append(" parent=");
-        ViewParent parent = editor.getParent();
-        int depth = 0;
-        while (parent instanceof View && depth++ < 5) {
-            report.append(((View) parent).getClass().getName()).append('/');
-            parent = parent.getParent();
-        }
-        ProjectLog.info(report.toString());
-    }
 }

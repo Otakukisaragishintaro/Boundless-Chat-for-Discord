@@ -74,7 +74,6 @@ public class ModuleEntry extends XposedModule {
     @Override
     public void onModuleLoaded(@NonNull XposedModuleInterface.ModuleLoadedParam param) {
         ProjectLog.attach(this::log);
-        ProjectLog.connectBeforeApplicationAttach(getModuleApplicationInfo().packageName);
         ProjectLog.bootstrapInfo("module lifecycle entered");
         configureLogging();
         ProjectLog.info("onModuleLoaded lifecycle callback received");
@@ -90,9 +89,7 @@ public class ModuleEntry extends XposedModule {
         if (!TARGET_PACKAGE.equals(param.getPackageName())) {
             return;
         }
-        // Retry the same early transport acquisition at the package lifecycle boundary.
-        // This runs before Application.attach, so startup checkpoints can be persisted even
-        // when the attach hook itself is the component that later fails.
+        // Re-read logging preferences at the package lifecycle boundary.
         ProjectLog.connectBeforeApplicationAttach(getModuleApplicationInfo().packageName);
         // Remote preferences may not be ready during onModuleLoaded. Re-read them
         // at the target package lifecycle boundary before emitting any startup diagnostics.
@@ -210,9 +207,6 @@ public class ModuleEntry extends XposedModule {
                             if (contextObject instanceof Context) {
                                 Context context = (Context) contextObject;
                                 if (TARGET_PACKAGE.equals(context.getPackageName())) {
-                                    // Establish the module-owned IPC route before emitting target-process
-                                    // diagnostics. Remote Xposed preferences are read-only in hooked apps.
-                                    ProjectLog.setTransport(context, getModuleApplicationInfo().packageName);
                                     configureLogging();
                                     ProjectLog.bootstrapInfo("Discord Application.attach hook triggered");
                                     ProjectLog.bootstrapInfo("Discord Application.attach reached; remote configuration acquisition retried");

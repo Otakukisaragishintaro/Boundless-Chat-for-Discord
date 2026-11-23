@@ -27,13 +27,6 @@
             </intent-filter>
         </activity>
 
-        <!-- Discord 进程仅可向此 Provider 提交白名单诊断事件；Provider 会验证 Binder UID。 -->
-        <provider
-            android:name=".core.DiagnosticProvider"
-            android:authorities="${applicationId}.diagnostics"
-            android:exported="true"
-            android:grantUriPermissions="false" />
-
         <!-- 注意：io.github.libxposed.service.XposedProvider 由
              io.github.libxposed:service 这个 AAR 自带的 manifest 声明并合并进来，
              此处不要重复声明，否则会因 authority 重复而构建失败。 -->
