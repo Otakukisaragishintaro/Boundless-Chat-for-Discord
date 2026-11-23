@@ -91,10 +91,15 @@ public final class JsonApiEngine implements Scheduler.Engine {
             }
             translated = translated.trim();
             if (validateTranslation) {
-                // Some providers echo the exact outer request boundary tags despite the prompt.
-                // Strip only one well-formed outer pair; embedded/nested tags remain invalid.
-                translated = Segments.stripOuterResponseWrapper(translated);
-                String violation = Segments.plainTextViolation(translated, text);
+                // Optional normalization: remove only one exact outer wrapper pair.
+                // Embedded, partial, and nested markers remain available to the checks below.
+                if (cfg.stripOuterWrapper) {
+                    translated = Segments.stripOuterResponseWrapper(translated);
+                }
+                String violation = Segments.plainTextViolation(translated, text,
+                        cfg.checkWrapper, cfg.checkSegmentMarkers, cfg.checkPlaceholders,
+                        cfg.checkRetainedMarkers, cfg.checkLength,
+                        cfg.minLengthPercent, cfg.maxLengthPercent);
                 if (violation != null) {
                     String safeViolation = violation.replaceAll("（[0-9]+/[0-9]+）", "");
                     throw new TranslationException(TranslationException.Kind.PARSE,
