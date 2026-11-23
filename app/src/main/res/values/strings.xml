@@ -209,6 +209,7 @@
     <string name="menu_translation_cache">Local translation cache…</string>
     <string name="menu_api_settings">API and request settings…</string>
     <string name="button_apply_api_settings">Apply API and request settings</string>
+    <string name="button_apply_field">Apply this field</string>
         <string name="button_clear_translation_cache">Clear local translation cache</string>
     <string name="confirm_clear_translation_cache">Permanently delete all locally saved translations? This does not change API settings or chat messages.</string>
     <string name="status_cache_clear_requested">Cache clear request sent to Discord. It will be processed by the Discord module.</string>
