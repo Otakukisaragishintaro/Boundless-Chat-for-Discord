@@ -91,6 +91,9 @@ public final class Config {
      */
     public static final String KEY_SYSTEM_PROMPT = "system_prompt";
 
+    /** Independent system prompt for translating messages before they are sent. */
+    public static final String KEY_SEND_SYSTEM_PROMPT = "send_system_prompt";
+
     /**
      * 默认系统提示词。
      *
@@ -111,6 +114,10 @@ public final class Config {
             + "5. Keep the original line structure exactly: the output must have the same paragraphs separated by the same blank lines, and the same line breaks within each paragraph. Never merge, split, reorder, add, or drop paragraphs or lines. The source may contain repeated or identical paragraphs (e.g. lists, spam, ads); translate every occurrence and keep the repetition exactly.\n"
             + "6. Keep every bare link exactly as it appears in the input and in its original position: never modify, translate, merge, reorder, or drop links. Return other untranslatable content (garbled text, bare symbols) unchanged.\n"
             + "7. Some input text is wrapped in marker tags like <x1>...</x1> marking styled spans. Keep every marker tag exactly as it is, in its original position, and translate only the text between the tags.";
+
+    /** Outbound default uses a replaceable target-language token. */
+    public static final String DEF_SEND_SYSTEM_PROMPT =
+            DEF_SYSTEM_PROMPT.replace("Simplified Chinese", "{{target_language}}");
 
     // ---- 超时与并发 ----
     public static final String KEY_TIMEOUT_MS = "timeout_ms";
@@ -146,6 +153,7 @@ public final class Config {
         public final String sendTargetLang;
         public final String extraHeaders;
         public final String systemPrompt;
+        public final String sendSystemPrompt;
         /** 供应商协议，取值为 {@link #PROTOCOL_OPENAI_COMPATIBLE}、
          * {@link #PROTOCOL_OPENAI_RESPONSES} 或 {@link #PROTOCOL_ANTHROPIC_MESSAGES}。 */
         public final String protocol;
@@ -168,6 +176,7 @@ public final class Config {
             sendTargetLang = str(p, KEY_SEND_TARGET_LANG, DEF_SEND_TARGET_LANG);
             extraHeaders = str(p, KEY_EXTRA_HEADERS, DEF_EXTRA_HEADERS);
             systemPrompt = str(p, KEY_SYSTEM_PROMPT, DEF_SYSTEM_PROMPT);
+            sendSystemPrompt = str(p, KEY_SEND_SYSTEM_PROMPT, DEF_SEND_SYSTEM_PROMPT);
             protocol = readProtocol(p);
             streaming = readBoolean(p, KEY_STREAMING, DEF_STREAMING);
             timeoutMs = positiveInt(p, KEY_TIMEOUT_MS, DEF_TIMEOUT_MS);
@@ -187,6 +196,7 @@ public final class Config {
             sendTargetLang = DEF_SEND_TARGET_LANG;
             extraHeaders = DEF_EXTRA_HEADERS;
             systemPrompt = DEF_SYSTEM_PROMPT;
+            sendSystemPrompt = DEF_SEND_SYSTEM_PROMPT;
             protocol = DEF_PROTOCOL;
             streaming = DEF_STREAMING;
             timeoutMs = DEF_TIMEOUT_MS;
@@ -250,7 +260,7 @@ public final class Config {
          */
         public String version() {
             return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
-                    + encode(Boolean.toString(streaming)) + encode(systemPrompt)
+                    + encode(Boolean.toString(streaming)) + encode(systemPrompt) + encode(sendSystemPrompt)
                     + encode(configError == null ? "" : "invalid")
                     + encode(credentialFingerprint());
         }
@@ -284,8 +294,9 @@ public final class Config {
             targetLang = source.sendTargetLang;
             sendTargetLang = source.sendTargetLang;
             extraHeaders = source.extraHeaders;
-            // Outbound translation always gets its own generated target-language prompt.
-            systemPrompt = DEF_SYSTEM_PROMPT;
+            // Outbound translation uses its own independently editable prompt.
+            systemPrompt = source.sendSystemPrompt;
+            sendSystemPrompt = source.sendSystemPrompt;
             protocol = source.protocol;
             streaming = source.streaming;
             configError = source.configError;
