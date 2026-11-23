@@ -283,7 +283,11 @@ public final class TranslationCache {
     private SQLiteDatabase database() {
         if (database != null && database.isOpen()) return database;
         Context context = sContext;
-        if (context == null) return null;
+        if (context == null) {
+            ProjectLog.warnOnce("cache.database.context_missing",
+                    "local translation cache database unavailable reason=target_context_missing");
+            return null;
+        }
         try {
             if (helper == null) helper = new DatabaseHelper(context);
             database = helper.getWritableDatabase();
