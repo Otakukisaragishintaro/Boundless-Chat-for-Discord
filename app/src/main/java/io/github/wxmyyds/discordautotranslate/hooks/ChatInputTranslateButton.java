@@ -26,10 +26,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Adds an outbound-translation action beside Discord's native send control.
+ * Adds an outbound-translation action in the Activity decor overlay.
  *
- * The original send control is discovered from the focused editor's nearby clickable siblings.
- * Translation is completed before the editor is updated and the original send control is clicked.
+ * Discord's native send action is identified by its accessibility label and used only
+ * for submission. The injected button is positioned independently of the composer
+ * ViewGroup hierarchy so Discord's own layout parameters are never modified.
  */
 public final class ChatInputTranslateButton {
     private static final int BUTTON_WIDTH_DP = 68;
