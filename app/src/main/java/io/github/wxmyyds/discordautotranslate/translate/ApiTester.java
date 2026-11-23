@@ -19,14 +19,17 @@ public final class ApiTester {
         public final int httpStatus;
         public final String exceptionType;
         @Nullable public final String upstreamErrorBody;
+        public final String detail;
 
         private Failure(TranslationException.Kind kind, TranslationException.Reason reason,
-                        int httpStatus, String exceptionType, @Nullable String upstreamErrorBody) {
+                        int httpStatus, String exceptionType, @Nullable String upstreamErrorBody,
+                        String detail) {
             this.kind = kind;
             this.reason = reason;
             this.httpStatus = httpStatus;
             this.exceptionType = exceptionType;
             this.upstreamErrorBody = upstreamErrorBody;
+            this.detail = detail == null ? "" : detail;
         }
 
         private static Failure from(Throwable failure) {
@@ -36,16 +39,17 @@ public final class ApiTester {
                 String body = error instanceof JsonApiEngine.UpstreamHttpException
                         ? ((JsonApiEngine.UpstreamHttpException) error).responseBody : null;
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
-                        (cause == null ? error : cause).getClass().getSimpleName(), body);
+                        (cause == null ? error : cause).getClass().getSimpleName(), body,
+                        error.getMessage());
             }
             return new Failure(TranslationException.Kind.UNKNOWN,
                     TranslationException.Reason.UNKNOWN_FAILURE, 0,
-                    failure.getClass().getSimpleName(), null);
+                    failure.getClass().getSimpleName(), null, failure.getMessage());
         }
 
         private static Failure cancelled(int httpStatus) {
             return new Failure(TranslationException.Kind.CANCELLED,
-                    TranslationException.Reason.CANCELLED, httpStatus, "TranslationException", null);
+                    TranslationException.Reason.CANCELLED, httpStatus, "TranslationException", null, "");
         }
     }
 
