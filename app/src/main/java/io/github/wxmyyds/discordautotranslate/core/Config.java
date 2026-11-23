@@ -32,6 +32,8 @@ public final class Config {
     public static final String KEY_CACHE_LIMIT = "translation_cache_limit";
     public static final int DEF_CACHE_LIMIT = 100000;
     public static final int MAX_CACHE_LIMIT = 1000000;
+    /** Discord 侧向设置页同步的缓存条目数（只读状态，不参与配置版本）。 */
+    public static final String KEY_CACHE_ENTRY_COUNT = "translation_cache_entry_count";
     /** One-shot command toggled by the settings UI; deliberately excluded from config sync. */
     public static final String KEY_CACHE_CLEAR_REQUEST = "translation_cache_clear_request";
 
@@ -325,10 +327,10 @@ public final class Config {
         private static int boundedCacheLimit(SharedPreferences p) {
             if (!p.contains(KEY_CACHE_LIMIT)) return DEF_CACHE_LIMIT;
             int value = p.getInt(KEY_CACHE_LIMIT, DEF_CACHE_LIMIT);
-            if (value != 100000 && value != 1000000) {
-                throw new IllegalArgumentException(KEY_CACHE_LIMIT + " 无效");
+            if (value < 1 || value > MAX_CACHE_LIMIT) {
+                throw new IllegalArgumentException(KEY_CACHE_LIMIT + " 必须在 1 到 " + MAX_CACHE_LIMIT + " 之间");
             }
-            return Math.min(value, MAX_CACHE_LIMIT);
+            return value;
         }
 
         private static int boundedPercent(SharedPreferences p, String key, int def) {
