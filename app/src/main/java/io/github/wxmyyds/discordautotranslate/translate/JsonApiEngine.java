@@ -91,6 +91,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
             }
             translated = translated.trim();
             if (validateTranslation) {
+                // Some providers echo the exact outer request boundary tags despite the prompt.
+                // Strip only one well-formed outer pair; embedded/nested tags remain invalid.
+                translated = Segments.stripOuterResponseWrapper(translated);
                 String violation = Segments.plainTextViolation(translated, text);
                 if (violation != null) {
                     String safeViolation = violation.replaceAll("（[0-9]+/[0-9]+）", "");
