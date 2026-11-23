@@ -69,11 +69,11 @@ public class ModuleEntry extends XposedModule {
     private volatile boolean bootstrapInstalled;
     private volatile HookConfiguration hookConfiguration;
     @Nullable private SharedPreferences cacheCommandPreferences;
+    @Nullable private SharedPreferences cacheCommandState;
     private final SharedPreferences.OnSharedPreferenceChangeListener cacheCommandListener =
             (sharedPreferences, key) -> {
                 if (Config.KEY_CACHE_CLEAR_REQUEST.equals(key)) {
-                    TranslationCache.get().clear();
-                    ProjectLog.info("local translation cache cleared by settings command");
+                    handleCacheClearCommand(sharedPreferences);
                 }
             };
 
@@ -262,7 +262,7 @@ public class ModuleEntry extends XposedModule {
             // Keep the translation cache in Discord's private app storage so it survives
             // Discord relogins and process restarts without exposing it to another app.
             TranslationCache.initialize(context);
-            attachCacheCommandListener();
+            attachCacheCommandListener(context);
             install(cl, config);
             installed = true;
             ProjectLog.bootstrapInfo("Discord required hooks installed and runtime activated");
@@ -473,8 +473,10 @@ public class ModuleEntry extends XposedModule {
         }
     }
 
-    private void attachCacheCommandListener() {
+    private void attachCacheCommandListener(Context context) {
         try {
+            cacheCommandState = context.getSharedPreferences(
+                    "boundless_cache_command_state", Context.MODE_PRIVATE);
             SharedPreferences remote = getRemotePreferences(Config.GROUP);
             if (remote == null) return;
             if (cacheCommandPreferences != null && cacheCommandPreferences != remote) {
@@ -483,8 +485,27 @@ public class ModuleEntry extends XposedModule {
             }
             cacheCommandPreferences = remote;
             remote.registerOnSharedPreferenceChangeListener(cacheCommandListener);
+            // Also consume a request issued while Discord was not running.
+            handleCacheClearCommand(remote);
         } catch (Throwable failure) {
             ProjectLog.warn("cache command listener unavailable errorClass="
+                    + failure.getClass().getSimpleName());
+        }
+    }
+
+    private void handleCacheClearCommand(SharedPreferences remote) {
+        SharedPreferences state = cacheCommandState;
+        if (remote == null || state == null) return;
+        try {
+            boolean request = remote.getBoolean(Config.KEY_CACHE_CLEAR_REQUEST, false);
+            boolean handled = state.getBoolean(Config.KEY_CACHE_CLEAR_REQUEST, false);
+            if (request != handled) {
+                TranslationCache.get().clear();
+                state.edit().putBoolean(Config.KEY_CACHE_CLEAR_REQUEST, request).commit();
+                ProjectLog.info("local translation cache cleared by settings command");
+            }
+        } catch (Throwable failure) {
+            ProjectLog.warn("cache clear command failed errorClass="
                     + failure.getClass().getSimpleName());
         }
     }
@@ -492,6 +513,7 @@ public class ModuleEntry extends XposedModule {
     private void detachCacheCommandListener() {
         SharedPreferences remote = cacheCommandPreferences;
         cacheCommandPreferences = null;
+        cacheCommandState = null;
         if (remote != null) {
             try {
                 remote.unregisterOnSharedPreferenceChangeListener(cacheCommandListener);
