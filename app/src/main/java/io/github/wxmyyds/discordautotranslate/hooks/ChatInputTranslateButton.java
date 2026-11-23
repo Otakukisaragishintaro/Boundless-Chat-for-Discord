@@ -269,7 +269,7 @@ public final class ChatInputTranslateButton {
             }
             if (refreshedSendView == null) {
                 ProjectLog.infoOnce("diagnostic.chatInputSendControlTemporarilyMissing",
-                        "Discord native send control temporarily unavailable; anchoring translation buttons to editor");
+                        "Discord native send control temporarily unavailable; translation buttons are hidden until it is available");
             }
             reportHierarchyIfEnabled(editor);
             return;
@@ -282,10 +282,10 @@ public final class ChatInputTranslateButton {
                     "Discord chat input send control found");
         } else {
             // The native send control is normally hidden while the composer is empty.
-            // Attach anyway: translation-button placement is anchored to the editor,
-            // never gated by the native send button's visibility or the text contents.
+            // Attach the bindings so they can follow the native control when Discord
+            // creates it. positionButton keeps the injected actions hidden until then.
             ProjectLog.infoOnce("diagnostic.chatInputFallbackAnchor",
-                    "Discord translation button attached using stable editor anchor");
+                    "Discord translation button binding attached; waiting for native send control anchor");
         }
 
         if (!(registration.decor instanceof FrameLayout)) {
@@ -379,35 +379,46 @@ public final class ChatInputTranslateButton {
         }
     }
 
-    /** Position actions using one coordinate space: physical screen coordinates.
+    /** Position each translation action beside Discord's native send control.
      *
-     * DecorView and React Native composer can have different window/inset offsets.
-     * Convert both screen-space rectangles into overlay-local coordinates instead of
-     * mixing root, window and screen coordinates or requiring full containment.
+     * The editor is only used to identify the composer and perform translation.
+     * It is deliberately NOT a positioning anchor: its measured width/scroll state
+     * can change as text is entered, making the injected action appear to follow
+     * the caret. The native send control is the visual anchor.
      */
     private static void positionButton(ButtonBinding binding) {
-        if (binding == null || !isComposerUsable(binding.editor)
-                || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
-
-        Rect editorScreen = boundsOnScreen(binding.editor);
-        Rect overlayScreen = boundsOnScreen(binding.overlay);
-        if (editorScreen.width() <= 0 || editorScreen.height() <= 0
-                || overlayScreen.width() <= 0 || overlayScreen.height() <= 0) {
+        if (binding == null) return;
+        if (!isComposerUsable(binding.editor)
+                || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0
+                || !isUsableSendAnchor(binding.sendView)) {
+            binding.positioned = false;
+            if (binding.button.getVisibility() != View.INVISIBLE) {
+                binding.button.setVisibility(View.INVISIBLE);
+            }
             return;
         }
 
-        // The EditText may be partially clipped while the IME animates. Its measured
-        // screen position is still the stable anchor; do not reject it based on a
-        // visible-rect or full-overlay-containment test.
+        Rect sendScreen = boundsOnScreen(binding.sendView);
+        Rect overlayScreen = boundsOnScreen(binding.overlay);
+        if (sendScreen.width() <= 0 || sendScreen.height() <= 0
+                || overlayScreen.width() <= 0 || overlayScreen.height() <= 0) {
+            binding.positioned = false;
+            binding.button.setVisibility(View.INVISIBLE);
+            return;
+        }
+
         int width = dp(binding.activity, BUTTON_WIDTH_DP);
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
-        int left = editorScreen.right - width - overlayScreen.left;
         int stackOffset = binding.buttonIndex * (height + dp(binding.activity, 4));
-        int top = editorScreen.top - height - margin - stackOffset - overlayScreen.top;
 
+        // Place the translation action immediately to the left of Discord's send
+        // control. Align the first action vertically to the native control's center.
+        int left = sendScreen.left - margin - width - overlayScreen.left;
+        int top = sendScreen.top + (sendScreen.height() - height) / 2
+                - stackOffset - overlayScreen.top;
         if (top < 0) {
-            top = editorScreen.bottom + margin + stackOffset - overlayScreen.top;
+            top = sendScreen.bottom + margin + stackOffset - overlayScreen.top;
         }
 
         int maxLeft = Math.max(0, binding.overlay.getWidth() - width);
@@ -436,6 +447,12 @@ public final class ChatInputTranslateButton {
         if (binding.button.getVisibility() != View.VISIBLE) {
             binding.button.setVisibility(View.VISIBLE);
         }
+    }
+
+    private static boolean isUsableSendAnchor(View sendView) {
+        return sendView != null && sendView.isAttachedToWindow()
+                && sendView.getVisibility() == View.VISIBLE && sendView.isShown()
+                && sendView.getWidth() > 0 && sendView.getHeight() > 0;
     }
 
     private static void startTranslation(ButtonBinding binding) {
