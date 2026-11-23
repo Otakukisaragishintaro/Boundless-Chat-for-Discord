@@ -1,6 +1,8 @@
 package io.github.wxmyyds.discordautotranslate.core;
 
 import android.util.Log;
+import android.app.Application;
+import android.os.Process;
 import android.content.SharedPreferences;
 
 import androidx.annotation.Nullable;
@@ -96,6 +98,16 @@ public final class ProjectLog {
 
     /** Shared output path. Bootstrap entries are fixed lifecycle facts, never message data. */
     private static void write(int priority, String message, boolean force) {
+        // Bootstrap records are the independent proof that code executed inside a process.
+        // Include process identity so LSPosed/logcat output can distinguish Discord from settings.
+        if (force) {
+            String processName = "unknown";
+            try {
+                String current = Application.getProcessName();
+                if (current != null && !current.isEmpty()) processName = current;
+            } catch (Throwable ignored) { }
+            message = "pid=" + Process.myPid() + " process=" + processName + " " + message;
+        }
         if (storage != null) {
             try {
                 String previous = storage.getString(STORAGE_KEY, "");
