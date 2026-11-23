@@ -1,4 +1,4 @@
-// Discord 自动翻译模块
+// Boundless Chat for Discord — Android LSPosed module
 //
 // 构建说明：本仓库禁止本地构建，所有编译/打包必须通过 GitHub Actions 执行。
 // 见 .github/workflows/build.yml
