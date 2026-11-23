@@ -486,6 +486,10 @@ public class ModuleEntry extends XposedModule {
             cacheCommandPreferences = remote;
             remote.registerOnSharedPreferenceChangeListener(cacheCommandListener);
             // Also consume a request issued while Discord was not running.
+            TranslationCache.get().setCountListener(count -> {
+                try { remote.edit().putInt(Config.KEY_CACHE_ENTRY_COUNT, count).apply(); }
+                catch (Throwable ignored) { /* 计数同步失败不影响翻译。 */ }
+            });
             handleCacheClearCommand(remote);
         } catch (Throwable failure) {
             ProjectLog.warn("cache command listener unavailable errorClass="
