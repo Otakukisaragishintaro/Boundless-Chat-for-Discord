@@ -1,5 +1,6 @@
 package io.github.wxmyyds.discordautotranslate;
 
+import android.app.Activity;
 import android.app.Application;
 import android.content.Context;
 import android.content.SharedPreferences;
@@ -27,6 +28,7 @@ import io.github.wxmyyds.discordautotranslate.hooks.MessageHooks;
 import io.github.wxmyyds.discordautotranslate.hooks.PollHooks;
 import io.github.wxmyyds.discordautotranslate.hooks.RenderDispatcher;
 import io.github.wxmyyds.discordautotranslate.hooks.HookRuntime;
+import io.github.wxmyyds.discordautotranslate.hooks.ChatInputViewDiagnostics;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -260,6 +262,7 @@ public class ModuleEntry extends XposedModule {
             Scheduler.MainThread.install();
             RenderDispatcher.install();
             reloadConfig();
+            installChatInputDiagnostics();
             MessageHooks.install(this, cl, config, installedHookIds, hooks);
             EmbedHooks.install(this, cl, config, installedHookIds, hooks);
             PollHooks.install(this, cl, config, installedHookIds, hooks);
@@ -281,6 +284,47 @@ public class ModuleEntry extends XposedModule {
         }
         ProjectLog.info("installed hook profile versionCode=" + config.versionCode()
                 + " requiredHookIds=" + installedHookIds);
+    }
+
+    /**
+     * Observe the focused native text editor and its nearby Android View hierarchy.
+     * Diagnostics are content-free and are emitted only while project logging is enabled.
+     */
+    private void installChatInputDiagnostics() {
+        try {
+            java.lang.reflect.Method onResume = Activity.class.getDeclaredMethod("onResume");
+            hooks.add(hook(onResume)
+                    .setId("dat.chatInputDiagnostics.resume")
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        Object result = chain.proceed();
+                        try (HookRuntime.Lease lease = HookRuntime.enter()) {
+                            if (lease != null && chain.getThisObject() instanceof Activity) {
+                                ChatInputViewDiagnostics.attach((Activity) chain.getThisObject());
+                            }
+                        }
+                        return result;
+                    }));
+
+            java.lang.reflect.Method onDestroy = Activity.class.getDeclaredMethod("onDestroy");
+            hooks.add(hook(onDestroy)
+                    .setId("dat.chatInputDiagnostics.destroy")
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        Object activity = chain.getThisObject();
+                        try {
+                            return chain.proceed();
+                        } finally {
+                            if (activity instanceof Activity) {
+                                ChatInputViewDiagnostics.detach((Activity) activity);
+                            }
+                        }
+                    }));
+            ProjectLog.info("chat input view diagnostics hooks installed");
+        } catch (Throwable failure) {
+            ProjectLog.warn("chat input view diagnostics hook installation failed errorClass="
+                    + failure.getClass().getSimpleName());
+        }
     }
 
     /** 从旧 Hook 的目标方法反推宿主 ClassLoader（热重载后包回调不会重放）。 */
@@ -324,6 +368,7 @@ public class ModuleEntry extends XposedModule {
             if (!InlineIconSpan.resetAll(2000L)) {
                 throw new IllegalStateException("Inline icon cleanup incomplete; restart Discord required");
             }
+            ChatInputViewDiagnostics.clear();
             int failures = HookCleanup.remove(hooks, XposedInterface.HookHandle::unhook);
             if (failures != 0) {
                 throw new IllegalStateException("Hook removal incomplete count=" + failures
