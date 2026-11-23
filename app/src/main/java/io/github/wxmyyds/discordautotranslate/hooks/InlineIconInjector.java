@@ -202,9 +202,10 @@ public final class InlineIconInjector {
 
             Drawable source = iconFor(context, status);
             Drawable tinted = InlineIconSpan.tintForState(source, status, showingOriginal);
+            String sourceLanguage = sourceLanguageLabel(messageId);
             InlineIconSpan icon = InlineIconSpan.create(
                     tinted, context.getResources().getDisplayMetrics().density,
-                    status);
+                    status, sourceLanguage);
             if (icon == null) {
                 ProjectLog.warnOnce("icon.spanCreation", "icon injection skipped: icon span creation failed");
                 return rendered;
@@ -241,6 +242,40 @@ public final class InlineIconInjector {
                     + t.getClass().getName());
             return rendered;
         }
+    }
+
+    /** Infer a compact source-language tag from the original, untranslated message text. */
+    @Nullable
+    private static String sourceLanguageLabel(String messageId) {
+        StateStore.Source source = StateStore.get().source(messageId);
+        if (source == null || source.content == null) return null;
+        TextExtractor.Result extracted = TextExtractor.extract(source.content);
+        if (extracted == null || extracted.text == null) return null;
+
+        int latin = 0, han = 0, kana = 0, hangul = 0, cyrillic = 0, arabic = 0;
+        String text = extracted.text;
+        for (int offset = 0; offset < text.length();) {
+            int cp = text.codePointAt(offset);
+            offset += Character.charCount(cp);
+            if (!Character.isLetter(cp)) continue;
+            switch (Character.UnicodeScript.of(cp)) {
+                case LATIN: latin++; break;
+                case HAN: han++; break;
+                case HIRAGANA:
+                case KATAKANA: kana++; break;
+                case HANGUL: hangul++; break;
+                case CYRILLIC: cyrillic++; break;
+                case ARABIC: arabic++; break;
+                default: break;
+            }
+        }
+        if (kana > 0) return "JP";
+        if (hangul > 0) return "KR";
+        if (cyrillic > 0) return "RU";
+        if (arabic > 0) return "AR";
+        if (han > 0) return "ZH";
+        if (latin > 0) return "EN";
+        return null;
     }
 
     /** 状态 → 图标 Drawable。正文/Embed 共用。 */
