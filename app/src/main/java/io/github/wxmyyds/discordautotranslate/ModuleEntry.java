@@ -396,7 +396,9 @@ public class ModuleEntry extends XposedModule {
     /** Read the log gate before any startup diagnostics, including unsupported versions. */
     private void configureLogging() {
         try {
-            ProjectLog.configure(Config.read(getRemotePreferences(Config.GROUP)));
+            SharedPreferences prefs = getRemotePreferences(Config.GROUP);
+            ProjectLog.setStorage(prefs);
+            ProjectLog.configure(Config.read(prefs));
         } catch (Throwable failure) {
             ProjectLog.configure(Config.invalidSnapshot());
         }
@@ -405,6 +407,7 @@ public class ModuleEntry extends XposedModule {
     private void reloadConfig() {
         try {
             final SharedPreferences prefs = getRemotePreferences(Config.GROUP);
+            ProjectLog.setStorage(prefs);
             Config.Snapshot snapshot = Config.read(prefs);
             ProjectLog.configure(snapshot);
             HookBridge.get().updateConfig(snapshot);
