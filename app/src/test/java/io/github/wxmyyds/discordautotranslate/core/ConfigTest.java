@@ -68,8 +68,11 @@ public class ConfigTest {
         assertEquals(1000000, enabled.cacheLimit);
         assertEquals(defaults.version(), enabled.version());
 
+        Config.Snapshot custom = Config.read(new MemoryPrefs()
+                .put(Config.KEY_CACHE_LIMIT, 345678));
+        assertEquals(345678, custom.cacheLimit);
         assertTrue(Config.read(new MemoryPrefs()
-                .put(Config.KEY_CACHE_LIMIT, 10000)).configError != null);
+                .put(Config.KEY_CACHE_LIMIT, 0)).configError != null);
         assertTrue(Config.read(new MemoryPrefs()
                 .put(Config.KEY_CACHE_LIMIT, 10000000)).configError != null);
         assertTrue(Config.read(new MemoryPrefs()
