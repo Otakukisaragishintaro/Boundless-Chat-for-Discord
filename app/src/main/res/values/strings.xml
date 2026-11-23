@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="module_name">Discord AutoTranslate</string>
-    <string name="module_description">Translate Discord messages and switch between original and translated text.</string>
+    <string name="module_name">Boundless Chat for Discord</string>
+    <string name="module_description">Translate Discord messages, switch between original and translated text, and use customizable outbound translation buttons.</string>
     <string name="status_local_ready">Settings save on this device and sync when LSPosed is available.</string>
     <string name="status_syncing">Syncing settings with LSPosed…</string>
     <string name="status_sync_pending">Saved on this device. Sync will retry when LSPosed reconnects.</string>
