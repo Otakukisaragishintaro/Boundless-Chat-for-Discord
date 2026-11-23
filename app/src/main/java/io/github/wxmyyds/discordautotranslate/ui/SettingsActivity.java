@@ -15,7 +15,6 @@ import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
-import android.view.ViewParent;
 import android.view.MenuItem;
 import android.widget.AdapterView;
 import android.widget.FrameLayout;
