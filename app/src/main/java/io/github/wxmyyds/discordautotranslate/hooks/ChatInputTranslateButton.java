@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.view.ViewParent;
 import android.view.ViewTreeObserver;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -19,7 +20,6 @@ import io.github.wxmyyds.discordautotranslate.core.Scheduler;
 import io.github.wxmyyds.discordautotranslate.core.TranslationTaskId;
 import io.github.wxmyyds.discordautotranslate.translate.JsonApiEngine;
 
-import java.lang.reflect.Constructor;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -74,18 +74,19 @@ public final class ChatInputTranslateButton {
     private static final class ButtonBinding {
         final Activity activity;
         final EditText editor;
-        final ViewGroup parent;
-        final View sendView;
+        final FrameLayout overlay;
+        View sendView;
         final TextView button;
         final AtomicBoolean requestValid = new AtomicBoolean(true);
         boolean inFlight;
         String requestId;
 
-        ButtonBinding(Activity activity, EditText editor, Candidate candidate, TextView button) {
+        ButtonBinding(Activity activity, EditText editor, FrameLayout overlay,
+                      View sendView, TextView button) {
             this.activity = activity;
             this.editor = editor;
-            this.parent = candidate.parent;
-            this.sendView = candidate.sendView;
+            this.overlay = overlay;
+            this.sendView = sendView;
             this.button = button;
         }
     }
@@ -211,7 +212,16 @@ public final class ChatInputTranslateButton {
         ProjectLog.infoOnce("diagnostic.chatInputEditorFocused",
                 "Discord chat input editor focused");
         if (registration.binding != null && registration.binding.editor == editor
-                && registration.binding.button.getParent() == registration.binding.parent) {
+                && registration.binding.button.getParent() == registration.binding.overlay) {
+            Candidate refreshed = findSendCandidate(editor);
+            if (refreshed == null || !refreshed.sendView.isAttachedToWindow()) {
+                removeBinding(registration);
+                ProjectLog.infoOnce("diagnostic.chatInputSendControlMissingAfterBind",
+                        "Discord chat input send control disappeared after binding");
+                return;
+            }
+            registration.binding.sendView = refreshed.sendView;
+            positionButton(registration.binding);
             reportHierarchyIfEnabled(editor);
             return;
         }
@@ -227,6 +237,13 @@ public final class ChatInputTranslateButton {
         ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
                 "Discord chat input send control found");
 
+        if (!(registration.decor instanceof FrameLayout)) {
+            ProjectLog.warn("chat input decor is not a FrameLayout; overlay injection skipped class="
+                    + registration.decor.getClass().getName());
+            return;
+        }
+        FrameLayout overlay = (FrameLayout) registration.decor;
+
         TextView button = new TextView(activity);
         button.setText("翻译发送");
         button.setTextColor(Color.WHITE);
@@ -241,24 +258,25 @@ public final class ChatInputTranslateButton {
         button.setBackground(createButtonBackground(activity));
         button.setClickable(true);
         button.setFocusable(false);
-        ViewGroup.LayoutParams params = copyLayoutParams(candidate.parent, candidate.branch);
-        params.width = dp(activity, BUTTON_WIDTH_DP);
-        params.height = dp(activity, BUTTON_HEIGHT_DP);
+        button.setElevation(dp(activity, 8));
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                dp(activity, BUTTON_WIDTH_DP), dp(activity, BUTTON_HEIGHT_DP),
+                Gravity.TOP | Gravity.LEFT);
         try {
-            int insertAt = Math.max(0, Math.min(candidate.branchIndex,
-                    candidate.parent.getChildCount()));
-            candidate.parent.addView(button, insertAt, params);
-            ButtonBinding binding = new ButtonBinding(activity, editor, candidate, button);
+            overlay.addView(button, params);
+            ButtonBinding binding = new ButtonBinding(activity, editor, overlay,
+                    candidate.sendView, button);
             registration.binding = binding;
             button.setOnClickListener(view -> startTranslation(binding));
             ProjectLog.infoOnce("diagnostic.translationButtonAttached",
                     "Discord translation button attached");
+            positionButton(binding);
             ProjectLog.info("chat input translate button attached editor="
                     + editor.getClass().getName() + " send="
                     + candidate.sendView.getClass().getName() + " label="
-                    + sendActionLabel(candidate.sendView));
+                    + sendActionLabel(candidate.sendView) + " host=decor-overlay");
             button.post(() -> {
-                if (button.getParent() != candidate.parent || !button.isAttachedToWindow()
+                if (button.getParent() != overlay || !button.isAttachedToWindow()
                         || button.getWidth() <= 0 || button.getHeight() <= 0) {
                     ProjectLog.warn("chat input translate button layout verification failed parent="
                             + (button.getParent() == null ? "none"
@@ -293,6 +311,34 @@ public final class ChatInputTranslateButton {
         if (binding.button.getParent() instanceof ViewGroup) {
             ((ViewGroup) binding.button.getParent()).removeView(binding.button);
         }
+    }
+
+    /** Position the action in the window overlay, independently of Discord's composer layout. */
+    private static void positionButton(ButtonBinding binding) {
+        if (binding == null || binding.sendView == null
+                || !binding.sendView.isAttachedToWindow()
+                || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
+        int[] overlayLocation = new int[2];
+        binding.overlay.getLocationOnScreen(overlayLocation);
+        Rect send = boundsOnScreen(binding.sendView);
+        int width = dp(binding.activity, BUTTON_WIDTH_DP);
+        int height = dp(binding.activity, BUTTON_HEIGHT_DP);
+        int margin = dp(binding.activity, 8);
+        int left = send.right - width;
+        int top = send.top - height - margin;
+        left -= overlayLocation[0];
+        top -= overlayLocation[1];
+        left = Math.max(0, Math.min(left, binding.overlay.getWidth() - width));
+        top = Math.max(0, Math.min(top, binding.overlay.getHeight() - height));
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)
+                binding.button.getLayoutParams();
+        params.width = width;
+        params.height = height;
+        params.gravity = Gravity.TOP | Gravity.LEFT;
+        params.leftMargin = left;
+        params.topMargin = top;
+        binding.button.setLayoutParams(params);
+        binding.button.bringToFront();
     }
 
     private static void startTranslation(ButtonBinding binding) {
@@ -489,24 +535,6 @@ public final class ChatInputTranslateButton {
             if (parent.getChildAt(i) == child) return i;
         }
         return -1;
-    }
-
-    private static ViewGroup.LayoutParams copyLayoutParams(ViewGroup parent, View source) {
-        ViewGroup.LayoutParams original = source.getLayoutParams();
-        if (original != null) {
-            for (Constructor<?> constructor : original.getClass().getConstructors()) {
-                Class<?>[] types = constructor.getParameterTypes();
-                if (types.length == 1 && types[0].isAssignableFrom(original.getClass())) {
-                    try {
-                        return (ViewGroup.LayoutParams) constructor.newInstance(original);
-                    } catch (Throwable ignored) {
-                        // Try the next compatible layout-parameter constructor.
-                    }
-                }
-            }
-        }
-        int height = source.getHeight() > 0 ? source.getHeight() : BUTTON_HEIGHT_DP;
-        return new ViewGroup.LayoutParams(BUTTON_WIDTH_DP, height);
     }
 
     private static int dp(Activity activity, int value) {
