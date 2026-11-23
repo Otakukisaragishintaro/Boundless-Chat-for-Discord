@@ -1294,8 +1294,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .create();
         cacheSettingsDialog.setOnDismissListener(dialog -> {
             cacheSettingsDialog = null;
-            if (content.getParent() instanceof ViewGroup) {
-                ((ViewGroup) content.getParent()).removeView(content);
+            if (cacheBacking.getParent() instanceof ViewGroup) {
+                ((ViewGroup) cacheBacking.getParent()).removeView(cacheBacking);
             }
         });
         cacheSettingsDialog.show();
@@ -1314,8 +1314,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .create();
         apiSettingsDialog.setOnDismissListener(dialog -> {
             apiSettingsDialog = null;
-            if (content.getParent() instanceof ViewGroup) {
-                ((ViewGroup) content.getParent()).removeView(content);
+            if (apiBacking.getParent() instanceof ViewGroup) {
+                ((ViewGroup) apiBacking.getParent()).removeView(apiBacking);
             }
         });
         apiSettingsDialog.show();
