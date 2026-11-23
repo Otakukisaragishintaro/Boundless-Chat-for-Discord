@@ -144,7 +144,7 @@ public final class ChatInputTranslateButton {
                     if (focused instanceof EditText) {
                         updateFocusedEditor(activity, current, focused);
                     } else if (current.binding != null
-                            && !current.binding.editor.isAttachedToWindow()) {
+                            && !isComposerVisible(current.binding.editor)) {
                         removeBinding(current);
                     }
                 }
@@ -211,7 +211,7 @@ public final class ChatInputTranslateButton {
                                 + focused.getClass().getName());
             }
             if (registration.binding != null
-                    && !registration.binding.editor.isAttachedToWindow()) {
+                    && !isComposerVisible(registration.binding.editor)) {
                 removeBinding(registration);
             }
             return;
@@ -335,14 +335,22 @@ public final class ChatInputTranslateButton {
 
     /** Position the action in the window overlay, independently of Discord's composer layout. */
     private static void positionButton(ButtonBinding binding) {
-        if (binding == null || !binding.editor.isAttachedToWindow()
+        if (binding == null || !isComposerVisible(binding.editor)
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
+        // Keep the last stable position during transient IME/layout frames. Using
+        // the editor as a fallback anchor caused the action to jump across the screen.
+        if (binding.sendView == null || !binding.sendView.isAttachedToWindow()) return;
+        Rect editorBounds = boundsOnScreen(binding.editor);
+        Rect anchor = boundsOnScreen(binding.sendView);
+        int verticalOverlap = Math.max(0, Math.min(anchor.bottom, editorBounds.bottom)
+                - Math.max(anchor.top, editorBounds.top));
+        if (anchor.width() <= 0 || anchor.height() <= 0
+                || anchor.centerX() <= editorBounds.centerX()
+                || verticalOverlap * 3 < Math.max(1, Math.min(anchor.height(), editorBounds.height()))) {
+            return;
+        }
         int[] overlayLocation = new int[2];
         binding.overlay.getLocationOnScreen(overlayLocation);
-        // Prefer the native send control. During IME transitions Discord can
-        // temporarily detach/recreate it, so fall back to the editor bounds.
-        Rect anchor = binding.sendView != null && binding.sendView.isAttachedToWindow()
-                ? boundsOnScreen(binding.sendView) : boundsOnScreen(binding.editor);
         int width = dp(binding.activity, BUTTON_WIDTH_DP);
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
@@ -551,6 +559,17 @@ public final class ChatInputTranslateButton {
                 || normalized.equals("envoyer")
                 || normalized.equals("senden")
                 || normalized.equals("отправить");
+    }
+
+    private static boolean isComposerVisible(EditText editor) {
+        if (editor == null || !editor.isAttachedToWindow()
+                || editor.getVisibility() != View.VISIBLE || !editor.isShown()
+                || editor.getWidth() <= 0 || editor.getHeight() <= 0) {
+            return false;
+        }
+        Rect visible = new Rect();
+        return editor.getGlobalVisibleRect(visible)
+                && visible.width() > 0 && visible.height() > 0;
     }
 
     private static Rect boundsOnScreen(View view) {
