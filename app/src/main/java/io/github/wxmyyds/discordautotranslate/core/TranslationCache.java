@@ -65,6 +65,8 @@ public final class TranslationCache {
     private final int maxMemoryEntries;
     private volatile int maxDiskEntries = DEFAULT_DISK_ENTRIES;
     private int writesSincePrune;
+    /** -1 means not loaded yet; after initialization this tracks SQLite rows incrementally. */
+    private int diskEntryCount = -1;
     @Nullable private volatile java.util.function.IntConsumer countListener;
     private final LinkedHashMap<String, String> memory;
     private DatabaseHelper helper;
@@ -116,6 +118,7 @@ public final class TranslationCache {
         SQLiteDatabase db = database();
         if (db != null) {
             prune(db);
+            refreshEntryCount(db);
             publishEntryCount();
         }
     }
@@ -130,12 +133,22 @@ public final class TranslationCache {
     public synchronized int getEntryCount() {
         SQLiteDatabase db = database();
         if (db == null) return 0;
+        if (diskEntryCount < 0) {
+            refreshEntryCount(db);
+        }
+        return Math.max(0, diskEntryCount);
+    }
+
+    /** Only run the aggregate query when the count is first loaded or after an LRU prune. */
+    private void refreshEntryCount(SQLiteDatabase db) {
         Cursor cursor = null;
         try {
             cursor = db.rawQuery("SELECT COUNT(*) FROM " + TABLE, null);
-            return cursor.moveToFirst() ? cursor.getInt(0) : 0;
+            if (cursor.moveToFirst()) {
+                diskEntryCount = Math.max(0, cursor.getInt(0));
+            }
         } catch (Throwable ignored) {
-            return 0;
+            // Keep the last known value; a later refresh can recover from a transient failure.
         } finally {
             if (cursor != null) cursor.close();
         }
@@ -166,15 +179,38 @@ public final class TranslationCache {
         SQLiteDatabase db = database();
         if (db == null) return;
         try {
+            // REPLACE also updates existing rows. Distinguish inserts so the visible count
+            // advances only for a genuinely new persisted translation.
+            Cursor existing = null;
+            boolean alreadyStored;
+            try {
+                existing = db.query(TABLE, new String[]{"cache_key"},
+                        "cache_key=?", new String[]{key}, null, null, null, "1");
+                alreadyStored = existing.moveToFirst();
+            } finally {
+                if (existing != null) existing.close();
+            }
+
             ContentValues values = new ContentValues();
             values.put("cache_key", key);
             values.put("translated", translated);
             values.put("last_access", System.currentTimeMillis());
-            db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            long rowId = db.insertWithOnConflict(
+                    TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            if (rowId == -1L) return;
+
+            if (!alreadyStored && diskEntryCount >= 0) {
+                diskEntryCount++;
+            }
+
             // Batch LRU maintenance to avoid a full-table prune on every insert at 1M entries.
             if (++writesSincePrune >= 32) {
                 writesSincePrune = 0;
                 prune(db);
+                refreshEntryCount(db);
+                publishEntryCount();
+            } else if (!alreadyStored) {
+                // Notify immediately when a new row is saved; do not wait for 32 writes.
                 publishEntryCount();
             }
         } catch (Throwable ignored) {
@@ -188,7 +224,13 @@ public final class TranslationCache {
         SQLiteDatabase db = database();
         if (db != null) {
             try {
-                db.delete(TABLE, "cache_key=?", new String[]{key});
+                int deleted = db.delete(TABLE, "cache_key=?", new String[]{key});
+                if (deleted > 0) {
+                    if (diskEntryCount >= 0) {
+                        diskEntryCount = Math.max(0, diskEntryCount - deleted);
+                    }
+                    publishEntryCount();
+                }
             } catch (Throwable ignored) {
                 // Cache invalidation failure must not break message rendering.
             }
@@ -203,7 +245,8 @@ public final class TranslationCache {
         if (db != null) {
             try {
                 db.delete(TABLE, null, null);
-            publishEntryCount();
+                diskEntryCount = 0;
+                publishEntryCount();
             } catch (Throwable ignored) {
                 // Cache clearing is best-effort if storage is unavailable.
             }
