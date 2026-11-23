@@ -135,6 +135,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Button resetSendSystemPromptButton;
     private EditText timeoutInput;
     private EditText concurrencyInput;
+    private EditText minLengthPercentInput;
+    private EditText maxLengthPercentInput;
+    private Switch checkWrapperInput;
+    private Switch stripOuterWrapperInput;
+    private Switch checkSegmentMarkersInput;
+    private Switch checkPlaceholdersInput;
+    private Switch checkRetainedMarkersInput;
+    private Switch checkLengthInput;
     private Switch enabledInput;
     private Switch loggingInput;
     private Switch streamingInput;
@@ -556,6 +564,40 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         concurrencyInput = addField(root, getString(R.string.label_concurrency),
                 String.valueOf(Config.DEF_MAX_CONCURRENCY), InputType.TYPE_CLASS_NUMBER);
 
+        TextView validationTitle = new TextView(this);
+        validationTitle.setText(chineseUi ? "译文防损坏校验" : "Translation integrity checks");
+        validationTitle.setTextSize(16f);
+        validationTitle.setPadding(0, dp(12), 0, dp(4));
+        root.addView(validationTitle, matchWrap());
+        TextView validationDescription = new TextView(this);
+        validationDescription.setTextSize(12f);
+        validationDescription.setText(chineseUi
+                ? "每项可单独关闭。关闭检查可能放行格式损坏、漏译或重复内容；空响应始终视为无效。"
+                : "Each check can be disabled independently. Disabling checks may allow malformed, incomplete, or repeated output; empty API responses remain invalid.");
+        root.addView(validationDescription, matchWrap());
+        checkWrapperInput = addValidationSwitch(root,
+                chineseUi ? "检查包装标签" : "Check wrapper tags", Config.DEF_CHECK_WRAPPER);
+        stripOuterWrapperInput = addValidationSwitch(root,
+                chineseUi ? "自动移除完整的外层包装标签" : "Strip one exact outer wrapper pair",
+                Config.DEF_STRIP_OUTER_WRAPPER);
+        checkSegmentMarkersInput = addValidationSwitch(root,
+                chineseUi ? "检查残留分段标记" : "Check leftover segment markers",
+                Config.DEF_CHECK_SEGMENT_MARKERS);
+        checkPlaceholdersInput = addValidationSwitch(root,
+                chineseUi ? "检查模板占位符" : "Check template placeholders",
+                Config.DEF_CHECK_PLACEHOLDERS);
+        checkRetainedMarkersInput = addValidationSwitch(root,
+                chineseUi ? "检查保留节点定位标记" : "Check retained-node markers",
+                Config.DEF_CHECK_RETAINED_MARKERS);
+        checkLengthInput = addValidationSwitch(root,
+                chineseUi ? "检查译文长度比例" : "Check translation length ratio",
+                Config.DEF_CHECK_LENGTH);
+        minLengthPercentInput = addField(root,
+                chineseUi ? "译文最小长度（原文百分比）" : "Minimum translation length (% of source)",
+                String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
+        maxLengthPercentInput = addField(root,
+                chineseUi ? "译文最大长度（原文百分比）" : "Maximum translation length (% of source)",
+                String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
 
         testTextInput = addField(root, getString(R.string.label_test_text),
                 getString(R.string.hint_test_text),
@@ -632,6 +674,17 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         return scroll;
+    }
+
+    private Switch addValidationSwitch(LinearLayout parent, String label, boolean defaultValue) {
+        Switch input = new Switch(this);
+        input.setText(label);
+        input.setShowText(false);
+        input.setChecked(defaultValue);
+        input.setMinimumHeight(dp(48));
+        parent.addView(input, matchWrap());
+        input.setOnCheckedChangeListener((button, checked) -> markDirty());
+        return input;
     }
 
     private TextView addToggle(LinearLayout parent, Switch input, SettingsToggleText.Setting setting) {
@@ -769,6 +822,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         sendSystemPromptInput.addTextChangedListener(watcher);
         timeoutInput.addTextChangedListener(watcher);
         concurrencyInput.addTextChangedListener(watcher);
+        minLengthPercentInput.addTextChangedListener(watcher);
+        maxLengthPercentInput.addTextChangedListener(watcher);
         testTextInput.addTextChangedListener(watcher);
         sendTestTextInput.addTextChangedListener(watcher);
     }
@@ -849,7 +904,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private EditText[] configurationFields() {
         return new EditText[] {urlInput, keyInput, modelInput, headersInput,
-                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput, testTextInput};
+                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
+                minLengthPercentInput, maxLengthPercentInput, testTextInput};
     }
 
     /** 无效快照的占位值不是用户保存的设置；锁定页面直到用户明确重置。 */
@@ -867,6 +923,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeSummary.setText("");
             loggingInput.setChecked(false);
             streamingInput.setChecked(false);
+            checkWrapperInput.setChecked(Config.DEF_CHECK_WRAPPER);
+            stripOuterWrapperInput.setChecked(Config.DEF_STRIP_OUTER_WRAPPER);
+            checkSegmentMarkersInput.setChecked(Config.DEF_CHECK_SEGMENT_MARKERS);
+            checkPlaceholdersInput.setChecked(Config.DEF_CHECK_PLACEHOLDERS);
+            checkRetainedMarkersInput.setChecked(Config.DEF_CHECK_RETAINED_MARKERS);
+            checkLengthInput.setChecked(Config.DEF_CHECK_LENGTH);
             protocolSpinner.setSelection(AdapterView.INVALID_POSITION);
             targetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
             sendTargetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
@@ -958,6 +1020,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     String.valueOf(Config.DEF_TIMEOUT_MS));
             setTextOrPlaceholder(concurrencyInput, String.valueOf(snapshot.maxConcurrency),
                     String.valueOf(Config.DEF_MAX_CONCURRENCY));
+            checkWrapperInput.setChecked(snapshot.checkWrapper);
+            stripOuterWrapperInput.setChecked(snapshot.stripOuterWrapper);
+            checkSegmentMarkersInput.setChecked(snapshot.checkSegmentMarkers);
+            checkPlaceholdersInput.setChecked(snapshot.checkPlaceholders);
+            checkRetainedMarkersInput.setChecked(snapshot.checkRetainedMarkers);
+            checkLengthInput.setChecked(snapshot.checkLength);
+            setTextOrPlaceholder(minLengthPercentInput, String.valueOf(snapshot.minLengthPercent),
+                    String.valueOf(Config.DEF_MIN_LENGTH_PERCENT));
+            setTextOrPlaceholder(maxLengthPercentInput, String.valueOf(snapshot.maxLengthPercent),
+                    String.valueOf(Config.DEF_MAX_LENGTH_PERCENT));
             baselineProtocol = snapshot.protocol;
             baselineTargetLanguage = snapshot.targetLang;
             baselineSendTargetLanguage = snapshot.sendTargetLang;
@@ -1155,6 +1227,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scopeButton.setEnabled(canOpenScopeEditor());
         scopeSummary.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         loggingInput.setEnabled(formAvailable);
+        checkWrapperInput.setEnabled(formAvailable);
+        stripOuterWrapperInput.setEnabled(formAvailable);
+        checkSegmentMarkersInput.setEnabled(formAvailable);
+        checkPlaceholdersInput.setEnabled(formAvailable);
+        checkRetainedMarkersInput.setEnabled(formAvailable);
+        checkLengthInput.setEnabled(formAvailable);
         updateToggleText(enabledInput, enabledHint, SettingsToggleText.Setting.TRANSLATION);
         updateToggleText(loggingInput, loggingHint, SettingsToggleText.Setting.LOGGING);
         protocolSpinner.setEnabled(formAvailable);
@@ -1224,6 +1302,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_TIMEOUT_MS, parseIntInput(timeoutInput, Config.DEF_TIMEOUT_MS));
         memoryPrefs.put(Config.KEY_MAX_CONCURRENCY,
                 parseIntInput(concurrencyInput, Config.DEF_MAX_CONCURRENCY));
+        memoryPrefs.put(Config.KEY_CHECK_WRAPPER, checkWrapperInput.isChecked());
+        memoryPrefs.put(Config.KEY_STRIP_OUTER_WRAPPER, stripOuterWrapperInput.isChecked());
+        memoryPrefs.put(Config.KEY_CHECK_SEGMENT_MARKERS, checkSegmentMarkersInput.isChecked());
+        memoryPrefs.put(Config.KEY_CHECK_PLACEHOLDERS, checkPlaceholdersInput.isChecked());
+        memoryPrefs.put(Config.KEY_CHECK_RETAINED_MARKERS, checkRetainedMarkersInput.isChecked());
+        memoryPrefs.put(Config.KEY_CHECK_LENGTH, checkLengthInput.isChecked());
+        memoryPrefs.put(Config.KEY_MIN_LENGTH_PERCENT,
+                parseIntInput(minLengthPercentInput, Config.DEF_MIN_LENGTH_PERCENT));
+        memoryPrefs.put(Config.KEY_MAX_LENGTH_PERCENT,
+                parseIntInput(maxLengthPercentInput, Config.DEF_MAX_LENGTH_PERCENT));
         return Config.read(memoryPrefs);
     }
 
