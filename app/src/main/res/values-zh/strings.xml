@@ -209,6 +209,7 @@
     <string name="menu_translation_cache">本地翻译缓存设置…</string>
     <string name="menu_api_settings">API 与请求设置…</string>
     <string name="button_apply_api_settings">应用 API 与请求设置</string>
+    <string name="button_apply_field">应用此项</string>
         <string name="button_clear_translation_cache">清空本地翻译缓存</string>
     <string name="confirm_clear_translation_cache">确定永久删除本机保存的全部译文吗？此操作不会修改 API 设置或 Discord 聊天记录。</string>
     <string name="status_cache_clear_requested">已向 Discord 发送清空请求，将由 Discord 模块执行。</string>
