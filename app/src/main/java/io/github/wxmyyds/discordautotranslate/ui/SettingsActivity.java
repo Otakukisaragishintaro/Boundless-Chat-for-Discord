@@ -43,7 +43,6 @@ import io.github.wxmyyds.discordautotranslate.translate.ApiTester;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -65,18 +64,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             "العربية", "فارسی", "हिन्दी", "বাংলা", "ไทย", "עברית", "Ελληνικά",
             "Tiếng Việt", "Türkçe", "Bahasa Indonesia"
     };
-    private static final String[] TARGET_LANGUAGE_LABELS_EN = {
-            "Simplified Chinese", "Traditional Chinese", "English", "Japanese", "Korean",
-            "Russian", "Ukrainian", "Spanish", "French", "German", "Portuguese", "Italian",
-            "Arabic", "Persian", "Hindi", "Bengali", "Thai", "Hebrew", "Greek",
-            "Vietnamese", "Turkish", "Indonesian"
-    };
-    private static final String[] TARGET_LANGUAGE_LABELS_ZH = {
-            "简体中文", "繁體中文", "英语", "日语", "韩语", "俄语", "乌克兰语", "西班牙语",
-            "法语", "德语", "葡萄牙语", "意大利语", "阿拉伯语", "波斯语", "印地语",
-            "孟加拉语", "泰语", "希伯来语", "希腊语", "越南语", "土耳其语", "印尼语"
-    };
-
     /** 下拉框显示顺序：0=OpenAI-Responses，1=OpenAI-Compatible，2=Anthropic-Messages。 */
     private static final String[] PROTOCOL_ENTRIES =
             {"OpenAI-Responses", "OpenAI-Compatible", "Anthropic-Messages"};
@@ -120,7 +107,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     @Nullable private Dialog outboundButtonsDialog;
     @Nullable private Dialog advancedSettingsDialog;
     private final List<String> targetLanguageValues = new ArrayList<>();
-    private boolean chineseUi;
     private boolean loadingUi;
     private boolean hasUnsavedChanges;
     private boolean persistedConfigInvalid;
@@ -175,7 +161,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        chineseUi = isChineseSystemLanguage();
         setTitle(R.string.module_name);
         setContentView(buildContentView());
         prefs = getSharedPreferences(LOCAL_PREFS_NAME, MODE_PRIVATE);
@@ -530,7 +515,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         targetLanguageSpinner = new Spinner(this);
         targetLanguageValues.clear();
         targetLanguageValues.addAll(Arrays.asList(TARGET_LANGUAGE_VALUES));
-        String[] labels = chineseUi ? TARGET_LANGUAGE_LABELS_ZH : TARGET_LANGUAGE_LABELS_EN;
+        String[] labels = getResources().getStringArray(R.array.target_language_labels);
         targetLanguageAdapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, new ArrayList<>(Arrays.asList(labels)));
         targetLanguageAdapter.setDropDownViewResource(
@@ -557,18 +542,18 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
 
         TextView outboundTitle = new TextView(this);
-        outboundTitle.setText(chineseUi ? "发送语言按钮" : "Outbound language buttons");
+        outboundTitle.setText(getString(R.string.label_outbound_section));
         outboundTitle.setPadding(0, dp(10), 0, 0);
         root.addView(outboundTitle, matchWrap());
         outboundButtonsSummary = new TextView(this);
         outboundButtonsSummary.setTextSize(12f);
         root.addView(outboundButtonsSummary, matchWrap());
         manageOutboundButtonsButton = new Button(this);
-        manageOutboundButtonsButton.setText(chineseUi ? "管理发送按钮" : "Manage send buttons");
+        manageOutboundButtonsButton.setText(getString(R.string.button_manage_outbound));
         manageOutboundButtonsButton.setOnClickListener(v -> openOutboundButtonsEditor());
         root.addView(manageOutboundButtonsButton, matchWrap());
         advancedSettingsButton = new Button(this);
-        advancedSettingsButton.setText(chineseUi ? "提示词与译文过滤设置…" : "Prompts and translation filters…");
+        advancedSettingsButton.setText(getString(R.string.button_advanced_settings));
         advancedSettingsButton.setOnClickListener(v -> openAdvancedSettings());
         root.addView(advancedSettingsButton, matchWrap());
 
@@ -578,40 +563,39 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         advancedBacking.setOrientation(LinearLayout.VERTICAL);
         advancedBacking.setVisibility(View.GONE);
         systemPromptInput = addField(advancedBacking,
-                chineseUi ? "接收翻译系统提示词" : "Incoming translation system prompt",
+                getString(R.string.label_incoming_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         resetSystemPromptButton = addPromptResetButton(advancedBacking, systemPromptInput,
                 Config.DEF_SYSTEM_PROMPT);
         sendSystemPromptInput = addField(advancedBacking,
-                chineseUi ? "新建发送按钮的默认提示词" : "Default prompt for new outbound buttons",
-                chineseUi ? "新建按钮时作为初始提示词，可使用 {{target_language}}。" :
-                        "Used when creating a button; supports {{target_language}}.",
+                getString(R.string.label_new_outbound_prompt),
+                getString(R.string.hint_default_outbound_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         resetSendSystemPromptButton = addPromptResetButton(advancedBacking, sendSystemPromptInput,
                 Config.DEF_SEND_SYSTEM_PROMPT);
         checkWrapperInput = addValidationSwitch(advancedBacking,
-                chineseUi ? "检查包装标签" : "Check wrapper tags", Config.DEF_CHECK_WRAPPER);
+                getString(R.string.validation_check_wrapper), Config.DEF_CHECK_WRAPPER);
         stripOuterWrapperInput = addValidationSwitch(advancedBacking,
-                chineseUi ? "自动移除完整的外层包装标签" : "Strip one exact outer wrapper pair",
+                getString(R.string.validation_strip_wrapper),
                 Config.DEF_STRIP_OUTER_WRAPPER);
         checkSegmentMarkersInput = addValidationSwitch(advancedBacking,
-                chineseUi ? "检查残留分段标记" : "Check leftover segment markers",
+                getString(R.string.validation_check_segments),
                 Config.DEF_CHECK_SEGMENT_MARKERS);
         checkPlaceholdersInput = addValidationSwitch(advancedBacking,
-                chineseUi ? "检查模板占位符" : "Check template placeholders",
+                getString(R.string.validation_check_placeholders),
                 Config.DEF_CHECK_PLACEHOLDERS);
         checkRetainedMarkersInput = addValidationSwitch(advancedBacking,
-                chineseUi ? "检查保留节点定位标记" : "Check retained-node markers",
+                getString(R.string.validation_check_retained),
                 Config.DEF_CHECK_RETAINED_MARKERS);
         checkLengthInput = addValidationSwitch(advancedBacking,
-                chineseUi ? "检查译文长度比例" : "Check translation length ratio",
+                getString(R.string.validation_check_length),
                 Config.DEF_CHECK_LENGTH);
         minLengthPercentInput = addField(advancedBacking,
-                chineseUi ? "译文最小长度（原文百分比）" : "Minimum translation length (% of source)",
+                getString(R.string.label_min_translation_length),
                 String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
         maxLengthPercentInput = addField(advancedBacking,
-                chineseUi ? "译文最大长度（原文百分比）" : "Maximum translation length (% of source)",
+                getString(R.string.label_max_translation_length),
                 String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
         root.addView(advancedBacking, matchWrap());
 
@@ -701,12 +685,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private void updateOutboundButtonsSummary() {
         if (outboundButtonsSummary == null) return;
         if (outboundButtonsDraft.isEmpty()) {
-            outboundButtonsSummary.setText(chineseUi ? "未启用任何发送按钮" : "No outbound buttons enabled");
+            outboundButtonsSummary.setText(getString(R.string.outbound_none));
             return;
         }
         StringBuilder summary = new StringBuilder();
         for (OutboundButtonConfig button : outboundButtonsDraft) {
-            if (summary.length() > 0) summary.append("、");
+            if (summary.length() > 0) summary.append(" · ");
             summary.append(button.label).append("（").append(button.targetLanguage).append("）");
         }
         outboundButtonsSummary.setText(summary.toString());
@@ -716,7 +700,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
                 || persistence.isLoading() || saveInProgress || syncInProgress
                 || outboundButtonsDialog != null) return;
-        String[] labels = chineseUi ? TARGET_LANGUAGE_LABELS_ZH : TARGET_LANGUAGE_LABELS_EN;
+        String[] labels = getResources().getStringArray(R.array.target_language_labels);
         outboundButtonsDialog = OutboundButtonsEditor.show(this,
                 new ArrayList<>(outboundButtonsDraft), TARGET_LANGUAGE_VALUES, labels,
                 promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT),
@@ -744,72 +728,70 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scroll.addView(form);
 
         EditText incomingPrompt = addField(form,
-                chineseUi ? "接收翻译系统提示词" : "Incoming translation system prompt",
+                getString(R.string.label_incoming_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         incomingPrompt.setMinLines(7);
         incomingPrompt.setText(promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
         Button resetIncoming = new Button(this);
-        resetIncoming.setText(chineseUi ? "恢复接收提示词默认值" : "Restore incoming prompt");
+        resetIncoming.setText(getString(R.string.button_restore_incoming_prompt));
         resetIncoming.setOnClickListener(v -> incomingPrompt.setText(Config.DEF_SYSTEM_PROMPT));
         form.addView(resetIncoming, matchWrap());
 
         EditText newButtonPrompt = addField(form,
-                chineseUi ? "新建发送按钮的默认提示词" : "Default prompt for new send buttons",
-                chineseUi ? "支持 {{target_language}}。" : "Supports {{target_language}}.",
+                getString(R.string.label_new_outbound_prompt),
+                getString(R.string.hint_default_outbound_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         newButtonPrompt.setMinLines(7);
         newButtonPrompt.setText(promptOrDefault(sendSystemPromptInput,
                 Config.DEF_SEND_SYSTEM_PROMPT));
         Button resetOutbound = new Button(this);
-        resetOutbound.setText(chineseUi ? "恢复新建按钮提示词默认值" : "Restore new-button prompt");
+        resetOutbound.setText(getString(R.string.button_restore_outbound_prompt));
         resetOutbound.setOnClickListener(v ->
                 newButtonPrompt.setText(Config.DEF_SEND_SYSTEM_PROMPT));
         form.addView(resetOutbound, matchWrap());
 
         TextView filterTitle = new TextView(this);
-        filterTitle.setText(chineseUi ? "译文防损坏校验" : "Translation integrity checks");
+        filterTitle.setText(getString(R.string.label_translation_integrity));
         filterTitle.setTextSize(16f);
         filterTitle.setPadding(0, dp(12), 0, dp(4));
         form.addView(filterTitle, matchWrap());
         TextView filterHint = new TextView(this);
         filterHint.setTextSize(12f);
-        filterHint.setText(chineseUi
-                ? "每项可以独立关闭。关闭检查可能放行格式损坏、漏译或重复内容；空响应始终无效。"
-                : "Checks can be disabled independently. Disabling them may allow malformed, incomplete, or repeated output; empty responses remain invalid.");
+        filterHint.setText(getString(R.string.hint_translation_integrity));
         form.addView(filterHint, matchWrap());
 
-        Switch wrapper = addDialogSwitch(form, chineseUi ? "检查包装标签" : "Check wrapper tags",
+        Switch wrapper = addDialogSwitch(form, getString(R.string.validation_check_wrapper),
                 checkWrapperInput.isChecked());
         Switch strip = addDialogSwitch(form,
-                chineseUi ? "自动移除完整的外层包装标签" : "Strip one exact outer wrapper pair",
+                getString(R.string.validation_strip_wrapper),
                 stripOuterWrapperInput.isChecked());
         Switch segments = addDialogSwitch(form,
-                chineseUi ? "检查残留分段标记" : "Check leftover segment markers",
+                getString(R.string.validation_check_segments),
                 checkSegmentMarkersInput.isChecked());
         Switch placeholders = addDialogSwitch(form,
-                chineseUi ? "检查模板占位符" : "Check template placeholders",
+                getString(R.string.validation_check_placeholders),
                 checkPlaceholdersInput.isChecked());
         Switch retained = addDialogSwitch(form,
-                chineseUi ? "检查保留节点定位标记" : "Check retained-node markers",
+                getString(R.string.validation_check_retained),
                 checkRetainedMarkersInput.isChecked());
         Switch length = addDialogSwitch(form,
-                chineseUi ? "检查译文长度比例" : "Check translation length ratio",
+                getString(R.string.validation_check_length),
                 checkLengthInput.isChecked());
         EditText minPercent = addField(form,
-                chineseUi ? "译文最小长度（原文百分比）" : "Minimum translation length (% of source)",
+                getString(R.string.label_min_translation_length),
                 String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
         minPercent.setText(minLengthPercentInput.getText().toString());
         EditText maxPercent = addField(form,
-                chineseUi ? "译文最大长度（原文百分比）" : "Maximum translation length (% of source)",
+                getString(R.string.label_max_translation_length),
                 String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
         maxPercent.setText(maxLengthPercentInput.getText().toString());
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle(chineseUi ? "提示词与译文过滤设置" : "Prompts and translation filters")
+                .setTitle(getString(R.string.button_advanced_settings))
                 .setView(scroll)
                 .setNegativeButton(android.R.string.cancel, null)
-                .setPositiveButton(chineseUi ? "应用到待保存设置" : "Apply to draft", null)
+                .setPositiveButton(getString(R.string.button_apply_to_draft), null)
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> {
@@ -819,12 +801,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         min = Integer.parseInt(minPercent.getText().toString().trim());
                         max = Integer.parseInt(maxPercent.getText().toString().trim());
                     } catch (NumberFormatException invalid) {
-                        Toast.makeText(this, "长度比例必须填写整数", Toast.LENGTH_SHORT).show();
+                        Toast.makeText(this, R.string.error_length_integer, Toast.LENGTH_SHORT).show();
                         return;
                     }
                     if (min < 0 || max > 1000 || min > max) {
-                        Toast.makeText(this, "长度比例需在 0～1000 之间，且最小值不能大于最大值",
-                                Toast.LENGTH_LONG).show();
+                        Toast.makeText(this, R.string.error_length_range, Toast.LENGTH_LONG).show();
                         return;
                     }
                     systemPromptInput.setText(incomingPrompt.getText().toString());
@@ -926,7 +907,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private Button addPromptResetButton(LinearLayout parent, EditText input, String defaultPrompt) {
         Button button = new Button(this);
-        button.setText(chineseUi ? "恢复默认提示词" : "Restore default prompt");
+        button.setText(getString(R.string.button_restore_default_prompt));
         button.setOnClickListener(view -> input.setText(defaultPrompt));
         parent.addView(button, matchWrap());
         return button;
@@ -1068,11 +1049,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private String selectedSendTargetLanguage() {
         return outboundButtonsDraft.isEmpty() ? Config.DEF_SEND_TARGET_LANG
                 : outboundButtonsDraft.get(0).targetLanguage;
-    }
-
-    private boolean isChineseSystemLanguage() {
-        Locale locale = getResources().getConfiguration().getLocales().get(0);
-        return "zh".equalsIgnoreCase(locale.getLanguage());
     }
 
     private int dp(int v) {
@@ -1318,7 +1294,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                                         saveFailure.getClass().getSimpleName());
                         if (commitResult != null && commitResult.rollbackFailed) {
                             // Only fixed labels and exception classes, never values/messages.
-                            detail += "\n" + (chineseUi ? "回滚：" : "Rollback: ")
+                            detail += "\n" + (getString(R.string.label_rollback))
                                     + (commitResult.rollbackFailure == null
                                             ? getString(R.string.status_save_persist_failed)
                                             : getString(R.string.status_save_failed,

@@ -150,4 +150,36 @@
     <string name="scope_error_action">请选择翻译或不翻译</string>
     <string name="scope_explanation">频道规则优先于服务器规则，再使用默认策略。删除规则即继承。全局关闭阻止新翻译。“应用”仅更新草稿，之后请保存、同步设置并重启 Discord。在 Discord 开发者模式中复制服务器或频道 ID 后添加规则。</string>
     <string name="scope_summary">%1$s · %2$d 条服务器规则 · %3$d 条频道规则</string>
+
+    <string name="label_outbound_section">发送语言按钮</string>
+    <string name="button_manage_outbound">管理发送按钮</string>
+    <string name="button_advanced_settings">提示词与译文过滤设置…</string>
+    <string name="label_incoming_prompt">接收翻译系统提示词</string>
+    <string name="label_new_outbound_prompt">新建发送按钮的默认提示词</string>
+    <string name="hint_default_outbound_prompt">新建按钮时使用的初始提示词，支持 {{target_language}}。</string>
+    <string name="button_restore_incoming_prompt">恢复接收提示词默认值</string>
+    <string name="button_restore_outbound_prompt">恢复新建按钮提示词默认值</string>
+    <string name="label_translation_integrity">译文防损坏校验</string>
+    <string name="hint_translation_integrity">每项检查都可以独立关闭。关闭后可能放行格式损坏、漏译或重复内容；空响应始终无效。</string>
+    <string name="validation_check_wrapper">检查包装标签</string>
+    <string name="validation_strip_wrapper">自动移除完整的外层包装标签</string>
+    <string name="validation_check_segments">检查残留分段标记</string>
+    <string name="validation_check_placeholders">检查模板占位符</string>
+    <string name="validation_check_retained">检查保留节点定位标记</string>
+    <string name="validation_check_length">检查译文长度比例</string>
+    <string name="label_min_translation_length">译文最小长度（原文百分比）</string>
+    <string name="label_max_translation_length">译文最大长度（原文百分比）</string>
+    <string name="button_apply_to_draft">应用到待保存设置</string>
+    <string name="error_length_integer">长度比例必须填写整数。</string>
+    <string name="error_length_range">长度比例需在 0～1000 之间，且最小值不能大于最大值。</string>
+    <string name="button_restore_default_prompt">恢复默认提示词</string>
+    <string name="outbound_none">未启用任何发送按钮。</string>
+    <string name="label_rollback">回滚： </string>
+    <string-array name="target_language_labels">
+        <item>简体中文</item><item>繁體中文</item><item>英语</item><item>日语</item><item>韩语</item>
+        <item>俄语</item><item>乌克兰语</item><item>西班牙语</item><item>法语</item><item>德语</item><item>葡萄牙语</item><item>意大利语</item>
+        <item>阿拉伯语</item><item>波斯语</item><item>印地语</item><item>孟加拉语</item><item>泰语</item><item>希伯来语</item><item>希腊语</item>
+        <item>越南语</item><item>土耳其语</item><item>印尼语</item>
+    </string-array>
+
 </resources>

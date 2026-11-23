@@ -150,4 +150,36 @@
     <string name="scope_error_action">Select Translate or Do not translate</string>
     <string name="scope_explanation">Channel rules override server rules, then the default policy. Delete a rule to inherit. Global off blocks new translations. Apply only updates this draft; save and sync settings, then restart Discord. Copy a server or channel ID in Discord developer mode to add a rule.</string>
     <string name="scope_summary">%1$s · %2$d server rules · %3$d channel rules</string>
+
+    <string name="label_outbound_section">Outbound language buttons</string>
+    <string name="button_manage_outbound">Manage send buttons</string>
+    <string name="button_advanced_settings">Prompts and translation filters…</string>
+    <string name="label_incoming_prompt">Incoming translation system prompt</string>
+    <string name="label_new_outbound_prompt">Default prompt for new outbound buttons</string>
+    <string name="hint_default_outbound_prompt">Used when creating a new button; supports {{target_language}}.</string>
+    <string name="button_restore_incoming_prompt">Restore incoming prompt</string>
+    <string name="button_restore_outbound_prompt">Restore new-button prompt</string>
+    <string name="label_translation_integrity">Translation integrity checks</string>
+    <string name="hint_translation_integrity">Checks can be disabled independently. Disabling them may allow malformed, incomplete, or repeated output; empty responses remain invalid.</string>
+    <string name="validation_check_wrapper">Check wrapper tags</string>
+    <string name="validation_strip_wrapper">Strip one exact outer wrapper pair</string>
+    <string name="validation_check_segments">Check leftover segment markers</string>
+    <string name="validation_check_placeholders">Check template placeholders</string>
+    <string name="validation_check_retained">Check retained-node markers</string>
+    <string name="validation_check_length">Check translation length ratio</string>
+    <string name="label_min_translation_length">Minimum translation length (%% of source)</string>
+    <string name="label_max_translation_length">Maximum translation length (%% of source)</string>
+    <string name="button_apply_to_draft">Apply to draft</string>
+    <string name="error_length_integer">Length limits must be whole numbers.</string>
+    <string name="error_length_range">Length limits must be between 0 and 1000, and the minimum cannot exceed the maximum.</string>
+    <string name="button_restore_default_prompt">Restore default prompt</string>
+    <string name="outbound_none">No outbound buttons configured.</string>
+    <string name="label_rollback">Rollback: </string>
+    <string-array name="target_language_labels">
+        <item>Simplified Chinese</item><item>Traditional Chinese</item><item>English</item><item>Japanese</item><item>Korean</item>
+        <item>Russian</item><item>Ukrainian</item><item>Spanish</item><item>French</item><item>German</item><item>Portuguese</item><item>Italian</item>
+        <item>Arabic</item><item>Persian</item><item>Hindi</item><item>Bengali</item><item>Thai</item><item>Hebrew</item><item>Greek</item>
+        <item>Vietnamese</item><item>Turkish</item><item>Indonesian</item>
+    </string-array>
+
 </resources>
