@@ -1,6 +1,5 @@
 package io.github.wxmyyds.discordautotranslate.core;
 
-import android.content.ContentResolver;
 import android.content.Context;
 import android.net.Uri;
 import android.os.Bundle;
@@ -73,9 +72,6 @@ public final class ProjectLog {
         enabled = nextEnabled;
         configurationValid = nextValid;
         reportConfiguration();
-        bootstrapInfo(nextValid
-                ? "module logging configuration initialized"
-                : "module logging configuration is invalid");
     }
 
     public static synchronized boolean isEnabled() {
