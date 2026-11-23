@@ -40,11 +40,12 @@ public final class ApiTester {
                         ? ((JsonApiEngine.UpstreamHttpException) error).responseBody : null;
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
                         (cause == null ? error : cause).getClass().getSimpleName(), body,
-                        error.getMessage());
+                        error.reason() == TranslationException.Reason.TRANSLATION_INVALID
+                                ? error.getMessage() : "");
             }
             return new Failure(TranslationException.Kind.UNKNOWN,
                     TranslationException.Reason.UNKNOWN_FAILURE, 0,
-                    failure.getClass().getSimpleName(), null, failure.getMessage());
+                    failure.getClass().getSimpleName(), null, "");
         }
 
         private static Failure cancelled(int httpStatus) {
