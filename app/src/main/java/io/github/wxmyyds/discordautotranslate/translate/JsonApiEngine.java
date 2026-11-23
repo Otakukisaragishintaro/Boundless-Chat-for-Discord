@@ -93,6 +93,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
             if (validateTranslation) {
                 String violation = Segments.plainTextViolation(translated, text);
                 if (violation != null) {
+                    ProjectLog.warn("translation.validation.failed httpStatus="
+                            + response.status + " reason=" + violation);
                     throw new TranslationException(TranslationException.Kind.PARSE,
                             TranslationException.Reason.TRANSLATION_INVALID,
                             "译文未通过防损坏校验：" + violation, response.status, null);
@@ -113,8 +115,14 @@ public final class JsonApiEngine implements Scheduler.Engine {
             throws Exception {
         // 1) 单一输入按协议构造请求体；已保存提示词也追加原样保留结构标记的规则。
         boolean sse = cfg.streaming;
-        String systemPrompt = Config.DEF_SYSTEM_PROMPT.equals(cfg.systemPrompt)
-                ? Config.defaultSystemPromptFor(cfg.targetLang) : cfg.systemPrompt;
+        String systemPrompt;
+        if (cfg.systemPrompt.contains("{{target_language}}")) {
+            systemPrompt = cfg.systemPrompt.replace("{{target_language}}", cfg.targetLang);
+        } else if (Config.DEF_SYSTEM_PROMPT.equals(cfg.systemPrompt)) {
+            systemPrompt = Config.defaultSystemPromptFor(cfg.targetLang);
+        } else {
+            systemPrompt = cfg.systemPrompt;
+        }
         String body = Protocols.requestBody(cfg.protocol, text, systemPrompt, cfg.model,
                 sse);
         buildHeaders(headers);
