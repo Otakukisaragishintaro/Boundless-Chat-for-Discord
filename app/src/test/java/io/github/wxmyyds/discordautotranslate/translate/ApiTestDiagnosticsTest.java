@@ -282,7 +282,7 @@ public class ApiTestDiagnosticsTest {
                     if ("<translate>你好</translate>".equals(text)) {
                         // One exact outer wrapper pair is normalized before validation.
                         assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
-                                ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, null);
+                                ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, "你好");
                     } else {
                         assertFailure(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION,
