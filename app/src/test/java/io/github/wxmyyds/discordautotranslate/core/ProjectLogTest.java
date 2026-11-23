@@ -54,6 +54,16 @@ public class ProjectLogTest {
     }
 
     @Test
+    public void bootstrapCheckpointsAreVisibleBeforeRegularLoggingIsEnabled() {
+        ProjectLog.configure(snapshot(false));
+        ProjectLog.bootstrapInfo("module lifecycle entered");
+        assertEquals(1, entries.size());
+        assertEntry(0, Log.INFO, "pid=" + android.os.Process.myPid()
+                + " process=" + android.app.Application.getProcessName()
+                + " module lifecycle entered");
+    }
+
+    @Test
     public void enabledLoggingPreservesSeverityTagAndRepeatedOrdinaryMessages() {
         ProjectLog.configure(snapshot(true));
         ProjectLog.info("info");
