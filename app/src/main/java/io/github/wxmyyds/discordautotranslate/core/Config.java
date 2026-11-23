@@ -324,8 +324,8 @@ public final class Config {
          * （它会被日志与诊断间接引用），这里只编码其 SHA-256 摘要。</p>
          */
         public String version() {
-            return encode(apiUrl) + encode(model) + encode(targetLang) + encode(sendTargetLang)
-                    + encode(protocol) + encode(Boolean.toString(streaming)) + encode(systemPrompt) + encode(sendSystemPrompt)
+            return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
+                    + encode(Boolean.toString(streaming)) + encode(systemPrompt) + encode(sendSystemPrompt)
                     + encode(outboundButtonsJson)
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
                     + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
