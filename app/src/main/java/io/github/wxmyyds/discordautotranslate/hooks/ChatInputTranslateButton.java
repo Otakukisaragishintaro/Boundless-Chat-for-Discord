@@ -88,6 +88,7 @@ public final class ChatInputTranslateButton {
         final TextView button;
         final View.OnLayoutChangeListener positionListener;
         final AtomicBoolean requestValid = new AtomicBoolean(true);
+        boolean positioned;
         boolean inFlight;
         String requestId;
 
@@ -308,6 +309,8 @@ public final class ChatInputTranslateButton {
         button.setBackground(createButtonBackground(activity));
         button.setClickable(true);
         button.setFocusable(false);
+        // Do not render at FrameLayout's temporary origin while the IME/composer is settling.
+        button.setVisibility(View.INVISIBLE);
         button.setElevation(dp(activity, 8));
         FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
                 dp(activity, BUTTON_WIDTH_DP), dp(activity, BUTTON_HEIGHT_DP),
@@ -376,6 +379,16 @@ public final class ChatInputTranslateButton {
         if (binding == null || !isComposerUsable(binding.editor)
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
         Rect editorBounds = boundsOnScreen(binding.editor);
+        Rect editorVisibleBounds = new Rect();
+        if (!binding.editor.getGlobalVisibleRect(editorVisibleBounds)
+                || editorVisibleBounds.width() <= 0 || editorVisibleBounds.height() <= 0
+                || !editorVisibleBounds.contains(editorBounds)) {
+            // During IME open/close Android can briefly report transient coordinates.
+            // Keep the last confirmed location; never animate through the screen center.
+            return;
+        }
+        Rect overlayBounds = boundsOnScreen(binding.overlay);
+        if (!overlayBounds.contains(editorBounds)) return;
         boolean useEditorAnchor = binding.sendView == null
                 || !binding.sendView.isAttachedToWindow();
         Rect anchor = useEditorAnchor ? editorBounds : boundsOnScreen(binding.sendView);
@@ -421,6 +434,10 @@ public final class ChatInputTranslateButton {
         int childCount = binding.overlay.getChildCount();
         if (childCount > 0 && binding.overlay.getChildAt(childCount - 1) != binding.button) {
             binding.button.bringToFront();
+        }
+        binding.positioned = true;
+        if (binding.button.getVisibility() != View.VISIBLE) {
+            binding.button.setVisibility(View.VISIBLE);
         }
     }
 
