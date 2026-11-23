@@ -196,4 +196,16 @@
     <string name="outbound_add_title">添加发送按钮</string><string name="outbound_edit_title">编辑发送按钮</string><string name="outbound_save">保存</string>
     <string name="outbound_prompt_edit_length">编辑此按钮的独立提示词（%1$d 个字符）</string>
 
+
+    <string name="label_translation_cache">本地翻译缓存</string>
+    <string name="label_cache_enabled">启用本地翻译缓存</string>
+    <string name="hint_translation_cache">关闭时完全沿用原来的 API 翻译流程，不读取也不写入缓存。关闭不会删除已有缓存；重新开启后仍可继续使用。</string>
+    <string name="label_cache_limit">最多保存的译文数量</string>
+    <string name="cache_limit_100k">100,000 条</string>
+    <string name="cache_limit_1m">1,000,000 条</string>
+    <string name="button_clear_translation_cache">清空本地翻译缓存</string>
+    <string name="confirm_clear_translation_cache">确定永久删除本机保存的全部译文吗？此操作不会修改 API 设置或 Discord 聊天记录。</string>
+    <string name="status_cache_clear_requested">已向 Discord 发送清空请求，将由 Discord 模块执行。</string>
+    <string name="status_cache_clear_unavailable">无法联系 Discord 模块。请打开 Discord 并确认 LSPosed 已连接，然后重试。</string>
+
 </resources>
