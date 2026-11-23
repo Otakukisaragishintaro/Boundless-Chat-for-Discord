@@ -64,4 +64,8 @@ JVM 单测无真实 Android 布局/Hook 环境。它可以验证纯逻辑、配�
 
 需要日志时先在设置页启用项目日志并成功保存；设置页测试日志直接进入 logcat，Discord 日志还需同步成功并重启 Discord。按安装/身份映射、检测、请求、严格回填、刷新五个阶段定位，不凭单一图标判定根因。
 
+Discord Hook 诊断按以下固定检查点记录：module lifecycle entered、Discord package lifecycle entered、Application.attach bootstrap hook installed、Discord Application.attach hook triggered、Discord hook profile selected、Discord required hooks installed and runtime activated、Discord Activity.onResume hook triggered、Discord chat input Activity attach entered、Discord chat input editor focused、Discord chat input send control found、Discord translation button attached。设置页根据 Provider 已收到的白名单事件逐项显示确认状态。
+
+Provider Ping 发生在 Discord 的 Application.attach Hook 触发并取得目标 Context 之后。因此没有 Provider Ping 只表示诊断 IPC 尚未握手，不能据此断言模块未加载或 Hook 未安装。握手前的入口、包生命周期和启动 Hook 安装状态必须通过 LSPosed 管理器的 Xposed 日志核实；ProjectLog 会把 IPC Ping 成功/失败写入该独立日志通道。设置页在握手前应将这些阶段显示为“无法读取”，不能显示为“Hook 失败”。
+
 LSPosed 导出日志未必包含完整 logcat。固定原因码和异常类型可帮助分类，但项目诊断不主动输出消息身份，不能把相邻的成功、PARSE、NETWORK 或结构拒绝记录自动归为同一条消息。非 2xx 上游 HTTP 错误正文按既定链路原样显示，并在日志启用时原样记录，可能含敏感信息，分享前必须检查。除此之外，不得为排障增加消息正文、身份、视图几何输出或第二次宿主遍历。
