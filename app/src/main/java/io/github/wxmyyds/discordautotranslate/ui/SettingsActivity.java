@@ -243,6 +243,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putString("scope", scopeDraft.toJson());
         draft.putBoolean("logging", loggingInput.isChecked());
         draft.putBoolean("streaming", streamingInput.isChecked());
+        draft.putBoolean("check_wrapper", checkWrapperInput.isChecked());
+        draft.putBoolean("strip_outer_wrapper", stripOuterWrapperInput.isChecked());
+        draft.putBoolean("check_segments", checkSegmentMarkersInput.isChecked());
+        draft.putBoolean("check_placeholders", checkPlaceholdersInput.isChecked());
+        draft.putBoolean("check_retained", checkRetainedMarkersInput.isChecked());
+        draft.putBoolean("check_length", checkLengthInput.isChecked());
         draft.putInt("protocol", protocolSpinner.getSelectedItemPosition());
         draft.putString("language", selectedTargetLanguage());
         draft.putString("send_language", selectedSendTargetLanguage());
@@ -270,6 +276,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             loggingInput.setChecked(draft.getBoolean("logging", Config.DEF_LOGGING_ENABLED));
             protocolSpinner.setSelection(draft.getInt("protocol"));
             streamingInput.setChecked(draft.getBoolean("streaming"));
+            checkWrapperInput.setChecked(draft.getBoolean("check_wrapper", Config.DEF_CHECK_WRAPPER));
+            stripOuterWrapperInput.setChecked(draft.getBoolean("strip_outer_wrapper",
+                    Config.DEF_STRIP_OUTER_WRAPPER));
+            checkSegmentMarkersInput.setChecked(draft.getBoolean("check_segments",
+                    Config.DEF_CHECK_SEGMENT_MARKERS));
+            checkPlaceholdersInput.setChecked(draft.getBoolean("check_placeholders",
+                    Config.DEF_CHECK_PLACEHOLDERS));
+            checkRetainedMarkersInput.setChecked(draft.getBoolean("check_retained",
+                    Config.DEF_CHECK_RETAINED_MARKERS));
+            checkLengthInput.setChecked(draft.getBoolean("check_length", Config.DEF_CHECK_LENGTH));
             String language = draft.getString("language");
             ensureTargetLanguageAvailable(language);
             targetLanguageSpinner.setSelection(targetLanguagePosition(language));
