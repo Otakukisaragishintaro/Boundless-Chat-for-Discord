@@ -479,6 +479,7 @@ public class TranslationScopeBridgeTest {
     private static Config.Snapshot snapshot(boolean enabled, TranslationScope scope) {
         Config.Snapshot snapshot = Config.read(new MemoryPrefs()
                 .put(Config.KEY_ENABLED, enabled)
+                .put(Config.KEY_CACHE_ENABLED, true)
                 .put(Config.KEY_TRANSLATION_SCOPE, scope.toJson()));
         assertNull(snapshot.configError);
         return snapshot;

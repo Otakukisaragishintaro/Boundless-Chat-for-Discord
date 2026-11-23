@@ -148,6 +148,7 @@ public final class HookBridge {
         }
         Config.Snapshot old = this.config;
         this.config = c;
+        if (c.cacheEnabled) TranslationCache.get().setMaxDiskEntries(c.cacheLimit);
 
         // 并发上限即时生效（需求 §5.7 普通配置变更尽量即时生效）。
         Scheduler.get().setMaxConcurrency(c.maxConcurrency);
@@ -444,7 +445,7 @@ public final class HookBridge {
         }
 
         // 缓存命中：直接出结果，不发请求（需求 §5.6）。
-        String cached = TranslationCache.get().get(hash);
+        String cached = cfg.cacheEnabled ? TranslationCache.get().get(hash) : null;
         if (cached != null) {
             if (StateStore.get().useCached(entry, cached)) refreshTranslation(messageId);
             return;
@@ -489,7 +490,7 @@ public final class HookBridge {
         boolean success = admitted && error == null && translated != null && !translated.isEmpty();
         if (!StateStore.get().complete(task, admitted, translated,
                 success ? null : admitted ? describe(error) : null)) return;
-        if (success) TranslationCache.get().put(task.contentHash, translated);
+        if (success && config.cacheEnabled) TranslationCache.get().put(task.contentHash, translated);
         refreshTranslation(task.messageId);
     }
 
@@ -519,7 +520,7 @@ public final class HookBridge {
                 || !translated.equals(entry.translatedText)) {
             return;
         }
-        TranslationCache.get().remove(entry.contentHash);
+        if (config.cacheEnabled) TranslationCache.get().remove(entry.contentHash);
         if (StateStore.get().rejectRender(id, translated)) {
             ProjectLog.info("translation render rejected: native structure reconstruction failed");
             refreshTranslation(id);

@@ -137,6 +137,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Switch checkLengthInput;
     private Switch enabledInput;
     private Switch loggingInput;
+    private Switch cacheEnabledInput;
+    private Spinner cacheLimitSpinner;
+    private Button clearCacheButton;
     private Switch streamingInput;
     private TextView enabledHint;
     private TextView loggingHint;
@@ -241,6 +244,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("enabled", enabledInput.isChecked());
         draft.putString("scope", scopeDraft.toJson());
         draft.putBoolean("logging", loggingInput.isChecked());
+        draft.putBoolean("cache_enabled", cacheEnabledInput.isChecked());
+        draft.putInt("cache_limit", cacheLimitSpinner.getSelectedItemPosition());
         draft.putBoolean("streaming", streamingInput.isChecked());
         draft.putBoolean("check_wrapper", checkWrapperInput.isChecked());
         draft.putBoolean("strip_outer_wrapper", stripOuterWrapperInput.isChecked());
@@ -274,6 +279,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeDraft = TranslationScope.parse(draft.getString("scope"));
             updateScopeSummary();
             loggingInput.setChecked(draft.getBoolean("logging", Config.DEF_LOGGING_ENABLED));
+            cacheEnabledInput.setChecked(draft.getBoolean("cache_enabled", Config.DEF_CACHE_ENABLED));
+            cacheLimitSpinner.setSelection(draft.getInt("cache_limit",
+                    Config.DEF_CACHE_LIMIT == 1000000 ? 1 : 0));
             protocolSpinner.setSelection(draft.getInt("protocol"));
             streamingInput.setChecked(draft.getBoolean("streaming"));
             checkWrapperInput.setChecked(draft.getBoolean("check_wrapper", Config.DEF_CHECK_WRAPPER));
@@ -461,6 +469,47 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         loggingPrivacy.setTextSize(12f);
         loggingPrivacy.setText(R.string.hint_logging_privacy);
         root.addView(loggingPrivacy, matchWrap());
+
+        TextView cacheTitle = new TextView(this);
+        cacheTitle.setText(R.string.label_translation_cache);
+        cacheTitle.setPadding(0, dp(10), 0, 0);
+        root.addView(cacheTitle, matchWrap());
+        cacheEnabledInput = new Switch(this);
+        cacheEnabledInput.setText(R.string.label_cache_enabled);
+        cacheEnabledInput.setShowText(false);
+        cacheEnabledInput.setMinimumHeight(dp(48));
+        root.addView(cacheEnabledInput, matchWrap());
+        cacheEnabledInput.setOnCheckedChangeListener((button, checked) -> {
+            updateCacheControls();
+            markDirty();
+        });
+        TextView cacheHint = new TextView(this);
+        cacheHint.setTextSize(12f);
+        cacheHint.setText(R.string.hint_translation_cache);
+        root.addView(cacheHint, matchWrap());
+        TextView cacheLimitLabel = new TextView(this);
+        cacheLimitLabel.setText(R.string.label_cache_limit);
+        root.addView(cacheLimitLabel, matchWrap());
+        cacheLimitSpinner = new Spinner(this);
+        ArrayAdapter<String> cacheLimitAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item,
+                new String[] {getString(R.string.cache_limit_100k),
+                        getString(R.string.cache_limit_1m)});
+        cacheLimitAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        cacheLimitSpinner.setAdapter(cacheLimitAdapter);
+        cacheLimitSpinner.setSelection(0);
+        cacheLimitSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                markDirty();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        root.addView(cacheLimitSpinner, matchWrap());
+        clearCacheButton = new Button(this);
+        clearCacheButton.setText(R.string.button_clear_translation_cache);
+        clearCacheButton.setOnClickListener(v -> confirmClearTranslationCache());
+        root.addView(clearCacheButton, matchWrap());
+        updateCacheControls();
 
         // 供应商协议：请求体与译文解析按所选协议内置实现，
         // 不再让用户手写 JSON 请求模板与译文提取路径。
@@ -1160,6 +1209,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeDraft = snapshot.translationScope;
             updateScopeSummary();
             loggingInput.setChecked(snapshot.loggingEnabled);
+            cacheEnabledInput.setChecked(snapshot.cacheEnabled);
+            cacheLimitSpinner.setSelection(snapshot.cacheLimit >= 1000000 ? 1 : 0);
+            updateCacheControls();
             protocolSpinner.setSelection(positionOf(snapshot.protocol));
             streamingInput.setChecked(snapshot.streaming);
             updateStreamingAvailability();
@@ -1200,6 +1252,37 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             loadingUi = false;
             updateSaveButtonState();
         }
+    }
+
+    private void updateCacheControls() {
+        if (cacheLimitSpinner != null) {
+            cacheLimitSpinner.setEnabled(configurationLoaded && !persistedConfigInvalid
+                    && cacheEnabledInput.isChecked());
+        }
+    }
+
+    private void confirmClearTranslationCache() {
+        if (!started || destroyed || remotePrefs == null || persistedConfigInvalid) {
+            Toast.makeText(this, R.string.status_cache_clear_unavailable, Toast.LENGTH_LONG).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+                .setTitle(R.string.button_clear_translation_cache)
+                .setMessage(R.string.confirm_clear_translation_cache)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton(R.string.button_clear_translation_cache, (dialog, which) -> {
+                    try {
+                        boolean next = !remotePrefs.getBoolean(
+                                Config.KEY_CACHE_CLEAR_REQUEST, false);
+                        remotePrefs.edit().putBoolean(Config.KEY_CACHE_CLEAR_REQUEST, next).apply();
+                        Toast.makeText(this, R.string.status_cache_clear_requested,
+                                Toast.LENGTH_LONG).show();
+                    } catch (Throwable failure) {
+                        Toast.makeText(this, R.string.status_cache_clear_unavailable,
+                                Toast.LENGTH_LONG).show();
+                    }
+                })
+                .show();
     }
 
     private void save() {
@@ -1389,6 +1472,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scopeButton.setEnabled(canOpenScopeEditor());
         scopeSummary.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         loggingInput.setEnabled(formAvailable);
+        cacheEnabledInput.setEnabled(formAvailable);
+        cacheLimitSpinner.setEnabled(formAvailable && cacheEnabledInput.isChecked());
+        clearCacheButton.setEnabled(formAvailable && remotePrefs != null);
         checkWrapperInput.setEnabled(formAvailable);
         stripOuterWrapperInput.setEnabled(formAvailable);
         checkSegmentMarkersInput.setEnabled(formAvailable);
@@ -1450,6 +1536,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_ENABLED, enabledInput.isChecked());
         memoryPrefs.put(Config.KEY_TRANSLATION_SCOPE, scopeDraft.toJson());
         memoryPrefs.put(Config.KEY_LOGGING_ENABLED, loggingInput.isChecked());
+        memoryPrefs.put(Config.KEY_CACHE_ENABLED, cacheEnabledInput.isChecked());
+        memoryPrefs.put(Config.KEY_CACHE_LIMIT,
+                cacheLimitSpinner.getSelectedItemPosition() == 1 ? 1000000 : 100000);
         memoryPrefs.put(Config.KEY_PROTOCOL,
                 protocolAt(protocolSpinner.getSelectedItemPosition()));
         memoryPrefs.put(Config.KEY_STREAMING, streamingInput.isChecked());

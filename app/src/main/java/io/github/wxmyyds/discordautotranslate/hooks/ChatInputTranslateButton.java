@@ -474,7 +474,7 @@ public final class ChatInputTranslateButton {
 
         // A previous outbound translation with the same source and button configuration
         // can be reused immediately without another provider request or token charge.
-        String cached = TranslationCache.get().get(hash);
+        String cached = base.cacheEnabled ? TranslationCache.get().get(hash) : null;
         if (cached != null) {
             ProjectLog.info("outbound translation cache hit");
             try (HookRuntime.Lease lease = HookRuntime.enter()) {
@@ -525,7 +525,9 @@ public final class ChatInputTranslateButton {
 
         String result = translated.trim();
         // Persist only validated successful output. This also refreshes the LRU timestamp on a hit.
-        TranslationCache.get().put(cacheKey, result);
+        if (HookBridge.get().configSnapshot().cacheEnabled) {
+            TranslationCache.get().put(cacheKey, result);
+        }
         binding.editor.setText(result);
         binding.editor.setSelection(result.length());
         // Let React Native's TextWatcher/event bridge receive the new text first.

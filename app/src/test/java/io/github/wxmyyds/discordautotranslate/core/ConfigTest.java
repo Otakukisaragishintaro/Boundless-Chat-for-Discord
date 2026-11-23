@@ -56,6 +56,27 @@ public class ConfigTest {
     }
 
     @Test
+    public void translationCacheIsOptInAndCapacityDoesNotChangeTranslationVersion() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        assertFalse(defaults.cacheEnabled);
+        assertEquals(100000, defaults.cacheLimit);
+
+        Config.Snapshot enabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_CACHE_ENABLED, true)
+                .put(Config.KEY_CACHE_LIMIT, 1000000));
+        assertTrue(enabled.cacheEnabled);
+        assertEquals(1000000, enabled.cacheLimit);
+        assertEquals(defaults.version(), enabled.version());
+
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_CACHE_LIMIT, 10000)).configError != null);
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_CACHE_LIMIT, 10000000)).configError != null);
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_CACHE_ENABLED, "true")).configError != null);
+    }
+
+    @Test
     public void loggingAcceptsExplicitBooleansWithoutChangingRequestVersion() {
         Config.Snapshot defaults = Config.read(new MemoryPrefs());
         for (boolean enabled : new boolean[]{false, true}) {
