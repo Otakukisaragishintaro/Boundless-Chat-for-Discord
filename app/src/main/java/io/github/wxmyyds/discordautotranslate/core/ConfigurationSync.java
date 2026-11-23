@@ -16,7 +16,11 @@ public final class ConfigurationSync {
             Config.KEY_TARGET_LANG, Config.KEY_SEND_TARGET_LANG,
             Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT, Config.KEY_SEND_SYSTEM_PROMPT,
             Config.KEY_PROTOCOL, Config.KEY_STREAMING, Config.KEY_TIMEOUT_MS,
-            Config.KEY_MAX_CONCURRENCY));
+            Config.KEY_MAX_CONCURRENCY, Config.KEY_CHECK_WRAPPER,
+            Config.KEY_STRIP_OUTER_WRAPPER, Config.KEY_CHECK_SEGMENT_MARKERS,
+            Config.KEY_CHECK_PLACEHOLDERS, Config.KEY_CHECK_RETAINED_MARKERS,
+            Config.KEY_CHECK_LENGTH, Config.KEY_MIN_LENGTH_PERCENT,
+            Config.KEY_MAX_LENGTH_PERCENT));
     private static final String KEY_LOCAL_INITIALIZED = "settings_initialized";
     private static final String[] LOCAL_COMMIT_KEYS = localCommitKeys();
 
@@ -231,6 +235,22 @@ public final class ConfigurationSync {
             putUnlessDefault(raw, Config.KEY_TIMEOUT_MS, snapshot.timeoutMs, Config.DEF_TIMEOUT_MS);
             putUnlessDefault(raw, Config.KEY_MAX_CONCURRENCY, snapshot.maxConcurrency,
                     Config.DEF_MAX_CONCURRENCY);
+            putUnlessDefault(raw, Config.KEY_CHECK_WRAPPER, snapshot.checkWrapper,
+                    Config.DEF_CHECK_WRAPPER);
+            putUnlessDefault(raw, Config.KEY_STRIP_OUTER_WRAPPER, snapshot.stripOuterWrapper,
+                    Config.DEF_STRIP_OUTER_WRAPPER);
+            putUnlessDefault(raw, Config.KEY_CHECK_SEGMENT_MARKERS, snapshot.checkSegmentMarkers,
+                    Config.DEF_CHECK_SEGMENT_MARKERS);
+            putUnlessDefault(raw, Config.KEY_CHECK_PLACEHOLDERS, snapshot.checkPlaceholders,
+                    Config.DEF_CHECK_PLACEHOLDERS);
+            putUnlessDefault(raw, Config.KEY_CHECK_RETAINED_MARKERS, snapshot.checkRetainedMarkers,
+                    Config.DEF_CHECK_RETAINED_MARKERS);
+            putUnlessDefault(raw, Config.KEY_CHECK_LENGTH, snapshot.checkLength,
+                    Config.DEF_CHECK_LENGTH);
+            putUnlessDefault(raw, Config.KEY_MIN_LENGTH_PERCENT, snapshot.minLengthPercent,
+                    Config.DEF_MIN_LENGTH_PERCENT);
+            putUnlessDefault(raw, Config.KEY_MAX_LENGTH_PERCENT, snapshot.maxLengthPercent,
+                    Config.DEF_MAX_LENGTH_PERCENT);
             return validate(raw);
         }
 
