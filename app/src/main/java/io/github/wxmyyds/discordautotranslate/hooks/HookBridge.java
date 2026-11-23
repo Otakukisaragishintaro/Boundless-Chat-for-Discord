@@ -44,6 +44,11 @@ public final class HookBridge {
         return INSTANCE;
     }
 
+    /** Immutable current configuration snapshot for the outbound composer action. */
+    public Config.Snapshot configSnapshot() {
+        return config;
+    }
+
     /** 正文视图 → 消息 ID（有界，避免列表回收后无限增长）。 */
     private final Map<View, String> viewToMessageId = boundedMap(512);
 
