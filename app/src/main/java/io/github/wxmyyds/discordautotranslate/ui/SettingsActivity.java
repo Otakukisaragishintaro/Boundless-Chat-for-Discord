@@ -216,6 +216,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             pendingScopeEditor = TranslationScopeEditor.saveState(scopeDialog);
             scopeDialog.dismiss(); scopeDialog = null;
         }
+        if (outboundButtonsDialog != null) {
+            outboundButtonsDialog.dismiss();
+            outboundButtonsDialog = null;
+        }
+        if (advancedSettingsDialog != null) {
+            advancedSettingsDialog.dismiss();
+            advancedSettingsDialog = null;
+        }
         XposedServiceConnectionHolder.unbind(this);
         cancelPendingTest();
         updateSaveButtonState();
