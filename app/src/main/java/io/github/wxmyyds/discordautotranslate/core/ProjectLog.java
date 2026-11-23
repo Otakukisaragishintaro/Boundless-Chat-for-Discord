@@ -34,6 +34,11 @@ public final class ProjectLog {
         enabled = next;
     }
 
+    /** Whether project diagnostics are currently enabled by the saved configuration. */
+    public static synchronized boolean isEnabled() {
+        return enabled;
+    }
+
     public static void info(String message) {
         emit(Log.INFO, null, message);
     }
