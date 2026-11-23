@@ -538,7 +538,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         root.addView(sendTargetLanguageHint, matchWrap());
         headersInput = addField(root, getString(R.string.label_headers), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        systemPromptInput = addField(root, getString(R.string.label_system_prompt),
+        systemPromptInput = addField(root,
+                chineseUi ? "接收翻译系统提示词" : "Incoming translation system prompt",
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         resetSystemPromptButton = addPromptResetButton(root, systemPromptInput,
