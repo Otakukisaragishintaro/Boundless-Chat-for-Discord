@@ -456,7 +456,7 @@ public final class ChatInputTranslateButton {
     private static View findComposerFallbackAnchor(EditText editor) {
         if (editor == null) return null;
         Rect editorBounds = boundsOnScreen(editor);
-        int requiredTrailingSpace = dp(editor.getContext(), 24);
+        int requiredTrailingSpace = Math.round(24 * editor.getResources().getDisplayMetrics().density);
         ViewParent parent = editor.getParent();
         View best = null;
         int bestExtraWidth = Integer.MAX_VALUE;
