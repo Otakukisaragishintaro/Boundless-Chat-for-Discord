@@ -217,8 +217,10 @@ public final class ChatInputTranslateButton {
                         "chat input focus target is not EditText class="
                                 + focused.getClass().getName());
             }
-            if (registration.binding != null
-                    && !isComposerVisible(registration.binding.editor)) {
+            // A route change can leave Discord's composer View attached and technically
+            // visible underneath the next screen. Focus leaving the editor is the reliable
+            // navigation boundary; the button must not survive on another screen.
+            if (registration.binding != null) {
                 removeBinding(registration);
             }
             return;
