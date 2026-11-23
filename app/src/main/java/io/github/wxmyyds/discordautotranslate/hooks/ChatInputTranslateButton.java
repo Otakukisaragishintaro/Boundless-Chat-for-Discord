@@ -103,7 +103,9 @@ public final class ChatInputTranslateButton {
                     positionButton(this);
             this.editor.addOnLayoutChangeListener(positionListener);
             this.overlay.addOnLayoutChangeListener(positionListener);
+            if (this.sendView != null) {
             this.sendView.addOnLayoutChangeListener(positionListener);
+        }
         }
     }
 
@@ -244,17 +246,22 @@ public final class ChatInputTranslateButton {
             // while the IME is opening/closing. Do not destroy our binding on one
             // transient lookup miss; keep the action anchored to the editor until the
             // native control can be resolved again.
-            if (refreshed != null && refreshed.sendView.isAttachedToWindow()) {
-                if (registration.binding.sendView != refreshed.sendView) {
+            View refreshedSendView = refreshed != null && refreshed.sendView.isAttachedToWindow()
+                    ? refreshed.sendView : null;
+            if (registration.binding.sendView != refreshedSendView) {
+                if (registration.binding.sendView != null) {
                     registration.binding.sendView.removeOnLayoutChangeListener(
                             registration.binding.positionListener);
-                    registration.binding.sendView = refreshed.sendView;
-                    registration.binding.sendView.addOnLayoutChangeListener(
+                }
+                registration.binding.sendView = refreshedSendView;
+                if (refreshedSendView != null) {
+                    refreshedSendView.addOnLayoutChangeListener(
                             registration.binding.positionListener);
                 }
-            } else {
+            }
+            if (refreshedSendView == null) {
                 ProjectLog.infoOnce("diagnostic.chatInputSendControlTemporarilyMissing",
-                        "Discord native send control temporarily unavailable; keeping translation button");
+                        "Discord native send control temporarily unavailable; anchoring translation button to editor");
             }
             positionButton(registration.binding);
             reportHierarchyIfEnabled(editor);
@@ -263,15 +270,22 @@ public final class ChatInputTranslateButton {
         removeBinding(registration);
 
         Candidate candidate = findSendCandidate(editor);
-        if (candidate == null) {
+        boolean hasInputText = editor.getText() != null
+                && !editor.getText().toString().trim().isEmpty();
+        if (candidate == null && !hasInputText) {
             scheduleSendCandidateRetry(activity, registration, editor);
             ProjectLog.infoOnce("diagnostic.chatInputSendControlMissing",
                     "Discord chat input send control not found");
             ProjectLog.info("chat input send control not found near focused editor");
             return;
         }
-        ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
-                "Discord chat input send control found");
+        if (candidate != null) {
+            ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
+                    "Discord chat input send control found");
+        } else {
+            ProjectLog.infoOnce("diagnostic.chatInputFallbackAnchor",
+                    "Discord translation button attached using editor fallback anchor");
+        }
 
         if (!(registration.decor instanceof FrameLayout)) {
             ProjectLog.warn("chat input decor is not a FrameLayout; overlay injection skipped class="
@@ -301,7 +315,7 @@ public final class ChatInputTranslateButton {
         try {
             overlay.addView(button, params);
             ButtonBinding binding = new ButtonBinding(activity, editor, overlay,
-                    candidate.sendView, button);
+                    candidate == null ? null : candidate.sendView, button);
             registration.binding = binding;
             cancelSendCandidateRetry(registration);
             clearPendingEditorWatcher(registration);
@@ -311,8 +325,9 @@ public final class ChatInputTranslateButton {
             positionButton(binding);
             ProjectLog.info("chat input translate button attached editor="
                     + editor.getClass().getName() + " send="
-                    + candidate.sendView.getClass().getName() + " label="
-                    + sendActionLabel(candidate.sendView) + " host=decor-overlay");
+                    + (candidate == null ? "pending" : candidate.sendView.getClass().getName())
+                    + " label=" + (candidate == null ? "pending" : sendActionLabel(candidate.sendView))
+                    + " host=decor-overlay");
             button.post(() -> {
                 if (button.getParent() != overlay || !button.isAttachedToWindow()
                         || button.getWidth() <= 0 || button.getHeight() <= 0) {
@@ -347,7 +362,9 @@ public final class ChatInputTranslateButton {
         if (binding == null) return;
         binding.requestValid.set(false);
         binding.editor.removeOnLayoutChangeListener(binding.positionListener);
-        binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
+        if (binding.sendView != null) {
+            binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
+        }
         binding.overlay.removeOnLayoutChangeListener(binding.positionListener);
         if (binding.button.getParent() instanceof ViewGroup) {
             ((ViewGroup) binding.button.getParent()).removeView(binding.button);
@@ -358,17 +375,23 @@ public final class ChatInputTranslateButton {
     private static void positionButton(ButtonBinding binding) {
         if (binding == null || !isComposerUsable(binding.editor)
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
-        // Keep the last stable position during transient IME/layout frames. Using
-        // the editor as a fallback anchor caused the action to jump across the screen.
-        if (binding.sendView == null || !binding.sendView.isAttachedToWindow()) return;
         Rect editorBounds = boundsOnScreen(binding.editor);
-        Rect anchor = boundsOnScreen(binding.sendView);
-        int verticalOverlap = Math.max(0, Math.min(anchor.bottom, editorBounds.bottom)
-                - Math.max(anchor.top, editorBounds.top));
-        if (anchor.width() <= 0 || anchor.height() <= 0
-                || anchor.centerX() <= editorBounds.centerX()
-                || verticalOverlap * 3 < Math.max(1, Math.min(anchor.height(), editorBounds.height()))) {
-            return;
+        boolean useEditorAnchor = binding.sendView == null
+                || !binding.sendView.isAttachedToWindow();
+        Rect anchor = useEditorAnchor ? editorBounds : boundsOnScreen(binding.sendView);
+        if (useEditorAnchor) {
+            // The composer may receive IME composing text before Discord exposes its
+            // native send control. Keep the action visible above the editor meanwhile.
+            if (editorBounds.width() <= 0 || editorBounds.height() <= 0) return;
+        } else {
+            int verticalOverlap = Math.max(0, Math.min(anchor.bottom, editorBounds.bottom)
+                    - Math.max(anchor.top, editorBounds.top));
+            if (anchor.width() <= 0 || anchor.height() <= 0
+                    || anchor.centerX() <= editorBounds.centerX()
+                    || verticalOverlap * 3 < Math.max(1,
+                            Math.min(anchor.height(), editorBounds.height()))) {
+                return;
+            }
         }
         int[] overlayLocation = new int[2];
         binding.overlay.getLocationOnScreen(overlayLocation);
