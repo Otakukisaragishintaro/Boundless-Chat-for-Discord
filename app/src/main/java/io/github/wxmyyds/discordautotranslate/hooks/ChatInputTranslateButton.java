@@ -162,8 +162,8 @@ public final class ChatInputTranslateButton {
                     View focused = current.decor.findFocus();
                     if (focused instanceof EditText) {
                         updateFocusedEditor(activity, current, focused);
-                    } else if (current.binding != null
-                            && !isComposerVisible(current.binding.editor)) {
+                    } else if (!current.bindings.isEmpty()
+                            && !isComposerVisible(current.bindings.get(0).editor)) {
                         removeBinding(current);
                     }
                 }
