@@ -382,36 +382,29 @@ public final class ChatInputTranslateButton {
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
         int stackOffset = binding.buttonIndex * (height + dp(binding.activity, 4));
-        int left;
-        int top;
-        if (isUsableSendAnchor(binding.sendView)) {
-            Rect sendScreen = boundsOnScreen(binding.sendView);
-            if (sendScreen.width() <= 0 || sendScreen.height() <= 0) {
-                binding.positioned = false;
+        // The native send action is the visibility gate as well as the position anchor.
+        // While Discord has not created/published that control (empty composer), keep the
+        // translation actions fully hidden instead of occupying a guessed fallback position.
+        if (!isUsableSendAnchor(binding.sendView)) {
+            binding.positioned = false;
+            if (binding.button.getVisibility() != View.INVISIBLE) {
                 binding.button.setVisibility(View.INVISIBLE);
-                return;
             }
-            // Stack each translation action ABOVE Discord's native send button.
-            left = sendScreen.centerX() - width / 2 - overlayScreen.left;
-            top = sendScreen.top - margin - height - stackOffset - overlayScreen.top;
-            if (top < 0) {
-                top = sendScreen.bottom + margin + stackOffset - overlayScreen.top;
-            }
-        } else {
-            // No native send view yet (typically an empty composer): anchor to the
-            // composer container's right edge, never to the caret or its scroll offset.
-            View fallback = findComposerFallbackAnchor(binding.editor);
-            if (fallback == null || !fallback.isAttachedToWindow()
-                    || !fallback.isShown() || fallback.getWidth() <= 0) {
-                binding.positioned = false;
-                binding.button.setVisibility(View.INVISIBLE);
-                return;
-            }
-            Rect fallbackScreen = boundsOnScreen(fallback);
-            Rect editorScreen = boundsOnScreen(binding.editor);
-            int sendSlotHalfWidth = dp(binding.activity, 24);
-            left = fallbackScreen.right - sendSlotHalfWidth - width / 2 - overlayScreen.left;
-            top = editorScreen.top - margin - height - stackOffset - overlayScreen.top;
+            return;
+        }
+
+        Rect sendScreen = boundsOnScreen(binding.sendView);
+        if (sendScreen.width() <= 0 || sendScreen.height() <= 0) {
+            binding.positioned = false;
+            binding.button.setVisibility(View.INVISIBLE);
+            return;
+        }
+
+        // Stack each translation action ABOVE Discord's native send button.
+        int left = sendScreen.centerX() - width / 2 - overlayScreen.left;
+        int top = sendScreen.top - margin - height - stackOffset - overlayScreen.top;
+        if (top < 0) {
+            top = sendScreen.bottom + margin + stackOffset - overlayScreen.top;
         }
 
         int maxLeft = Math.max(0, binding.overlay.getWidth() - width);
@@ -448,39 +441,6 @@ public final class ChatInputTranslateButton {
                 && sendView.getWidth() > 0 && sendView.getHeight() > 0;
     }
 
-    /**
-     * Find the composer row that reserves horizontal space for Discord's send action.
-     * An empty React editor can shrink to its text width; anchoring to that editor or its
-     * immediate wrapper makes the overlay drift toward the middle of the screen.
-     */
-    private static View findComposerFallbackAnchor(EditText editor) {
-        if (editor == null) return null;
-        Rect editorBounds = boundsOnScreen(editor);
-        int requiredTrailingSpace = Math.round(24 * editor.getResources().getDisplayMetrics().density);
-        ViewParent parent = editor.getParent();
-        View best = null;
-        int bestExtraWidth = Integer.MAX_VALUE;
-        for (int depth = 0; depth < 8 && parent instanceof View; depth++) {
-            View candidate = (View) parent;
-            if (candidate instanceof ViewGroup && candidate.isAttachedToWindow()
-                    && candidate.isShown() && candidate.getHeight() > 0) {
-                Rect bounds = boundsOnScreen(candidate);
-                int trailingSpace = bounds.right - editorBounds.right;
-                boolean containsEditor = bounds.left <= editorBounds.left
-                        && bounds.top <= editorBounds.top
-                        && bounds.bottom >= editorBounds.bottom;
-                if (containsEditor && trailingSpace >= requiredTrailingSpace) {
-                    int extraWidth = bounds.width() - editorBounds.width();
-                    if (extraWidth < bestExtraWidth) {
-                        best = candidate;
-                        bestExtraWidth = extraWidth;
-                    }
-                }
-            }
-            parent = candidate.getParent();
-        }
-        return best;
-    }
 
     private static void startTranslation(ButtonBinding binding) {
         if (binding == null || binding.inFlight || !binding.requestValid.get()
