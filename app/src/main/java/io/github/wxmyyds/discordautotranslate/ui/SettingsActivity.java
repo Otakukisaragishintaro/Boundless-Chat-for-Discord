@@ -107,6 +107,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private Spinner protocolSpinner;
     private Spinner targetLanguageSpinner;
+    private Spinner sendTargetLanguageSpinner;
     private ArrayAdapter<String> targetLanguageAdapter;
     private final List<String> targetLanguageValues = new ArrayList<>();
     private boolean chineseUi;
@@ -118,6 +119,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private String baselineProtocol;
     @Nullable
     private String baselineTargetLanguage;
+    @Nullable
+    private String baselineSendTargetLanguage;
     private EditText urlInput;
     private EditText keyInput;
     private EditText modelInput;
@@ -225,8 +228,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("streaming", streamingInput.isChecked());
         draft.putInt("protocol", protocolSpinner.getSelectedItemPosition());
         draft.putString("language", selectedTargetLanguage());
+        draft.putString("send_language", selectedSendTargetLanguage());
         draft.putString("baseline_protocol", baselineProtocol);
         draft.putString("baseline_language", baselineTargetLanguage);
+        draft.putString("baseline_send_language", baselineSendTargetLanguage);
         draft.putBoolean("dirty", hasUnsavedChanges);
         outState.putBundle(STATE_DRAFT, draft);
     }
@@ -251,8 +256,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             String language = draft.getString("language");
             ensureTargetLanguageAvailable(language);
             targetLanguageSpinner.setSelection(targetLanguagePosition(language));
+            String sendLanguage = draft.getString("send_language", Config.DEF_SEND_TARGET_LANG);
+            ensureTargetLanguageAvailable(sendLanguage);
+            sendTargetLanguageSpinner.setSelection(targetLanguagePosition(sendLanguage));
             baselineProtocol = draft.getString("baseline_protocol");
             baselineTargetLanguage = draft.getString("baseline_language");
+            baselineSendTargetLanguage = draft.getString("baseline_send_language",
+                    Config.DEF_SEND_TARGET_LANG);
             hasUnsavedChanges = draft.getBoolean("dirty");
             formGeneration++;
             updateStreamingAvailability();
@@ -484,6 +494,29 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             }
         });
         root.addView(targetLanguageSpinner, matchWrap());
+        TextView sendTargetLanguageLabel = new TextView(this);
+        sendTargetLanguageLabel.setText(R.string.label_send_target_language);
+        sendTargetLanguageLabel.setPadding(0, dp(8), 0, 0);
+        root.addView(sendTargetLanguageLabel, matchWrap());
+        sendTargetLanguageSpinner = new Spinner(this);
+        sendTargetLanguageSpinner.setAdapter(targetLanguageAdapter);
+        sendTargetLanguageSpinner.setSelection(targetLanguagePosition(Config.DEF_SEND_TARGET_LANG));
+        sendTargetLanguageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                markSpinnerDirty();
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                markSpinnerDirty();
+            }
+        });
+        root.addView(sendTargetLanguageSpinner, matchWrap());
+        TextView sendTargetLanguageHint = new TextView(this);
+        sendTargetLanguageHint.setTextSize(12f);
+        sendTargetLanguageHint.setText(R.string.hint_send_target_language);
+        root.addView(sendTargetLanguageHint, matchWrap());
         headersInput = addField(root, getString(R.string.label_headers), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         systemPromptInput = addField(root, getString(R.string.label_system_prompt),
@@ -705,8 +738,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
         String protocol = protocolAt(protocolSpinner.getSelectedItemPosition());
         String targetLanguage = selectedTargetLanguage();
+        String sendTargetLanguage = selectedSendTargetLanguage();
         if (!sameValue(protocol, baselineProtocol)
-                || !sameValue(targetLanguage, baselineTargetLanguage)) {
+                || !sameValue(targetLanguage, baselineTargetLanguage)
+                || !sameValue(sendTargetLanguage, baselineSendTargetLanguage)) {
             formGeneration++;
             hasUnsavedChanges = true;
         }
@@ -747,6 +782,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 ? targetLanguageValues.get(position) : null;
     }
 
+    private String selectedSendTargetLanguage() {
+        int position = sendTargetLanguageSpinner.getSelectedItemPosition();
+        return position >= 0 && position < targetLanguageValues.size()
+                ? targetLanguageValues.get(position) : null;
+    }
+
     private boolean isChineseSystemLanguage() {
         Locale locale = getResources().getConfiguration().getLocales().get(0);
         return "zh".equalsIgnoreCase(locale.getLanguage());
@@ -780,12 +821,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             streamingInput.setChecked(false);
             protocolSpinner.setSelection(AdapterView.INVALID_POSITION);
             targetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
+            sendTargetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
             for (EditText field : configurationFields()) {
                 field.setText("");
                 field.setHint(null);
             }
             baselineProtocol = null;
             baselineTargetLanguage = null;
+            baselineSendTargetLanguage = null;
             hasUnsavedChanges = false;
             resultText.setText("");
         } finally {
@@ -858,6 +901,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             setTextOrPlaceholder(modelInput, snapshot.model, Config.DEF_MODEL);
             ensureTargetLanguageAvailable(snapshot.targetLang);
             targetLanguageSpinner.setSelection(targetLanguagePosition(snapshot.targetLang));
+            ensureTargetLanguageAvailable(snapshot.sendTargetLang);
+            sendTargetLanguageSpinner.setSelection(targetLanguagePosition(snapshot.sendTargetLang));
             setTextOrPlaceholder(headersInput, snapshot.extraHeaders, Config.DEF_EXTRA_HEADERS);
             setTextOrPlaceholder(systemPromptInput, snapshot.systemPrompt, Config.DEF_SYSTEM_PROMPT);
             setTextOrPlaceholder(timeoutInput, String.valueOf(snapshot.timeoutMs),
@@ -866,6 +911,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     String.valueOf(Config.DEF_MAX_CONCURRENCY));
             baselineProtocol = snapshot.protocol;
             baselineTargetLanguage = snapshot.targetLang;
+            baselineSendTargetLanguage = snapshot.sendTargetLang;
             hasUnsavedChanges = false;
         } finally {
             loadingUi = false;
@@ -987,6 +1033,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         if (savedFormGeneration == formGeneration) {
                             baselineProtocol = snapshot.protocol;
                             baselineTargetLanguage = snapshot.targetLang;
+                            baselineSendTargetLanguage = snapshot.sendTargetLang;
                             hasUnsavedChanges = false;
                         }
                         toast(getString(R.string.toast_saved));
@@ -1065,6 +1112,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         protocolSpinner.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         targetLanguageSpinner.setEnabled(formAvailable);
         targetLanguageSpinner.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
+        sendTargetLanguageSpinner.setEnabled(formAvailable);
+        sendTargetLanguageSpinner.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
         }
@@ -1115,6 +1164,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_API_KEY, keyInput.getText().toString().trim());
         memoryPrefs.put(Config.KEY_MODEL, textOrDefault(modelInput, Config.DEF_MODEL));
         memoryPrefs.put(Config.KEY_TARGET_LANG, selectedTargetLanguage());
+        memoryPrefs.put(Config.KEY_SEND_TARGET_LANG, selectedSendTargetLanguage());
         memoryPrefs.put(Config.KEY_EXTRA_HEADERS, headersInput.getText().toString());
         memoryPrefs.put(Config.KEY_SYSTEM_PROMPT,
                 promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
