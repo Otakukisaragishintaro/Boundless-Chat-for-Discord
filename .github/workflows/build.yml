@@ -2,6 +2,7 @@ name: Build module APK
 
 # 依据项目规则：编译/打包/构建产物只能通过 GitHub Actions 执行，禁止本地构建。
 # 触发方式：手动触发（workflow_dispatch），或向 main 的 PR、以及功能分支推送时自动构建验证。
+# 签名私钥仅通过 GitHub Actions Secrets 注入；公开仓库不保存密钥文件或密码。
 on:
   workflow_dispatch:
     inputs:
