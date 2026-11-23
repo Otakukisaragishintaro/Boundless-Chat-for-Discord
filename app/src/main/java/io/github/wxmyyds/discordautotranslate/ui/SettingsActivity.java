@@ -1352,17 +1352,37 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 && remote.getBoolean(Config.KEY_LOGGING_ENABLED, false);
         long configuredAt = diagnostics.getLong(DiagnosticProvider.KEY_CONFIGURED_AT, 0L);
         long transportPingAt = diagnostics.getLong("transport_last_ping_at", 0L);
+        long appendAt = diagnostics.getLong("transport_last_append_at", 0L);
+        long configureAt = diagnostics.getLong("transport_last_configure_at", 0L);
+        long rejectAt = diagnostics.getLong("transport_last_reject_at", 0L);
+        int lastCallingUid = diagnostics.getInt("transport_last_calling_uid", -1);
+        int rejectedUid = diagnostics.getInt("transport_last_reject_uid", -1);
+        String lastMethod = diagnostics.getString("transport_last_method", "");
+        String rejectedMethod = diagnostics.getString("transport_last_reject_method", "");
         boolean moduleLoggingEnabled = diagnostics.getBoolean(
                 DiagnosticProvider.KEY_MODULE_ENABLED, false);
         boolean configValid = diagnostics.getBoolean(DiagnosticProvider.KEY_CONFIG_VALID, false);
         String logs = diagnostics.getString(DiagnosticProvider.KEY_BUFFER, "");
         if (logs == null) logs = "";
+        java.text.SimpleDateFormat diagnosticTime = new java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault());
 
         StringBuilder display = new StringBuilder();
-        if (!logs.trim().isEmpty()) display.append(logs);
-        else display.append(chineseUi
-                ? "目前还没有收到 Discord 进程的诊断记录。请完全退出并重新打开 Discord 后刷新。\n\n"
-                : "No Discord-process diagnostics received yet. Fully close and reopen Discord, then refresh.\n\n");
+        if (!logs.trim().isEmpty()) {
+            display.append(logs);
+        } else if (transportPingAt > 0L || appendAt > 0L || configureAt > 0L) {
+            display.append(chineseUi
+                    ? "Provider 已收到 Discord 进程请求，但目前没有可显示的白名单诊断日志。请检查下面的调用状态。\\n\\n"
+                    : "The provider received a Discord-process request, but no allow-listed log is available. Check the call status below.\\n\\n");
+        } else if (rejectAt > 0L) {
+            display.append(chineseUi
+                    ? "Provider 收到过请求，但调用方身份校验未通过。请检查下面的拒绝记录。\\n\\n"
+                    : "The provider received a request but rejected caller authentication. Check the rejection record below.\\n\\n");
+        } else {
+            display.append(chineseUi
+                    ? "模块端尚未观察到 Discord 诊断 Provider 的任何调用。此状态不能单独判断 Hook 是否执行；请查看下面的分阶段状态。\\n\\n"
+                    : "No diagnostic-provider call has been observed by the module. This alone cannot determine whether the hook ran; inspect the stage details below.\\n\\n");
+        }
         display.append("\n--- ").append(chineseUi ? "诊断状态" : "Diagnostic status").append(" ---\n")
                 .append(chineseUi ? "设置页日志开关：" : "Settings toggle: ")
                 .append(uiLoggingEnabled ? "ON" : "OFF").append('\n')
@@ -1376,10 +1396,27 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .append(configuredAt == 0L ? (chineseUi ? "尚未收到" : "not received")
                         : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                                 .format(new java.util.Date(configuredAt))).append('\n')
+                .append(chineseUi ? "Provider Ping：" : "Provider ping: ")
+                .append(transportPingAt == 0L ? (chineseUi ? "未记录" : "not recorded")
+                        : diagnosticTime.format(new java.util.Date(transportPingAt))).append('\n')
+                .append(chineseUi ? "最近成功写入：" : "Last accepted append: ")
+                .append(appendAt == 0L ? (chineseUi ? "未记录" : "not recorded")
+                        : diagnosticTime.format(new java.util.Date(appendAt))).append('\n')
+                .append(chineseUi ? "最近配置回执：" : "Last configuration acknowledgement: ")
+                .append(configureAt == 0L ? (chineseUi ? "未记录" : "not recorded")
+                        : diagnosticTime.format(new java.util.Date(configureAt))).append('\n')
+                .append(chineseUi ? "最近 Provider 调用：" : "Last provider method: ")
+                .append(lastMethod == null || lastMethod.isEmpty() ? "—" : lastMethod)
+                .append(lastCallingUid < 0 ? "" : " (UID " + lastCallingUid + ")").append('\n')
+                .append(chineseUi ? "最近拒绝记录：" : "Last rejected call: ")
+                .append(rejectAt == 0L ? (chineseUi ? "无记录" : "none")
+                        : diagnosticTime.format(new java.util.Date(rejectAt))
+                                + " / " + (rejectedMethod == null ? "?" : rejectedMethod)
+                                + " / UID " + rejectedUid).append('\n')
                 .append(chineseUi ? "IPC 通道握手：" : "IPC transport handshake: ")
                 .append(transportPingAt == 0L ? (chineseUi ? "尚未成功" : "not confirmed")
-                        : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
-                                .format(new java.util.Date(transportPingAt))).append('\n')
+                        : (chineseUi ? "已收到 Provider 回执" : "provider acknowledgement received"))
+                .append('\n')
                 .append(chineseUi ? "独立诊断通道：" : "Independent diagnostics: ")
                 .append(chineseUi
                         ? "ContentProvider IPC（仅接受已验证的 Discord UID 和白名单生命周期事件）"
