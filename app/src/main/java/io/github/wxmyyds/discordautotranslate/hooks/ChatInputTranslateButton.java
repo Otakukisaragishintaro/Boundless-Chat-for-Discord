@@ -18,10 +18,13 @@ import android.widget.Toast;
 
 import io.github.wxmyyds.discordautotranslate.core.Config;
 import io.github.wxmyyds.discordautotranslate.core.ProjectLog;
+import io.github.wxmyyds.discordautotranslate.core.OutboundButtonConfig;
 import io.github.wxmyyds.discordautotranslate.core.Scheduler;
 import io.github.wxmyyds.discordautotranslate.core.TranslationTaskId;
 import io.github.wxmyyds.discordautotranslate.translate.JsonApiEngine;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -35,7 +38,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * ViewGroup hierarchy so Discord's own layout parameters are never modified.
  */
 public final class ChatInputTranslateButton {
-    private static final int BUTTON_WIDTH_DP = 68;
+    private static final int BUTTON_WIDTH_DP = 82;
     private static final int BUTTON_HEIGHT_DP = 38;
     private static final int MAX_SEND_CANDIDATE_RETRIES = 40;
     private static final AtomicLong NEXT_REQUEST = new AtomicLong();
@@ -49,7 +52,7 @@ public final class ChatInputTranslateButton {
         final ViewTreeObserver observer;
         final ViewTreeObserver.OnGlobalFocusChangeListener focusListener;
         final ViewTreeObserver.OnGlobalLayoutListener layoutListener;
-        ButtonBinding binding;
+        final List<ButtonBinding> bindings = new ArrayList<>();
         EditText pendingEditor;
         TextWatcher pendingTextWatcher;
         EditText retryEditor;
@@ -86,6 +89,8 @@ public final class ChatInputTranslateButton {
         final FrameLayout overlay;
         View sendView;
         final TextView button;
+        final OutboundButtonConfig outboundConfig;
+        final int buttonIndex;
         final View.OnLayoutChangeListener positionListener;
         final AtomicBoolean requestValid = new AtomicBoolean(true);
         boolean positioned;
@@ -93,12 +98,15 @@ public final class ChatInputTranslateButton {
         String requestId;
 
         ButtonBinding(Activity activity, EditText editor, FrameLayout overlay,
-                      View sendView, TextView button) {
+                      View sendView, TextView button, OutboundButtonConfig outboundConfig,
+                      int buttonIndex) {
             this.activity = activity;
             this.editor = editor;
             this.overlay = overlay;
             this.sendView = sendView;
             this.button = button;
+            this.outboundConfig = outboundConfig;
+            this.buttonIndex = buttonIndex;
             this.positionListener = (view, left, top, right, bottom,
                                      oldLeft, oldTop, oldRight, oldBottom) ->
                     positionButton(this);
@@ -230,7 +238,7 @@ public final class ChatInputTranslateButton {
             // A route change can leave Discord's composer View attached and technically
             // visible underneath the next screen. Focus leaving the editor is the reliable
             // navigation boundary; the button must not survive on another screen.
-            if (registration.binding != null) {
+            if (!registration.bindings.isEmpty()) {
                 removeBinding(registration);
             }
             return;
@@ -239,32 +247,30 @@ public final class ChatInputTranslateButton {
         ensurePendingEditorWatcher(activity, registration, editor);
         ProjectLog.infoOnce("diagnostic.chatInputEditorFocused",
                 "Discord chat input editor focused");
-        if (registration.binding != null && registration.binding.editor == editor
-                && registration.binding.button.getParent() == registration.binding.overlay) {
+        if (!registration.bindings.isEmpty()
+                && registration.bindings.get(0).editor == editor
+                && registration.bindings.get(0).button.getParent()
+                        == registration.bindings.get(0).overlay) {
             cancelSendCandidateRetry(registration);
             Candidate refreshed = findSendCandidate(editor);
-            // Discord may temporarily replace, hide, or disable its native send action
-            // while the IME is opening/closing. Do not destroy our binding on one
-            // transient lookup miss; keep the action anchored to the editor until the
-            // native control can be resolved again.
             View refreshedSendView = refreshed != null && refreshed.sendView.isAttachedToWindow()
                     ? refreshed.sendView : null;
-            if (registration.binding.sendView != refreshedSendView) {
-                if (registration.binding.sendView != null) {
-                    registration.binding.sendView.removeOnLayoutChangeListener(
-                            registration.binding.positionListener);
+            for (ButtonBinding binding : registration.bindings) {
+                if (binding.sendView != refreshedSendView) {
+                    if (binding.sendView != null) {
+                        binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
+                    }
+                    binding.sendView = refreshedSendView;
+                    if (refreshedSendView != null) {
+                        refreshedSendView.addOnLayoutChangeListener(binding.positionListener);
+                    }
                 }
-                registration.binding.sendView = refreshedSendView;
-                if (refreshedSendView != null) {
-                    refreshedSendView.addOnLayoutChangeListener(
-                            registration.binding.positionListener);
-                }
+                positionButton(binding);
             }
             if (refreshedSendView == null) {
                 ProjectLog.infoOnce("diagnostic.chatInputSendControlTemporarilyMissing",
-                        "Discord native send control temporarily unavailable; anchoring translation button to editor");
+                        "Discord native send control temporarily unavailable; anchoring translation buttons to editor");
             }
-            positionButton(registration.binding);
             reportHierarchyIfEnabled(editor);
             return;
         }
@@ -295,9 +301,17 @@ public final class ChatInputTranslateButton {
         }
         FrameLayout overlay = (FrameLayout) registration.decor;
 
-        TextView button = new TextView(activity);
-        button.setText("翻译发送");
-        button.setTextColor(Color.WHITE);
+        Config.Snapshot currentConfig = HookBridge.get().configSnapshot();
+        List<OutboundButtonConfig> outboundButtons = currentConfig == null
+                ? OutboundButtonConfig.defaults(Config.DEF_SEND_TARGET_LANG,
+                        Config.DEF_SEND_SYSTEM_PROMPT) : currentConfig.outboundButtons;
+        if (outboundButtons.isEmpty()) return;
+        try {
+            for (int buttonIndex = 0; buttonIndex < outboundButtons.size(); buttonIndex++) {
+                OutboundButtonConfig outboundConfig = outboundButtons.get(buttonIndex);
+                TextView button = new TextView(activity);
+                button.setText(outboundConfig.label);
+                button.setTextColor(Color.WHITE);
         button.setTextSize(12);
         button.setGravity(Gravity.CENTER);
         button.setIncludeFontPadding(false);
@@ -312,39 +326,34 @@ public final class ChatInputTranslateButton {
         // Do not render at FrameLayout's temporary origin while the IME/composer is settling.
         button.setVisibility(View.INVISIBLE);
         button.setElevation(dp(activity, 8));
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                dp(activity, BUTTON_WIDTH_DP), dp(activity, BUTTON_HEIGHT_DP),
-                Gravity.TOP | Gravity.LEFT);
-        try {
-            overlay.addView(button, params);
-            ButtonBinding binding = new ButtonBinding(activity, editor, overlay,
-                    candidate == null ? null : candidate.sendView, button);
-            registration.binding = binding;
+                FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
+                        dp(activity, BUTTON_WIDTH_DP), dp(activity, BUTTON_HEIGHT_DP),
+                        Gravity.TOP | Gravity.LEFT);
+                overlay.addView(button, params);
+                ButtonBinding binding = new ButtonBinding(activity, editor, overlay,
+                        candidate == null ? null : candidate.sendView, button,
+                        outboundConfig, buttonIndex);
+                registration.bindings.add(binding);
+                button.setOnClickListener(view -> startTranslation(binding));
+                positionButton(binding);
+                final TextView attachedButton = button;
+                button.post(() -> {
+                    if (attachedButton.getParent() != overlay || !attachedButton.isAttachedToWindow()
+                            || attachedButton.getWidth() <= 0 || attachedButton.getHeight() <= 0) {
+                        ProjectLog.warn("chat input translate button layout verification failed");
+                    } else {
+                        ProjectLog.info("chat input translate button layout verified bounds="
+                                + boundsOnScreen(attachedButton).toShortString());
+                    }
+                });
+            }
             cancelSendCandidateRetry(registration);
             clearPendingEditorWatcher(registration);
-            button.setOnClickListener(view -> startTranslation(binding));
             ProjectLog.infoOnce("diagnostic.translationButtonAttached",
-                    "Discord translation button attached");
-            positionButton(binding);
-            ProjectLog.info("chat input translate button attached editor="
-                    + editor.getClass().getName() + " send="
-                    + (candidate == null ? "pending" : candidate.sendView.getClass().getName())
-                    + " label=" + (candidate == null ? "pending" : sendActionLabel(candidate.sendView))
-                    + " host=decor-overlay");
-            button.post(() -> {
-                if (button.getParent() != overlay || !button.isAttachedToWindow()
-                        || button.getWidth() <= 0 || button.getHeight() <= 0) {
-                    ProjectLog.warn("chat input translate button layout verification failed parent="
-                            + (button.getParent() == null ? "none"
-                            : button.getParent().getClass().getName())
-                            + " size=" + button.getWidth() + "x" + button.getHeight());
-                } else {
-                    ProjectLog.info("chat input translate button layout verified bounds="
-                            + boundsOnScreen(button).toShortString());
-                }
-            });
+                    "Discord outbound translation buttons attached count=" + outboundButtons.size());
             reportHierarchyIfEnabled(editor);
         } catch (Throwable failure) {
+            removeBinding(registration);
             ProjectLog.infoOnce("diagnostic.translationButtonAttachFailed",
                     "Discord translation button attach failed");
             ProjectLog.warn("chat input translate button attach failed errorClass="
@@ -360,17 +369,19 @@ public final class ChatInputTranslateButton {
     }
 
     private static void removeBinding(Registration registration) {
-        ButtonBinding binding = registration.binding;
-        registration.binding = null;
-        if (binding == null) return;
-        binding.requestValid.set(false);
-        binding.editor.removeOnLayoutChangeListener(binding.positionListener);
-        if (binding.sendView != null) {
-            binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
-        }
-        binding.overlay.removeOnLayoutChangeListener(binding.positionListener);
-        if (binding.button.getParent() instanceof ViewGroup) {
-            ((ViewGroup) binding.button.getParent()).removeView(binding.button);
+        if (registration.bindings.isEmpty()) return;
+        List<ButtonBinding> bindings = new ArrayList<>(registration.bindings);
+        registration.bindings.clear();
+        for (ButtonBinding binding : bindings) {
+            binding.requestValid.set(false);
+            binding.editor.removeOnLayoutChangeListener(binding.positionListener);
+            if (binding.sendView != null) {
+                binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
+            }
+            binding.overlay.removeOnLayoutChangeListener(binding.positionListener);
+            if (binding.button.getParent() instanceof ViewGroup) {
+                ((ViewGroup) binding.button.getParent()).removeView(binding.button);
+            }
         }
     }
 
@@ -412,7 +423,8 @@ public final class ChatInputTranslateButton {
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
         int left = anchor.right - width;
-        int top = anchor.top - height - margin;
+        int top = anchor.top - height - margin
+                - binding.buttonIndex * (height + dp(binding.activity, 4));
         left -= overlayLocation[0];
         top -= overlayLocation[1];
         left = Math.max(0, Math.min(left, binding.overlay.getWidth() - width));
@@ -458,7 +470,7 @@ public final class ChatInputTranslateButton {
             Toast.makeText(binding.activity, "翻译配置不可用，请检查 API 设置", Toast.LENGTH_SHORT).show();
             return;
         }
-        Config.Snapshot outbound = base.forSendTranslation();
+        Config.Snapshot outbound = base.forSendTranslation(binding.outboundConfig);
         String requestId = "outbound:" + NEXT_REQUEST.incrementAndGet();
         String hash = Scheduler.contentHash(source, outbound.version());
         TranslationTaskId task = TranslationTaskId.create(requestId, hash, 1);
@@ -478,14 +490,14 @@ public final class ChatInputTranslateButton {
                         && source.contentEquals(binding.editor.getText())
                         && base.version().equals(io.github.wxmyyds.discordautotranslate.hooks
                                 .HookBridge.get().configSnapshot().version())
-                        && base.sendTargetLang.equals(io.github.wxmyyds.discordautotranslate.hooks
-                                .HookBridge.get().configSnapshot().sendTargetLang),
+                        && base.version().equals(io.github.wxmyyds.discordautotranslate.hooks
+                                .HookBridge.get().configSnapshot().version()),
                 (identity, accepted, translated, error) -> {
                     try (HookRuntime.Lease lease = HookRuntime.enter()) {
                         if (lease == null || !requestId.equals(binding.requestId)) return;
                         binding.inFlight = false;
                         binding.button.setEnabled(true);
-                        binding.button.setText("翻译发送");
+                        binding.button.setText(binding.outboundConfig.label);
 
                         if (!accepted || error != null || translated == null
                                 || translated.trim().isEmpty()) {
@@ -670,7 +682,7 @@ public final class ChatInputTranslateButton {
             @Override public void run() {
                 if (registration.retryEditor != editor) return;
                 registration.retryRunnable = null;
-                if (registration.binding != null || !editor.hasFocus()
+                if (!registration.bindings.isEmpty() || !editor.hasFocus()
                         || !isComposerUsable(editor)) {
                     cancelSendCandidateRetry(registration);
                     return;
@@ -706,7 +718,7 @@ public final class ChatInputTranslateButton {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) { }
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) { }
             @Override public void afterTextChanged(Editable editable) {
-                if (registration.binding == null && editor.hasFocus()
+                if (registration.bindings.isEmpty() && editor.hasFocus()
                         && isComposerUsable(editor)) {
                     cancelSendCandidateRetry(registration);
                     updateFocusedEditor(activity, registration, editor);
