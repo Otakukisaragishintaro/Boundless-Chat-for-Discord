@@ -65,34 +65,50 @@ public final class Segments {
      *
      * @return 违规描述；合格返回 null
      */
+    /** Backward-compatible default policy used by existing callers and tests. */
     @Nullable
     public static String plainTextViolation(@Nullable String translated, String source) {
+        return plainTextViolation(translated, source,
+                Config.DEF_CHECK_WRAPPER, Config.DEF_CHECK_SEGMENT_MARKERS,
+                Config.DEF_CHECK_PLACEHOLDERS, Config.DEF_CHECK_RETAINED_MARKERS,
+                Config.DEF_CHECK_LENGTH, Config.DEF_MIN_LENGTH_PERCENT,
+                Config.DEF_MAX_LENGTH_PERCENT);
+    }
+
+    /** Applies the user's independent response-integrity policy. */
+    @Nullable
+    public static String plainTextViolation(@Nullable String translated, String source,
+                                            boolean checkWrapper, boolean checkSegments,
+                                            boolean checkPlaceholders, boolean checkRetainedMarkers,
+                                            boolean checkLength, int minLengthPercent,
+                                            int maxLengthPercent) {
+        // An empty API response is never a usable translation and remains a hard protocol error.
         if (translated == null || translated.trim().isEmpty()) {
             return "译文为空";
         }
-        if (translated.contains(Protocols.WRAPPER_OPEN)
-                || translated.contains(Protocols.WRAPPER_CLOSE)) {
+        if (checkWrapper && (translated.contains(Protocols.WRAPPER_OPEN)
+                || translated.contains(Protocols.WRAPPER_CLOSE))) {
             return "译文包含包装标签";
         }
-        if (hasSegmentMarkers(translated)) {
+        if (checkSegments && hasSegmentMarkers(translated)) {
             return "译文中残留分段标记";
         }
-        if (PLACEHOLDER_RUN.matcher(translated).find()) {
+        if (checkPlaceholders && PLACEHOLDER_RUN.matcher(translated).find()) {
             return "译文含模板占位符";
         }
-        if (!RetainedNodeMarkers.matchesSource(translated, source)) {
+        if (checkRetainedMarkers && !RetainedNodeMarkers.matchesSource(translated, source)) {
             return "保留节点定位标记无效";
         }
         String sourceWithoutKeep = RetainedNodeMarkers.withoutMarkers(source);
         String translationWithoutKeep = RetainedNodeMarkers.withoutMarkers(translated);
         if (translationWithoutKeep.trim().isEmpty()) return "译文为空";
         int n = sourceWithoutKeep.codePointCount(0, sourceWithoutKeep.length());
-        if (n >= 40) {
+        if (checkLength && n >= 40) {
             int m = translationWithoutKeep.codePointCount(0, translationWithoutKeep.length());
-            if (m * 10 < n) {
+            if ((long) m * 100L < (long) n * minLengthPercent) {
                 return "译文长度异常（" + m + "/" + n + "）：疑似内容丢失";
             }
-            if (m > n * 5) {
+            if ((long) m * 100L > (long) n * maxLengthPercent) {
                 return "译文长度异常（" + m + "/" + n + "）：疑似复读";
             }
         }
