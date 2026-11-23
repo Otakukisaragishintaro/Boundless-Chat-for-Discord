@@ -131,6 +131,24 @@ public final class Config {
     public static final String KEY_MAX_CONCURRENCY = "max_concurrency";
     public static final int DEF_MAX_CONCURRENCY = 4;
 
+    // ---- Translation response integrity checks ----
+    public static final String KEY_CHECK_WRAPPER = "check_wrapper_tags";
+    public static final boolean DEF_CHECK_WRAPPER = true;
+    public static final String KEY_STRIP_OUTER_WRAPPER = "strip_outer_wrapper";
+    public static final boolean DEF_STRIP_OUTER_WRAPPER = true;
+    public static final String KEY_CHECK_SEGMENT_MARKERS = "check_segment_markers";
+    public static final boolean DEF_CHECK_SEGMENT_MARKERS = true;
+    public static final String KEY_CHECK_PLACEHOLDERS = "check_placeholders";
+    public static final boolean DEF_CHECK_PLACEHOLDERS = true;
+    public static final String KEY_CHECK_RETAINED_MARKERS = "check_retained_markers";
+    public static final boolean DEF_CHECK_RETAINED_MARKERS = true;
+    public static final String KEY_CHECK_LENGTH = "check_translation_length";
+    public static final boolean DEF_CHECK_LENGTH = true;
+    public static final String KEY_MIN_LENGTH_PERCENT = "min_translation_length_percent";
+    public static final int DEF_MIN_LENGTH_PERCENT = 10;
+    public static final String KEY_MAX_LENGTH_PERCENT = "max_translation_length_percent";
+    public static final int DEF_MAX_LENGTH_PERCENT = 500;
+
     private Config() {
     }
 
@@ -163,6 +181,14 @@ public final class Config {
         public final String configError;
         public final int timeoutMs;
         public final int maxConcurrency;
+        public final boolean checkWrapper;
+        public final boolean stripOuterWrapper;
+        public final boolean checkSegmentMarkers;
+        public final boolean checkPlaceholders;
+        public final boolean checkRetainedMarkers;
+        public final boolean checkLength;
+        public final int minLengthPercent;
+        public final int maxLengthPercent;
 
         Snapshot(SharedPreferences p) {
             enabled = readBoolean(p, KEY_ENABLED, DEF_ENABLED);
@@ -181,6 +207,17 @@ public final class Config {
             streaming = readBoolean(p, KEY_STREAMING, DEF_STREAMING);
             timeoutMs = positiveInt(p, KEY_TIMEOUT_MS, DEF_TIMEOUT_MS);
             maxConcurrency = positiveInt(p, KEY_MAX_CONCURRENCY, DEF_MAX_CONCURRENCY);
+            checkWrapper = readBoolean(p, KEY_CHECK_WRAPPER, DEF_CHECK_WRAPPER);
+            stripOuterWrapper = readBoolean(p, KEY_STRIP_OUTER_WRAPPER, DEF_STRIP_OUTER_WRAPPER);
+            checkSegmentMarkers = readBoolean(p, KEY_CHECK_SEGMENT_MARKERS, DEF_CHECK_SEGMENT_MARKERS);
+            checkPlaceholders = readBoolean(p, KEY_CHECK_PLACEHOLDERS, DEF_CHECK_PLACEHOLDERS);
+            checkRetainedMarkers = readBoolean(p, KEY_CHECK_RETAINED_MARKERS, DEF_CHECK_RETAINED_MARKERS);
+            checkLength = readBoolean(p, KEY_CHECK_LENGTH, DEF_CHECK_LENGTH);
+            minLengthPercent = boundedPercent(p, KEY_MIN_LENGTH_PERCENT, DEF_MIN_LENGTH_PERCENT);
+            maxLengthPercent = boundedPercent(p, KEY_MAX_LENGTH_PERCENT, DEF_MAX_LENGTH_PERCENT);
+            if (minLengthPercent > maxLengthPercent) {
+                throw new IllegalArgumentException("最小译文长度比例不能大于最大比例");
+            }
             configError = null;
         }
 
@@ -201,6 +238,14 @@ public final class Config {
             streaming = DEF_STREAMING;
             timeoutMs = DEF_TIMEOUT_MS;
             maxConcurrency = DEF_MAX_CONCURRENCY;
+            checkWrapper = DEF_CHECK_WRAPPER;
+            stripOuterWrapper = DEF_STRIP_OUTER_WRAPPER;
+            checkSegmentMarkers = DEF_CHECK_SEGMENT_MARKERS;
+            checkPlaceholders = DEF_CHECK_PLACEHOLDERS;
+            checkRetainedMarkers = DEF_CHECK_RETAINED_MARKERS;
+            checkLength = DEF_CHECK_LENGTH;
+            minLengthPercent = DEF_MIN_LENGTH_PERCENT;
+            maxLengthPercent = DEF_MAX_LENGTH_PERCENT;
             configError = error;
         }
 
@@ -251,6 +296,15 @@ public final class Config {
             return value;
         }
 
+        private static int boundedPercent(SharedPreferences p, String key, int def) {
+            if (!p.contains(key)) return def;
+            int value = p.getInt(key, def);
+            if (value < 0 || value > 1000) {
+                throw new IllegalArgumentException(key + " 必须在 0 到 1000 之间");
+            }
+            return value;
+        }
+
         /**
          * 返回请求配置版本，并使用无歧义的字段边界编码。
          *
@@ -261,6 +315,10 @@ public final class Config {
         public String version() {
             return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
                     + encode(Boolean.toString(streaming)) + encode(systemPrompt) + encode(sendSystemPrompt)
+                    + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
+                    + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
+                    + encode(Boolean.toString(checkRetainedMarkers)) + encode(Boolean.toString(checkLength))
+                    + encode(Integer.toString(minLengthPercent)) + encode(Integer.toString(maxLengthPercent))
                     + encode(configError == null ? "" : "invalid")
                     + encode(credentialFingerprint());
         }
@@ -302,6 +360,14 @@ public final class Config {
             configError = source.configError;
             timeoutMs = source.timeoutMs;
             maxConcurrency = source.maxConcurrency;
+            checkWrapper = source.checkWrapper;
+            stripOuterWrapper = source.stripOuterWrapper;
+            checkSegmentMarkers = source.checkSegmentMarkers;
+            checkPlaceholders = source.checkPlaceholders;
+            checkRetainedMarkers = source.checkRetainedMarkers;
+            checkLength = source.checkLength;
+            minLengthPercent = source.minLengthPercent;
+            maxLengthPercent = source.maxLengthPercent;
         }
 
         /** 是否已具备发起请求的最小配置。 */
