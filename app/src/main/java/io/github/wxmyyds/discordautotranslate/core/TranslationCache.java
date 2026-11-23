@@ -66,6 +66,7 @@ public final class TranslationCache {
     private final int maxMemoryEntries;
     private volatile int maxDiskEntries = DEFAULT_DISK_ENTRIES;
     private int writesSincePrune;
+    @Nullable private volatile java.util.function.IntConsumer countListener;
     private final LinkedHashMap<String, String> memory;
     private DatabaseHelper helper;
     private SQLiteDatabase database;
@@ -111,10 +112,38 @@ public final class TranslationCache {
 
     /** Change the persistent LRU capacity without deleting entries unnecessarily. */
     public synchronized void setMaxDiskEntries(int maxEntries) {
-        int bounded = maxEntries == 1000000 ? 1000000 : 100000;
+        int bounded = Math.max(1, Math.min(maxEntries, 1000000));
         maxDiskEntries = bounded;
         SQLiteDatabase db = database();
         if (db != null) prune(db);
+    }
+
+    /** 设置跨进程缓存数量监听；仅发布计数，不暴露原文或译文。 */
+    public void setCountListener(@Nullable java.util.function.IntConsumer listener) {
+        countListener = listener;
+        if (listener != null) listener.accept(getEntryCount());
+    }
+
+    /** 返回持久化译文条目数，供设置页展示。 */
+    public synchronized int getEntryCount() {
+        SQLiteDatabase db = database();
+        if (db == null) return 0;
+        Cursor cursor = null;
+        try {
+            cursor = db.rawQuery("SELECT COUNT(*) FROM " + TABLE, null);
+            return cursor.moveToFirst() ? cursor.getInt(0) : 0;
+        } catch (Throwable ignored) {
+            return 0;
+        } finally {
+            if (cursor != null) cursor.close();
+        }
+    }
+
+    private void publishEntryCount() {
+        java.util.function.IntConsumer listener = countListener;
+        if (listener != null) {
+            try { listener.accept(getEntryCount()); } catch (Throwable ignored) { }
+        }
     }
 
     private void prune(SQLiteDatabase db) {
@@ -141,9 +170,10 @@ public final class TranslationCache {
             values.put("last_access", System.currentTimeMillis());
             db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
             // Batch LRU maintenance to avoid a full-table prune on every insert at 1M entries.
-            if (++writesSincePrune >= 128) {
+            if (++writesSincePrune >= 32) {
                 writesSincePrune = 0;
                 prune(db);
+                publishEntryCount();
             }
         } catch (Throwable ignored) {
             // Memory cache remains useful even when persistent storage is unavailable.
@@ -171,6 +201,7 @@ public final class TranslationCache {
         if (db != null) {
             try {
                 db.delete(TABLE, null, null);
+            publishEntryCount();
             } catch (Throwable ignored) {
                 // Cache clearing is best-effort if storage is unavailable.
             }
