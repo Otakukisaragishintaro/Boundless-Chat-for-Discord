@@ -74,6 +74,7 @@ public class ModuleEntry extends XposedModule {
     @Override
     public void onModuleLoaded(@NonNull XposedModuleInterface.ModuleLoadedParam param) {
         ProjectLog.attach(this::log);
+        ProjectLog.bootstrapInfo("module lifecycle entered");
         configureLogging();
         ProjectLog.info("onModuleLoaded lifecycle callback received");
         ModuleResources.attach(this);
@@ -90,6 +91,7 @@ public class ModuleEntry extends XposedModule {
         }
         // Remote preferences may not be ready during onModuleLoaded. Re-read them
         // at the target package lifecycle boundary before emitting any startup diagnostics.
+        ProjectLog.bootstrapInfo("Discord package lifecycle entered");
         configureLogging();
         ProjectLog.info("onPackageReady received for Discord");
         if (installed || bootstrapInstalled || restartRequired) {
@@ -216,8 +218,11 @@ public class ModuleEntry extends XposedModule {
             hooks.add(handle);
             bootstrapInstalled = true;
             ProjectLog.info("Application.attach bootstrap hook installed");
+            ProjectLog.bootstrapInfo("waiting for Discord Application.attach");
         } catch (Throwable t) {
-            ProjectLog.info("bootstrap hook installation failed errorClass="
+            ProjectLog.warn("bootstrap hook installation failed errorClass="
+                    + t.getClass().getSimpleName());
+            ProjectLog.bootstrapWarn("Application.attach hook registration failed errorClass="
                     + t.getClass().getSimpleName());
             installed = false;
         }
@@ -232,17 +237,21 @@ public class ModuleEntry extends XposedModule {
                     TARGET_PACKAGE, 0);
             int versionCode = packageInfo.versionCode;
             ProjectLog.info("selecting hook profile for versionCode=" + versionCode);
+            ProjectLog.bootstrapInfo("Discord application attached; selecting version profile");
             HookConfiguration config = HookConfigurationLoader.load(
                     getModuleApplicationInfo().sourceDir, versionCode);
             if (config == null) {
                 ProjectLog.warn("no hook profile for Discord versionCode=" + versionCode);
+                ProjectLog.bootstrapWarn("no hook profile matches installed Discord version");
                 return;
             }
             install(cl, config);
             installed = true;
         } catch (Throwable t) {
-            ProjectLog.info("configured hook installation failed errorClass="
+            ProjectLog.warn("configured hook installation failed errorClass="
                     + t.getClass().getSimpleName() + "; restart Discord required");
+            ProjectLog.bootstrapWarn("Discord hook installation failed errorClass="
+                    + t.getClass().getSimpleName());
             installed = false;
             restartRequired = true;
         }
@@ -309,6 +318,27 @@ public class ModuleEntry extends XposedModule {
                         return result;
                     }));
 
+            java.lang.reflect.Method onWindowFocusChanged =
+                    Activity.class.getDeclaredMethod("onWindowFocusChanged", boolean.class);
+            hooks.add(hook(onWindowFocusChanged)
+                    .setId("dat.chatInputTranslateButton.windowFocus")
+                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
+                    .intercept(chain -> {
+                        Object result = chain.proceed();
+                        if (Boolean.TRUE.equals(chain.getArg(0))) {
+                            try (HookRuntime.Lease lease = HookRuntime.enter()) {
+                                if (lease != null && chain.getThisObject() instanceof Activity) {
+                                    ChatInputTranslateButton.attach(
+                                            (Activity) chain.getThisObject());
+                                }
+                            } catch (Throwable failure) {
+                                ProjectLog.warn("chat input window-focus attach failed errorClass="
+                                        + failure.getClass().getSimpleName());
+                            }
+                        }
+                        return result;
+                    }));
+
             java.lang.reflect.Method onDestroy = Activity.class.getDeclaredMethod("onDestroy");
             hooks.add(hook(onDestroy)
                     .setId("dat.chatInputTranslateButton.destroy")
@@ -326,6 +356,8 @@ public class ModuleEntry extends XposedModule {
             ProjectLog.info("chat input translate button lifecycle hooks installed");
         } catch (Throwable failure) {
             ProjectLog.warn("chat input translate button hook installation failed errorClass="
+                    + failure.getClass().getSimpleName());
+            ProjectLog.bootstrapWarn("chat input lifecycle hook registration failed errorClass="
                     + failure.getClass().getSimpleName());
         }
     }
@@ -398,12 +430,25 @@ public class ModuleEntry extends XposedModule {
 
     /** Read the log gate before any startup diagnostics, including unsupported versions. */
     private void configureLogging() {
+        // Do not leave a stale preferences handle in place if acquiring the current
+        // process' remote store fails.
+        ProjectLog.setStorage(null);
         try {
             SharedPreferences prefs = getRemotePreferences(Config.GROUP);
+            if (prefs == null) {
+                throw new IllegalStateException("remote preferences unavailable");
+            }
             ProjectLog.setStorage(prefs);
-            ProjectLog.configure(Config.read(prefs));
+            ProjectLog.bootstrapInfo("remote preferences acquired");
+            Config.Snapshot snapshot = Config.read(prefs);
+            ProjectLog.configure(snapshot);
+            ProjectLog.bootstrapInfo(snapshot.configError == null
+                    ? "module logging configuration initialized"
+                    : "module logging configuration is invalid");
         } catch (Throwable failure) {
             ProjectLog.configure(Config.invalidSnapshot());
+            ProjectLog.bootstrapWarn("remote preferences initialization failed errorClass="
+                    + failure.getClass().getSimpleName());
         }
     }
 
