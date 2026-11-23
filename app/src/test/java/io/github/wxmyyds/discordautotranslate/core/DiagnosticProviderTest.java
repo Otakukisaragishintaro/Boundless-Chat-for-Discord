@@ -39,5 +39,9 @@ public class DiagnosticProviderTest {
         assertFalse(DiagnosticProvider.isAllowedDiagnostic(
                 "message body=hello world"));
         assertFalse(DiagnosticProvider.isAllowedDiagnostic(""));
+        assertFalse(DiagnosticProvider.isAllowedDiagnostic(
+                "Discord Application.onCreate reached; diagnostic transport fallback"));
+        assertFalse(DiagnosticProvider.isAllowedDiagnostic(
+                "Application.onCreate fallback failed errorClass=RuntimeException"));
     }
 }
