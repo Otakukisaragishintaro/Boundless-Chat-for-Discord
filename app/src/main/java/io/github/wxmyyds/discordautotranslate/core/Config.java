@@ -46,6 +46,10 @@ public final class Config {
     public static final String KEY_TARGET_LANG = "target_lang";
     public static final String DEF_TARGET_LANG = "简体中文";
 
+    /** Independent target language for messages sent through the translation action. */
+    public static final String KEY_SEND_TARGET_LANG = "send_target_lang";
+    public static final String DEF_SEND_TARGET_LANG = "English";
+
     /** 额外的请求头，格式：每行 {@code Name: Value}。 */
     public static final String KEY_EXTRA_HEADERS = "extra_headers";
     public static final String DEF_EXTRA_HEADERS = "";
@@ -139,6 +143,7 @@ public final class Config {
         public final String apiKey;
         public final String model;
         public final String targetLang;
+        public final String sendTargetLang;
         public final String extraHeaders;
         public final String systemPrompt;
         /** 供应商协议，取值为 {@link #PROTOCOL_OPENAI_COMPATIBLE}、
@@ -160,6 +165,7 @@ public final class Config {
             apiKey = str(p, KEY_API_KEY, DEF_API_KEY);
             model = str(p, KEY_MODEL, DEF_MODEL);
             targetLang = str(p, KEY_TARGET_LANG, DEF_TARGET_LANG);
+            sendTargetLang = str(p, KEY_SEND_TARGET_LANG, DEF_SEND_TARGET_LANG);
             extraHeaders = str(p, KEY_EXTRA_HEADERS, DEF_EXTRA_HEADERS);
             systemPrompt = str(p, KEY_SYSTEM_PROMPT, DEF_SYSTEM_PROMPT);
             protocol = readProtocol(p);
@@ -178,6 +184,7 @@ public final class Config {
             apiKey = DEF_API_KEY;
             model = DEF_MODEL;
             targetLang = DEF_TARGET_LANG;
+            sendTargetLang = DEF_SEND_TARGET_LANG;
             extraHeaders = DEF_EXTRA_HEADERS;
             systemPrompt = DEF_SYSTEM_PROMPT;
             protocol = DEF_PROTOCOL;
@@ -242,7 +249,7 @@ public final class Config {
          * （它会被日志与诊断间接引用），这里只编码其 SHA-256 摘要。</p>
          */
         public String version() {
-            return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
+            return encode(apiUrl) + encode(model) + encode(targetLang) + encode(sendTargetLang) + encode(protocol)
                     + encode(Boolean.toString(streaming)) + encode(systemPrompt)
                     + encode(configError == null ? "" : "invalid")
                     + encode(credentialFingerprint());
