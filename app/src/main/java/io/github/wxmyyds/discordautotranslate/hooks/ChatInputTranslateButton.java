@@ -262,13 +262,9 @@ public final class ChatInputTranslateButton {
         }
         removeBinding(registration);
 
+        // Attach immediately on editor focus, even if Discord has not created its
+        // native send action yet; the fallback anchor keeps the buttons out of the caret.
         Candidate candidate = findSendCandidate(editor);
-        if (candidate != null) {
-        } else {
-            // Attach immediately on editor focus. If Discord has not created its native
-            // send action yet, positionButton uses the stable composer container instead
-            // of waiting for an IME hide/show cycle.
-        }
 
         if (!(registration.decor instanceof FrameLayout)) {
             ProjectLog.warn("chat input decor is not a FrameLayout; overlay injection skipped class="

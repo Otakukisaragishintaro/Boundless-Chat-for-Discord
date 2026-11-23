@@ -1,6 +1,7 @@
 package io.github.wxmyyds.discordautotranslate.core;
 
 import android.util.Log;
+import android.os.Process;
 
 import androidx.annotation.Nullable;
 
@@ -56,11 +57,21 @@ public final class ProjectLog {
 
     /** Startup and hook-installation failures remain visible even when optional logging is off. */
     public static synchronized void bootstrapWarn(String message) {
-        write(Log.WARN, message);
+        write(Log.WARN, withProcessContext(message));
     }
 
     public static synchronized void bootstrapInfo(String message) {
-        write(Log.INFO, message);
+        write(Log.INFO, withProcessContext(message));
+    }
+
+    private static String withProcessContext(String message) {
+        String processName = "unknown";
+        try {
+            String current = android.app.Application.getProcessName();
+            if (current != null && !current.isEmpty()) processName = current;
+        } catch (Throwable ignored) { }
+        return "pid=" + Process.myPid() + " process=" + processName + " "
+                + (message == null ? "" : message);
     }
 
     private static synchronized void emit(int priority, @Nullable String key, String message) {

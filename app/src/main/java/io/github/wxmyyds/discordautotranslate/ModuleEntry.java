@@ -90,7 +90,6 @@ public class ModuleEntry extends XposedModule {
             return;
         }
         // Re-read logging preferences at the package lifecycle boundary.
-        ProjectLog.connectBeforeApplicationAttach(getModuleApplicationInfo().packageName);
         // Remote preferences may not be ready during onModuleLoaded. Re-read them
         // at the target package lifecycle boundary before emitting any startup diagnostics.
         ProjectLog.bootstrapInfo("Discord package lifecycle entered");
