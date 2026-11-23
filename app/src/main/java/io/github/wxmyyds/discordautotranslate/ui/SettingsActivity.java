@@ -4,6 +4,8 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.SharedPreferences;
+import android.content.ClipboardManager;
+import android.content.ClipData;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -421,6 +423,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         loggingPrivacy.setTextSize(12f);
         loggingPrivacy.setText(R.string.hint_logging_privacy);
         root.addView(loggingPrivacy, matchWrap());
+
+        Button viewLogsButton = new Button(this);
+        viewLogsButton.setText(chineseUi ? "查看诊断日志" : "View diagnostic logs");
+        viewLogsButton.setOnClickListener(view -> showProjectLogs());
+        root.addView(viewLogsButton, matchWrap());
 
         // 供应商协议：请求体与译文解析按所选协议内置实现，
         // 不再让用户手写 JSON 请求模板与译文提取路径。
@@ -1314,6 +1321,39 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resultText.setText(ApiTestResultFormatter.format(result, this::getString));
         updateStatus(getString(result.ok
                 ? R.string.status_test_passed : R.string.status_test_failed));
+    }
+
+    private void showProjectLogs() {
+        SharedPreferences source = remotePrefs;
+        String logs = source == null ? "" : source.getString("__project_log_buffer_v1", "");
+        if (logs == null || logs.trim().isEmpty()) {
+            logs = chineseUi
+                    ? "暂时没有日志。请确认已开启「项目日志」，保存设置并同步，然后重启 Discord。打开 Discord 聊天输入框后，再返回这里刷新。"
+                    : "No logs yet. Enable Project logs, save and sync settings, restart Discord, focus the chat input, then refresh here.";
+        }
+        final String displayed = logs;
+        TextView content = new TextView(this);
+        content.setText(displayed);
+        content.setTextIsSelectable(true);
+        content.setTextSize(12f);
+        content.setPadding(dp(12), dp(8), dp(12), dp(8));
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(content, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle(chineseUi ? "项目诊断日志" : "Project diagnostic logs")
+                .setView(scroll)
+                .setPositiveButton(chineseUi ? "复制全部" : "Copy all", (d, which) -> {
+                    ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("DiscordAutoTranslate logs", displayed));
+                        Toast.makeText(this, chineseUi ? "日志已复制" : "Logs copied", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNegativeButton(chineseUi ? "关闭" : "Close", null)
+                .setNeutralButton(chineseUi ? "刷新" : "Refresh", (d, which) -> showProjectLogs())
+                .create();
+        dialog.show();
     }
 
     private void updateStatus(String status) {
