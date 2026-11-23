@@ -423,8 +423,13 @@ public final class ChatInputTranslateButton {
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
         int left = anchor.right - width;
-        int top = anchor.top - height - margin
-                - binding.buttonIndex * (height + dp(binding.activity, 4));
+        int stackOffset = binding.buttonIndex * (height + dp(binding.activity, 4));
+        int top = anchor.top - height - margin - stackOffset;
+        if (top < 0) {
+            // If the stack does not fit above the composer, place it below instead of
+            // clamping every action to y=0 and making the buttons overlap.
+            top = anchor.bottom + margin + stackOffset;
+        }
         left -= overlayLocation[0];
         top -= overlayLocation[1];
         left = Math.max(0, Math.min(left, binding.overlay.getWidth() - width));
