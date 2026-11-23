@@ -28,7 +28,7 @@ import io.github.wxmyyds.discordautotranslate.hooks.MessageHooks;
 import io.github.wxmyyds.discordautotranslate.hooks.PollHooks;
 import io.github.wxmyyds.discordautotranslate.hooks.RenderDispatcher;
 import io.github.wxmyyds.discordautotranslate.hooks.HookRuntime;
-import io.github.wxmyyds.discordautotranslate.hooks.ChatInputViewDiagnostics;
+import io.github.wxmyyds.discordautotranslate.hooks.ChatInputTranslateButton;
 
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -262,7 +262,7 @@ public class ModuleEntry extends XposedModule {
             Scheduler.MainThread.install();
             RenderDispatcher.install();
             reloadConfig();
-            installChatInputDiagnostics();
+            installChatInputTranslateButton();
             MessageHooks.install(this, cl, config, installedHookIds, hooks);
             EmbedHooks.install(this, cl, config, installedHookIds, hooks);
             PollHooks.install(this, cl, config, installedHookIds, hooks);
@@ -290,17 +290,17 @@ public class ModuleEntry extends XposedModule {
      * Observe the focused native text editor and its nearby Android View hierarchy.
      * Diagnostics are content-free and are emitted only while project logging is enabled.
      */
-    private void installChatInputDiagnostics() {
+    private void installChatInputTranslateButton() {
         try {
             java.lang.reflect.Method onResume = Activity.class.getDeclaredMethod("onResume");
             hooks.add(hook(onResume)
-                    .setId("dat.chatInputDiagnostics.resume")
+                    .setId("dat.chatInputTranslateButton.resume")
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
                         Object result = chain.proceed();
                         try (HookRuntime.Lease lease = HookRuntime.enter()) {
                             if (lease != null && chain.getThisObject() instanceof Activity) {
-                                ChatInputViewDiagnostics.attach((Activity) chain.getThisObject());
+                                ChatInputTranslateButton.attach((Activity) chain.getThisObject());
                             }
                         }
                         return result;
@@ -308,7 +308,7 @@ public class ModuleEntry extends XposedModule {
 
             java.lang.reflect.Method onDestroy = Activity.class.getDeclaredMethod("onDestroy");
             hooks.add(hook(onDestroy)
-                    .setId("dat.chatInputDiagnostics.destroy")
+                    .setId("dat.chatInputTranslateButton.destroy")
                     .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
                     .intercept(chain -> {
                         Object activity = chain.getThisObject();
@@ -316,13 +316,13 @@ public class ModuleEntry extends XposedModule {
                             return chain.proceed();
                         } finally {
                             if (activity instanceof Activity) {
-                                ChatInputViewDiagnostics.detach((Activity) activity);
+                                ChatInputTranslateButton.detach((Activity) activity);
                             }
                         }
                     }));
-            ProjectLog.info("chat input view diagnostics hooks installed");
+            ProjectLog.info("chat input translate button lifecycle hooks installed");
         } catch (Throwable failure) {
-            ProjectLog.warn("chat input view diagnostics hook installation failed errorClass="
+            ProjectLog.warn("chat input translate button hook installation failed errorClass="
                     + failure.getClass().getSimpleName());
         }
     }
@@ -368,7 +368,7 @@ public class ModuleEntry extends XposedModule {
             if (!InlineIconSpan.resetAll(2000L)) {
                 throw new IllegalStateException("Inline icon cleanup incomplete; restart Discord required");
             }
-            ChatInputViewDiagnostics.clear();
+            ChatInputTranslateButton.clear();
             int failures = HookCleanup.remove(hooks, XposedInterface.HookHandle::unhook);
             if (failures != 0) {
                 throw new IllegalStateException("Hook removal incomplete count=" + failures
