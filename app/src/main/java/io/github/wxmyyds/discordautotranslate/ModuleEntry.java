@@ -88,6 +88,9 @@ public class ModuleEntry extends XposedModule {
         if (!TARGET_PACKAGE.equals(param.getPackageName())) {
             return;
         }
+        // Remote preferences may not be ready during onModuleLoaded. Re-read them
+        // at the target package lifecycle boundary before emitting any startup diagnostics.
+        configureLogging();
         ProjectLog.info("onPackageReady received for Discord");
         if (installed || bootstrapInstalled || restartRequired) {
             // 防止重复注册启动钩子。
