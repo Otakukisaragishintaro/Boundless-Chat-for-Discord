@@ -1,0 +1,178 @@
+name: Build module APK
+
+# 依据项目规则：编译/打包/构建产物只能通过 GitHub Actions 执行，禁止本地构建。
+# 触发方式：手动触发（workflow_dispatch），或向 main 的 PR、以及功能分支推送时自动构建验证。
+on:
+  workflow_dispatch:
+    inputs:
+      build_type:
+        description: "构建类型"
+        required: true
+        default: "Debug"
+        type: choice
+        options:
+          - Debug
+          - Release
+
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/**'
+
+  push:
+    branches-ignore: [ main ]
+    paths:
+      - 'app/**'
+      - 'build.gradle'
+      - 'settings.gradle'
+      - 'gradle.properties'
+      - '.github/workflows/**'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Assemble APK
+    # 固定到 ubuntu-24.04：该镜像预装 Android SDK 与 cmdline-tools。
+    # 不跟随 ubuntu-latest，因为官方已通告该标签将于 2026-10 迁移到 Ubuntu 26，
+    # 届时预装 SDK 路径与 build-tools 版本都可能变化，会直接影响本工作流。
+    runs-on: ubuntu-24.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # 固定使用 ubuntu-24.04 预装的 SDK 工具；缺失时明确失败。
+      # API 37 平台包名为 platforms;android-37.0。
+      - name: Install required SDK packages
+        env:
+          ANDROID_HOME: /usr/local/lib/android/sdk
+          ANDROID_SDK_ROOT: /usr/local/lib/android/sdk
+        run: |
+          set -euo pipefail
+          SDKMGR="$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMGR" || { echo "::error::Required sdkmanager is missing"; exit 1; }
+          echo "sdkmanager: $SDKMGR"
+          # yes 在 sdkmanager 正常结束后会收到 SIGPIPE；单独检查 sdkmanager 状态。
+          set +e
+          yes | "$SDKMGR" --licenses > /dev/null 2>&1
+          LICENSE_STATUS=${PIPESTATUS[1]}
+          set -e
+          test "$LICENSE_STATUS" -eq 0 || { echo "::error::SDK license acceptance failed"; exit 1; }
+          "$SDKMGR" "platforms;android-37.0" "build-tools;36.0.0"
+
+          echo "--- installed platforms ---"
+          ls "$ANDROID_HOME/platforms"
+          echo "--- installed build-tools ---"
+          ls "$ANDROID_HOME/build-tools"
+          echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '9.6.0'
+
+      # 构建和测试配置都要求同一正式签名；缺少 Secret 时明确失败。
+      - name: Inject signing keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+        run: |
+          set -euo pipefail
+          if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
+            echo "::error::Required signing secrets are missing" >&2
+            exit 1
+          fi
+          mkdir -p "$RUNNER_TEMP/keystore"
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore/release.jks"
+          chmod 600 "$RUNNER_TEMP/keystore/release.jks"
+          printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
+            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEYSTORE_PASSWORD" \
+            > "$RUNNER_TEMP/keystore/keystore.properties"
+          chmod 600 "$RUNNER_TEMP/keystore/keystore.properties"
+          echo "KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore/keystore.properties" >> "$GITHUB_ENV"
+
+      - name: Resolve requested build type
+        id: cfg
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "task=${{ github.event.inputs.build_type }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "task=Debug" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Verify xposed resources are present
+        run: |
+          set -e
+          for f in app/src/main/resources/META-INF/xposed/java_init.list \
+                   app/src/main/resources/META-INF/xposed/module.prop \
+                   app/src/main/resources/META-INF/xposed/scope.list; do
+            test -f "$f" || { echo "missing $f"; exit 1; }
+          done
+          echo "entry class: $(cat app/src/main/resources/META-INF/xposed/java_init.list)"
+
+      - name: Assemble
+        run: gradle --no-daemon assemble${{ steps.cfg.outputs.task }}
+
+      # 阶段 2 起单元测试是必要验证项（模板转义、路径提取、调度去重/过期丢弃/重试）。
+      - name: Run unit tests
+        run: gradle --no-daemon testDebugUnitTest
+
+      - name: Publish test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-test-report-${{ github.sha }}
+          path: app/build/reports/tests/**
+          if-no-files-found: ignore
+
+      - name: Verify APK contents (xposed entry + scope)
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk -name '*.apk' | head -n 1)
+          echo "APK: $APK"
+          test -n "$APK" || { echo "no apk produced"; exit 1; }
+          echo "--- META-INF/xposed entries ---"
+          unzip -l "$APK" | grep -i 'META-INF/xposed' || { echo "xposed metadata missing from APK"; exit 1; }
+          echo "--- java_init.list ---"
+          unzip -p "$APK" META-INF/xposed/java_init.list
+          echo "--- module.prop ---"
+          unzip -p "$APK" META-INF/xposed/module.prop
+          # 图标是模块自带资源，必须打包进 APK；缺失会导致运行期图标为空白。
+          # 用 aapt2 dump resources 按名字确认编译后的资源表里确实存在这三项。
+          echo "--- module drawables ---"
+          AAPT="$ANDROID_HOME/build-tools/36.0.0/aapt2"
+          test -x "$AAPT" || { echo "aapt2 not found"; exit 1; }
+          RES=$($AAPT dump resources "$APK")
+          for name in translate_24 progress_activity_24 error_24; do
+            echo "$RES" | grep -q "drawable/$name" \
+              || { echo "drawable/$name missing from APK resources"; exit 1; }
+            echo "ok: drawable/$name"
+          done
+
+      - name: Verify APK signature
+        run: |
+          set -e
+          APK=$(find app/build/outputs/apk -name '*.apk' | head -n 1)
+          APKSIGNER="$ANDROID_HOME/build-tools/36.0.0/apksigner"
+          test -x "$APKSIGNER" || { echo "apksigner not found"; exit 1; }
+          "$APKSIGNER" verify --print-certs "$APK"
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: DiscordAutoTranslate-${{ steps.cfg.outputs.task }}-${{ github.sha }}
+          path: app/build/outputs/apk/**/*.apk
+          if-no-files-found: error
