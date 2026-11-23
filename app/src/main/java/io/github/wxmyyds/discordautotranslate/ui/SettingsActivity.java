@@ -138,7 +138,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Switch enabledInput;
     private Switch loggingInput;
     private Switch cacheEnabledInput;
-    private Spinner cacheLimitSpinner;
+    private EditText cacheLimitInput;
+    private TextView cacheEntryCountText;
+    private Button cacheSettingsButton;
+    private Button apiSettingsButton;
+    private Button cacheApplyButton;
+    private Button apiApplyButton;
+    private LinearLayout cacheBacking;
+    private LinearLayout apiBacking;
+    @Nullable private Dialog cacheSettingsDialog;
+    @Nullable private Dialog apiSettingsDialog;
     private Button clearCacheButton;
     private Switch streamingInput;
     private TextView enabledHint;
@@ -207,7 +216,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             outboundButtonsDialog.dismiss();
             outboundButtonsDialog = null;
         }
-        if (advancedSettingsDialog != null) {
+        if (cacheSettingsDialog != null) { cacheSettingsDialog.dismiss(); cacheSettingsDialog = null; }\n        if (apiSettingsDialog != null) { apiSettingsDialog.dismiss(); apiSettingsDialog = null; }\n        if (advancedSettingsDialog != null) {
             advancedSettingsDialog.dismiss();
             advancedSettingsDialog = null;
         }
@@ -245,7 +254,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putString("scope", scopeDraft.toJson());
         draft.putBoolean("logging", loggingInput.isChecked());
         draft.putBoolean("cache_enabled", cacheEnabledInput.isChecked());
-        draft.putInt("cache_limit", cacheLimitSpinner.getSelectedItemPosition());
+        draft.putString("cache_limit", cacheLimitInput.getText().toString());
         draft.putBoolean("streaming", streamingInput.isChecked());
         draft.putBoolean("check_wrapper", checkWrapperInput.isChecked());
         draft.putBoolean("strip_outer_wrapper", stripOuterWrapperInput.isChecked());
@@ -280,8 +289,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             updateScopeSummary();
             loggingInput.setChecked(draft.getBoolean("logging", Config.DEF_LOGGING_ENABLED));
             cacheEnabledInput.setChecked(draft.getBoolean("cache_enabled", Config.DEF_CACHE_ENABLED));
-            cacheLimitSpinner.setSelection(draft.getInt("cache_limit",
-                    Config.DEF_CACHE_LIMIT == 1000000 ? 1 : 0));
+            cacheLimitInput.setText(draft.getString("cache_limit", String.valueOf(Config.DEF_CACHE_LIMIT)));
             protocolSpinner.setSelection(draft.getInt("protocol"));
             streamingInput.setChecked(draft.getBoolean("streaming"));
             checkWrapperInput.setChecked(draft.getBoolean("check_wrapper", Config.DEF_CHECK_WRAPPER));
@@ -470,60 +478,71 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         loggingPrivacy.setText(R.string.hint_logging_privacy);
         root.addView(loggingPrivacy, matchWrap());
 
+        // 本地缓存配置集中放入独立二级菜单，主设置页只保留入口。
+        cacheBacking = new LinearLayout(this);
+        cacheBacking.setOrientation(LinearLayout.VERTICAL);
         TextView cacheTitle = new TextView(this);
         cacheTitle.setText(R.string.label_translation_cache);
-        cacheTitle.setPadding(0, dp(10), 0, 0);
-        root.addView(cacheTitle, matchWrap());
+        cacheBacking.addView(cacheTitle, matchWrap());
         cacheEnabledInput = new Switch(this);
         cacheEnabledInput.setText(R.string.label_cache_enabled);
         cacheEnabledInput.setShowText(false);
         cacheEnabledInput.setMinimumHeight(dp(48));
-        root.addView(cacheEnabledInput, matchWrap());
+        cacheBacking.addView(cacheEnabledInput, matchWrap());
         cacheEnabledInput.setOnCheckedChangeListener((button, checked) -> {
             updateCacheControls();
             markDirty();
+            if (!loadingUi) save();
         });
         TextView cacheHint = new TextView(this);
         cacheHint.setTextSize(12f);
         cacheHint.setText(R.string.hint_translation_cache);
-        root.addView(cacheHint, matchWrap());
+        cacheBacking.addView(cacheHint, matchWrap());
         TextView cacheLimitLabel = new TextView(this);
         cacheLimitLabel.setText(R.string.label_cache_limit);
-        root.addView(cacheLimitLabel, matchWrap());
-        cacheLimitSpinner = new Spinner(this);
-        ArrayAdapter<String> cacheLimitAdapter = new ArrayAdapter<>(this,
-                android.R.layout.simple_spinner_item,
-                new String[] {getString(R.string.cache_limit_100k),
-                        getString(R.string.cache_limit_1m)});
-        cacheLimitAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        cacheLimitSpinner.setAdapter(cacheLimitAdapter);
-        cacheLimitSpinner.setSelection(0);
-        cacheLimitSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                markDirty();
+        cacheBacking.addView(cacheLimitLabel, matchWrap());
+        cacheLimitInput = addField(cacheBacking, "", getString(R.string.hint_cache_limit),
+                InputType.TYPE_CLASS_NUMBER);
+        cacheEntryCountText = new TextView(this);
+        cacheEntryCountText.setTextSize(13f);
+        cacheBacking.addView(cacheEntryCountText, matchWrap());
+        TextView cacheRecommendation = new TextView(this);
+        cacheRecommendation.setTextSize(12f);
+        cacheRecommendation.setText(R.string.hint_cache_recommended);
+        cacheBacking.addView(cacheRecommendation, matchWrap());
+        cacheApplyButton = new Button(this);
+        cacheApplyButton.setText(R.string.button_apply_cache_limit);
+        cacheApplyButton.setOnClickListener(v -> {
+            if (parseCacheLimitInput() <= 0) {
+                cacheLimitInput.setError(getString(R.string.error_cache_limit));
+                return;
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) { }
+            save();
         });
-        root.addView(cacheLimitSpinner, matchWrap());
+        cacheBacking.addView(cacheApplyButton, matchWrap());
         clearCacheButton = new Button(this);
         clearCacheButton.setText(R.string.button_clear_translation_cache);
         clearCacheButton.setOnClickListener(v -> confirmClearTranslationCache());
-        root.addView(clearCacheButton, matchWrap());
+        cacheBacking.addView(clearCacheButton, matchWrap());
+        cacheSettingsButton = new Button(this);
+        cacheSettingsButton.setText(R.string.menu_translation_cache);
+        cacheSettingsButton.setOnClickListener(v -> openCacheSettings());
+        root.addView(cacheSettingsButton, matchWrap());
         updateCacheControls();
 
-        // 供应商协议：请求体与译文解析按所选协议内置实现，
+        // API、服务协议与流式请求集中在独立二级菜单中。\n        apiBacking = new LinearLayout(this);\n        apiBacking.setOrientation(LinearLayout.VERTICAL);\n        // 供应商协议：请求体与译文解析按所选协议内置实现，
         // 不再让用户手写 JSON 请求模板与译文提取路径。
         TextView protocolLabel = new TextView(this);
         protocolLabel.setText(R.string.label_protocol);
         protocolLabel.setPadding(0, dp(8), 0, 0);
-        root.addView(protocolLabel, matchWrap());
+        apiBacking.addView(protocolLabel, matchWrap());
         protocolSpinner = new Spinner(this);
         ArrayAdapter<String> protocolAdapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item, PROTOCOL_ENTRIES);
         protocolAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         protocolSpinner.setAdapter(protocolAdapter);
         protocolSpinner.setSelection(positionOf(Config.DEF_PROTOCOL));
-        root.addView(protocolSpinner, matchWrap());
+        apiBacking.addView(protocolSpinner, matchWrap());
         protocolSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -543,24 +562,24 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         root.addView(protocolHint, matchWrap());
 
         streamingInput = new Switch(this);
-        streamingHint = addToggle(root, streamingInput, SettingsToggleText.Setting.STREAMING);
+        streamingHint = addToggle(apiBacking, streamingInput, SettingsToggleText.Setting.STREAMING);
         TextView toggleDraftHint = new TextView(this);
         toggleDraftHint.setTextSize(12f);
         toggleDraftHint.setText(R.string.hint_switch_draft);
-        root.addView(toggleDraftHint, matchWrap());
+        apiBacking.addView(toggleDraftHint, matchWrap());
 
         // 注意：TYPE_TEXT_VARIATION_* 必须与 TYPE_CLASS_TEXT 组合使用。
-        urlInput = addField(root, getString(R.string.label_api_url),
+        urlInput = addField(apiBacking, getString(R.string.label_api_url),
                 getString(R.string.hint_api_url),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        keyInput = addField(root, getString(R.string.label_api_key), "",
+        keyInput = addField(apiBacking, getString(R.string.label_api_key), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        modelInput = addField(root, getString(R.string.label_model), Config.DEF_MODEL,
+        modelInput = addField(apiBacking, getString(R.string.label_model), Config.DEF_MODEL,
                 InputType.TYPE_CLASS_TEXT);
         TextView targetLanguageLabel = new TextView(this);
         targetLanguageLabel.setText(R.string.label_target_language);
         targetLanguageLabel.setPadding(0, dp(8), 0, 0);
-        root.addView(targetLanguageLabel, matchWrap());
+        apiBacking.addView(targetLanguageLabel, matchWrap());
         targetLanguageSpinner = new Spinner(this);
         targetLanguageValues.clear();
         targetLanguageValues.addAll(Arrays.asList(TARGET_LANGUAGE_VALUES));
@@ -582,13 +601,22 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 markSpinnerDirty();
             }
         });
-        root.addView(targetLanguageSpinner, matchWrap());
+        apiBacking.addView(targetLanguageSpinner, matchWrap());
         // Legacy single-language spinner is retained only as a migration bridge; it is not shown.
         sendTargetLanguageSpinner = new Spinner(this);
         sendTargetLanguageSpinner.setAdapter(targetLanguageAdapter);
         sendTargetLanguageSpinner.setSelection(targetLanguagePosition(Config.DEF_SEND_TARGET_LANG));
-        headersInput = addField(root, getString(R.string.label_headers), "",
+        headersInput = addField(apiBacking, getString(R.string.label_headers), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+
+        apiApplyButton = new Button(this);
+        apiApplyButton.setText(R.string.button_apply_api_settings);
+        apiApplyButton.setOnClickListener(v -> save());
+        apiBacking.addView(apiApplyButton, matchWrap());
+        apiSettingsButton = new Button(this);
+        apiSettingsButton.setText(R.string.menu_api_settings);
+        apiSettingsButton.setOnClickListener(v -> openApiSettings());
+        root.addView(apiSettingsButton, matchWrap());
 
         TextView outboundTitle = new TextView(this);
         outboundTitle.setText(getString(R.string.label_outbound_section));
@@ -648,9 +676,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
         root.addView(advancedBacking, matchWrap());
 
-        timeoutInput = addField(root, getString(R.string.label_timeout),
+        timeoutInput = addField(apiBacking, getString(R.string.label_timeout),
                 String.valueOf(Config.DEF_TIMEOUT_MS), InputType.TYPE_CLASS_NUMBER);
-        concurrencyInput = addField(root, getString(R.string.label_concurrency),
+        concurrencyInput = addField(apiBacking, getString(R.string.label_concurrency),
                 String.valueOf(Config.DEF_MAX_CONCURRENCY), InputType.TYPE_CLASS_NUMBER);
 
         testTextInput = addField(root, getString(R.string.label_test_text),
@@ -673,9 +701,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         saveButton = new Button(this);
         saveButton.setText(R.string.button_save);
-        saveButton.setEnabled(false);
-        saveButton.setOnClickListener(v -> save());
-        root.addView(saveButton, matchWrap());
+        // 总保存按钮已移除；各设置分区通过各自的应用操作提交。\n        saveButton.setVisibility(View.GONE);
 
         resetButton = new Button(this);
         resetButton.setText(R.string.button_reset_saved_settings);
@@ -1034,7 +1060,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         concurrencyInput.addTextChangedListener(watcher);
         minLengthPercentInput.addTextChangedListener(watcher);
         maxLengthPercentInput.addTextChangedListener(watcher);
-        testTextInput.addTextChangedListener(watcher);
+        testTextInput.addTextChangedListener(watcher);\n        cacheLimitInput.addTextChangedListener(watcher);
         sendTestTextInput.addTextChangedListener(watcher);
     }
 
@@ -1059,6 +1085,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             hasUnsavedChanges = true;
         }
     }
+
+    private void applyCacheEntryCountFromRemote() { updateCacheEntryCount(); }
 
     private static boolean sameValue(@Nullable String left, @Nullable String right) {
         return left == null ? right == null : left.equals(right);
@@ -1210,7 +1238,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             updateScopeSummary();
             loggingInput.setChecked(snapshot.loggingEnabled);
             cacheEnabledInput.setChecked(snapshot.cacheEnabled);
-            cacheLimitSpinner.setSelection(snapshot.cacheLimit >= 1000000 ? 1 : 0);
+            cacheLimitInput.setText(String.valueOf(snapshot.cacheLimit));
             updateCacheControls();
             protocolSpinner.setSelection(positionOf(snapshot.protocol));
             streamingInput.setChecked(snapshot.streaming);
@@ -1254,10 +1282,67 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
     }
 
+    /** 打开本地翻译缓存二级菜单。 */
+    private void openCacheSettings() {
+        if (cacheSettingsDialog != null || persistedConfigInvalid) return;
+        ScrollView content = new ScrollView(this);
+        content.addView(cacheBacking);
+        cacheSettingsDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.menu_translation_cache)
+                .setView(content)
+                .setPositiveButton(R.string.button_done, null)
+                .create();
+        cacheSettingsDialog.setOnDismissListener(dialog -> {
+            cacheSettingsDialog = null;
+            if (content.getParent() instanceof ViewGroup) {
+                ((ViewGroup) content.getParent()).removeView(content);
+            }
+        });
+        cacheSettingsDialog.show();
+        updateCacheEntryCount();
+    }
+
+    /** 打开 API 与请求协议二级菜单。 */
+    private void openApiSettings() {
+        if (apiSettingsDialog != null || persistedConfigInvalid) return;
+        ScrollView content = new ScrollView(this);
+        content.addView(apiBacking);
+        apiSettingsDialog = new AlertDialog.Builder(this)
+                .setTitle(R.string.menu_api_settings)
+                .setView(content)
+                .setPositiveButton(R.string.button_done, null)
+                .create();
+        apiSettingsDialog.setOnDismissListener(dialog -> {
+            apiSettingsDialog = null;
+            if (content.getParent() instanceof ViewGroup) {
+                ((ViewGroup) content.getParent()).removeView(content);
+            }
+        });
+        apiSettingsDialog.show();
+    }
+
+    /** 缓存容量允许自定义输入，范围为 1 到 1,000,000 条。 */
+    private int parseCacheLimitInput() {
+        try {
+            int value = Integer.parseInt(cacheLimitInput.getText().toString().trim());
+            return value >= 1 && value <= Config.MAX_CACHE_LIMIT ? value : -1;
+        } catch (RuntimeException invalid) {
+            return -1;
+        }
+    }
+
+    /** 从 Discord 进程同步的只读计数，离线时保留最近一次同步值。 */
+    private void updateCacheEntryCount() {
+        if (cacheEntryCountText == null) return;
+        int count = remotePrefs == null ? 0
+                : remotePrefs.getInt(Config.KEY_CACHE_ENTRY_COUNT, 0);
+        cacheEntryCountText.setText(getString(R.string.label_cache_entry_count, count));
+    }
+
     private void updateCacheControls() {
-        if (cacheLimitSpinner != null) {
-            cacheLimitSpinner.setEnabled(configurationLoaded && !persistedConfigInvalid
-                    && cacheEnabledInput.isChecked());
+        if (cacheLimitInput != null) {
+            // 容量是独立设置；即使关闭缓存也允许预先修改。
+            cacheLimitInput.setEnabled(configurationLoaded && !persistedConfigInvalid);
         }
     }
 
@@ -1472,8 +1557,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scopeButton.setEnabled(canOpenScopeEditor());
         scopeSummary.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         loggingInput.setEnabled(formAvailable);
-        cacheEnabledInput.setEnabled(formAvailable);
-        cacheLimitSpinner.setEnabled(formAvailable && cacheEnabledInput.isChecked());
+        cacheEnabledInput.setEnabled(formAvailable);\n        updateCacheEntryCount();
+        cacheLimitInput.setEnabled(formAvailable);\n        if (cacheApplyButton != null) cacheApplyButton.setEnabled(formAvailable && available);\n        if (apiApplyButton != null) apiApplyButton.setEnabled(formAvailable && available);\n        if (cacheSettingsButton != null) cacheSettingsButton.setEnabled(formAvailable);\n        if (apiSettingsButton != null) apiSettingsButton.setEnabled(formAvailable);
         clearCacheButton.setEnabled(formAvailable && remotePrefs != null);
         checkWrapperInput.setEnabled(formAvailable);
         stripOuterWrapperInput.setEnabled(formAvailable);
@@ -1537,8 +1622,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_TRANSLATION_SCOPE, scopeDraft.toJson());
         memoryPrefs.put(Config.KEY_LOGGING_ENABLED, loggingInput.isChecked());
         memoryPrefs.put(Config.KEY_CACHE_ENABLED, cacheEnabledInput.isChecked());
-        memoryPrefs.put(Config.KEY_CACHE_LIMIT,
-                cacheLimitSpinner.getSelectedItemPosition() == 1 ? 1000000 : 100000);
+        memoryPrefs.put(Config.KEY_CACHE_LIMIT, parseCacheLimitInput());
         memoryPrefs.put(Config.KEY_PROTOCOL,
                 protocolAt(protocolSpinner.getSelectedItemPosition()));
         memoryPrefs.put(Config.KEY_STREAMING, streamingInput.isChecked());
