@@ -12,6 +12,7 @@ public class DiagnosticProviderTest {
     public void acceptsHookLifecycleCheckpoints() {
         String[] events = {
                 "module lifecycle entered",
+                "diagnostic bootstrap context acquired before Application.attach",
                 "Discord package lifecycle entered",
                 "Application.attach bootstrap hook installed",
                 "Discord Application.attach hook triggered",
