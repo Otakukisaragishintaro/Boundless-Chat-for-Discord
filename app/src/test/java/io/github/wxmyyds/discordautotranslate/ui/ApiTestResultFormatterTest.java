@@ -173,19 +173,18 @@ public class ApiTestResultFormatterTest {
     }
 
     @Test
-    public void translationValidationDetailIsShownWithoutExposingOtherExceptionMessages() throws Exception {
-        String detail = "译文未通过防损坏校验：译文长度异常（5/40）：疑似内容丢失";
-        Constructor<ApiTester.Failure> constructor = ApiTester.Failure.class.getDeclaredConstructor(
-                TranslationException.Kind.class, TranslationException.Reason.class,
-                int.class, String.class, String.class, String.class);
-        constructor.setAccessible(true);
-        ApiTester.Failure failure = constructor.newInstance(TranslationException.Kind.PARSE,
-                TranslationException.Reason.TRANSLATION_INVALID, 200, "TranslationException",
-                null, detail);
+    public void translationValidationDetailIsShownWithoutExposingLengthCounts() throws Exception {
+        TranslationException error = new TranslationException(TranslationException.Kind.PARSE,
+                TranslationException.Reason.TRANSLATION_INVALID,
+                "译文未通过防损坏校验：译文长度异常（5/40）：疑似内容丢失", 200, null);
+        Method from = ApiTester.Failure.class.getDeclaredMethod("from", Throwable.class);
+        from.setAccessible(true);
+        ApiTester.Failure failure = (ApiTester.Failure) from.invoke(null, error);
         RecordingStrings strings = new RecordingStrings();
         String output = ApiTestResultFormatter.format(
                 result(ApiTester.TestKind.SEND_TRANSLATION, null, 8L, failure), strings);
-        assertTrue(output.contains(detail));
+        assertTrue(output.contains("译文未通过防损坏校验：译文长度异常：疑似内容丢失"));
+        assertFalse(output.contains("5/40"));
     }
 
     @Test
