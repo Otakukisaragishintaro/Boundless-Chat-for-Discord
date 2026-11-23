@@ -50,7 +50,7 @@ def render_notes(content, *, mode, version, version_code, source_ref, source_sha
     suffix = "（预发布）" if mode == "prerelease" else ""
     warning = "> 预发布版本，用于验证；不代表已完成设备回归。\n\n" if suffix else ""
     base_url = f"https://github.com/{repository}"
-    return (f"# DiscordAutoTranslate {version}{suffix}\n\n"
+    return (f"# Boundless Chat for Discord {version}{suffix}\n\n"
             f"{warning}{content}\n\n"
             "## 构建信息\n\n"
             f"- 来源：`{source_ref}`（[{source_sha}]({base_url}/commit/{source_sha})）\n"
