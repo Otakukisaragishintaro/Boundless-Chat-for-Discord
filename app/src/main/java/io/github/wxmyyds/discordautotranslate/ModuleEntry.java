@@ -54,14 +54,9 @@ import io.github.libxposed.api.XposedModuleInterface;
  * <p>入口声明不在 Manifest 中，而在 {@code META-INF/xposed/java_init.list}；
  * 模块元数据在 {@code META-INF/xposed/module.prop}；作用域在
  * {@code META-INF/xposed/scope.list}。</p>
- */
-/**
- * LSPosed 模块生命周期入口，也是当前宿主适配的装配位置。
- *
- * <p>本类负责目标包识别、模块资源初始化、Hook 生命周期及清理，
- * 不负责实现 API 请求、翻译协议或缓存业务。当前只装配 Discord；
- * 未来接入其他聊天软件时，应在此处按目标包选择唯一 platform 适配实现，
- * 不要让多个宿主共用或重复注册同一套 Hook。</p>
+ * <p>本类也是当前宿主适配的装配位置：负责目标包识别、模块资源初始化、Hook 生命周期及清理，
+ * 不负责实现 API 请求、翻译协议或缓存业务。当前只装配 Discord；未来接入其他聊天软件时，
+ * 应按目标包选择唯一 platform 适配实现，不要让多个宿主共用或重复注册同一套 Hook。</p>
  */
 public class ModuleEntry extends XposedModule {
 
