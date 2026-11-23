@@ -60,6 +60,10 @@ public final class ProjectLog {
         transportContext = context.getApplicationContext() == null
                 ? context : context.getApplicationContext();
         transportUri = Uri.parse("content://" + modulePackageName + ".diagnostics");
+        // Verify that Android can resolve and start the module-owned provider before
+        // treating the transport as available. This also leaves a timestamp in the
+        // module app so the settings screen can distinguish "no attach" from "no IPC".
+        sendPing();
         flushPending();
         reportConfiguration();
     }
@@ -143,6 +147,22 @@ public final class ProjectLog {
             PendingDiagnostic item = PENDING.peekFirst();
             if (!sendDiagnostic(item.priority, item.message)) return;
             PENDING.removeFirst();
+        }
+    }
+
+    private static boolean sendPing() {
+        Context context = transportContext;
+        Uri uri = transportUri;
+        if (context == null || uri == null) return false;
+        try {
+            Bundle response = context.getContentResolver().call(uri, "ping", null, new Bundle());
+            return response != null && response.getBoolean("accepted", false);
+        } catch (Throwable failure) {
+            try {
+                Log.w(TAG, "diagnostic IPC ping failed errorClass="
+                        + failure.getClass().getSimpleName());
+            } catch (Throwable ignored) { }
+            return false;
         }
     }
 
