@@ -204,6 +204,7 @@
     <string name="hint_cache_limit">Enter a whole number from 1 to 1,000,000. You can change the capacity while the cache is disabled.</string>
     <string name="hint_cache_recommended">Recommended capacity: 100,000 to 1,000,000 entries. Actual storage depends on translation length and SQLite overhead.</string>
     <string name="label_cache_entry_count">Saved translations: %1$d</string>
+    <string name="label_cache_count_unavailable">Discord is not connected; the cache count is unavailable.</string>
     <string name="error_cache_limit">Enter a whole number from 1 to 1,000,000.</string>
     <string name="button_apply_cache_limit">Apply capacity</string>
     <string name="menu_translation_cache">Local translation cache…</string>
