@@ -45,6 +45,19 @@ public class SegmentsTest {
     }
 
     @Test
+    public void stripOuterResponseWrapperRemovesOnlyOneExactOuterPair() {
+        assertEquals("你好", Segments.stripOuterResponseWrapper("<translate>你好</translate>"));
+        assertEquals("hello", Segments.stripOuterResponseWrapper(" <translate>hello</translate> "));
+        assertEquals("prefix <translate>hello</translate>",
+                Segments.stripOuterResponseWrapper("prefix <translate>hello</translate>"));
+        assertEquals("<translate>hello", Segments.stripOuterResponseWrapper("<translate>hello"));
+        assertEquals("<translate><translate>hello</translate></translate>",
+                Segments.stripOuterResponseWrapper("<translate><translate>hello</translate></translate>"));
+        assertEquals("hello</translate>", Segments.stripOuterResponseWrapper("hello</translate>"));
+        assertNull(Segments.stripOuterResponseWrapper(null));
+    }
+
+    @Test
     public void plainTextViolationChecksEmptyTextBeforeOtherValidation() {
         for (String text : new String[]{null, "", " \n\t "}) {
             assertEquals("译文为空", Segments.plainTextViolation(text, "hello<keep1/>"));
