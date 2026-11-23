@@ -12,14 +12,13 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Persistent, bounded translation cache.
+ * 有容量上限的双层翻译缓存。
  *
- * Cache keys are SHA-256 hashes of the exact source text and the complete translation
- * configuration version. The database stores only the hash and translated result, never
- * the original message text, API key, or request headers.
+ * 缓存键由原文精确内容与完整翻译配置版本共同计算 SHA-256 得到。
+ * 数据库只保存哈希键和译文，不保存原文、API 密钥或额外请求头。
  *
- * The database lives in Discord's private application storage. It survives process restarts,
- * Discord relogins, and device reboots; clearing Discord app data removes it.
+ * 数据库位于 Discord 的应用私有目录，可跨进程重启、重新登录和设备重启保留；
+ * 清除 Discord 应用数据或卸载应用会删除缓存。
  */
 public final class TranslationCache {
     private static final int MEMORY_ENTRIES = 512;
@@ -30,7 +29,7 @@ public final class TranslationCache {
     private static volatile Context sContext;
     private static volatile TranslationCache sInstance;
 
-    /** Initialize with the target app context before translation hooks are activated. */
+    /** 安装翻译 Hook 前，使用目标应用 Context 初始化数据库存储位置。 */
     public static void initialize(@Nullable Context context) {
         if (context == null) return;
         sContext = context.getApplicationContext() == null
@@ -52,8 +51,8 @@ public final class TranslationCache {
     }
 
     /**
-     * Drop process-local objects during LSPosed hot reload. Do not delete the database:
-     * persistent translations must remain available to the next runtime generation.
+     * LSPosed 热重载时只释放进程内对象，不删除 SQLite 数据库，
+     * 让下一代运行时继续复用已经保存的译文。
      */
     public static void reset() {
         synchronized (TranslationCache.class) {
@@ -81,7 +80,7 @@ public final class TranslationCache {
         };
     }
 
-    /** Memory lookup first, then a persistent SQLite lookup on a miss. */
+    /** 先查询内存 LRU；未命中时再查询 SQLite 持久化缓存。 */
     @Nullable
     public synchronized String get(String key) {
         if (key == null || key.isEmpty()) return null;
@@ -110,7 +109,7 @@ public final class TranslationCache {
         }
     }
 
-    /** Change the persistent LRU capacity without deleting entries unnecessarily. */
+    /** 修改持久化 LRU 容量；仅淘汰超出新上限的最久未使用条目。 */
     public synchronized void setMaxDiskEntries(int maxEntries) {
         int bounded = Math.max(1, Math.min(maxEntries, 1000000));
         maxDiskEntries = bounded;
@@ -159,7 +158,7 @@ public final class TranslationCache {
         }
     }
 
-    /** Store only successful, non-empty translations. */
+    /** 只保存成功且非空的译文。 */
     public synchronized void put(String key, String translated) {
         if (key == null || key.isEmpty() || translated == null || translated.isEmpty()) return;
         memory.put(key, translated);
@@ -196,7 +195,7 @@ public final class TranslationCache {
         }
     }
 
-    /** Explicit full clear; normal configuration changes do not call this. */
+    /** 用户明确请求时才完整清空；普通配置变化不会调用此方法。 */
     public synchronized void clear() {
         memory.clear();
         writesSincePrune = 0;
