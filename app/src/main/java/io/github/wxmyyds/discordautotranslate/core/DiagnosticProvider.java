@@ -28,6 +28,7 @@ public final class DiagnosticProvider extends ContentProvider {
     private static final String TARGET_PACKAGE = "com.discord";
     private static final String METHOD_APPEND = "append";
     private static final String METHOD_CONFIGURE = "configure";
+    private static final String METHOD_PING = "ping";
     private static final int MAX_BUFFER_CHARS = 24000;
     private static final int MAX_MESSAGE_CHARS = 512;
 
@@ -47,6 +48,14 @@ public final class DiagnosticProvider extends ContentProvider {
         }
         SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, 0);
         Bundle result = new Bundle();
+        if (METHOD_PING.equals(method)) {
+            boolean stored = prefs.edit()
+                    .putLong("transport_last_ping_at", System.currentTimeMillis())
+                    .putInt("transport_last_calling_uid", Binder.getCallingUid())
+                    .commit();
+            result.putBoolean("accepted", stored);
+            return result;
+        }
         if (METHOD_APPEND.equals(method)) {
             String message = extras.getString("message", "");
             if (!isAllowedDiagnostic(message) || message.length() > MAX_MESSAGE_CHARS) {
@@ -91,9 +100,24 @@ public final class DiagnosticProvider extends ContentProvider {
     private boolean isDiscordCaller() {
         int uid = Binder.getCallingUid();
         if (uid <= 0 || getContext() == null) return false;
+
+        // ContentProvider verifies that getCallingPackage() belongs to the Binder UID.
+        // Prefer it over requiring a single-package UID: Android may associate more
+        // than one package with a shared UID, which must not reject Discord itself.
+        try {
+            String callingPackage = getCallingPackage();
+            if (TARGET_PACKAGE.equals(callingPackage)) return true;
+        } catch (Throwable ignored) {
+            // Fall through to the UID package list for implementations that do not
+            // propagate a calling package for call().
+        }
+
         String[] packages = getContext().getPackageManager().getPackagesForUid(uid);
-        if (packages == null || packages.length != 1) return false;
-        return TARGET_PACKAGE.equals(packages[0]);
+        if (packages == null) return false;
+        for (String packageName : packages) {
+            if (TARGET_PACKAGE.equals(packageName)) return true;
+        }
+        return false;
     }
 
     /** Accept only fixed lifecycle checkpoints; never persist arbitrary application text. */
