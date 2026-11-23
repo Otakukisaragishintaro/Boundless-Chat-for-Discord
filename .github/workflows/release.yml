@@ -251,9 +251,12 @@ jobs:
             echo "::error::Required signing secrets are missing"
             exit 1
           fi
+          KEYSTORE_PASSWORD="$(printf '%s' "$KEYSTORE_PASSWORD" | sed ':a;N;$!ba;s/[\r\n]*$//')"
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::Keystore password is empty"; exit 1; }
           mkdir -p "$RUNNER_TEMP/keystore"
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore/release.jks"
           chmod 600 "$RUNNER_TEMP/keystore/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/keystore/release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEYSTORE_PASSWORD" \
             > "$RUNNER_TEMP/keystore/keystore.properties"
@@ -288,7 +291,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          MODE: ${{ inputs.mode }}
+          MODE: ${{ inputs.mode || 'stable' }}
           VERSION: ${{ steps.resolve.outputs.version }}
           VERSION_CODE: ${{ steps.resolve.outputs.versionCode }}
           TAG: ${{ steps.resolve.outputs.tag }}
