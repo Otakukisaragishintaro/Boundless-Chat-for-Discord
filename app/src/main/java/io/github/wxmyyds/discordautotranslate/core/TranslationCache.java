@@ -271,14 +271,15 @@ public final class TranslationCache {
             }
 
             // Batch LRU maintenance to avoid a full-table prune on every insert at 1M entries.
-            if (++writesSincePrune >= 32) {
+            boolean pruned = ++writesSincePrune >= 32;
+            if (pruned) {
                 writesSincePrune = 0;
                 prune(db);
                 refreshEntryCount(db);
             }
 
-            if (!alreadyStored) {
-                // Notify immediately when a new row is saved; do not wait for 32 writes.
+            // New rows change the count; a prune can also change it even when this key existed.
+            if (!alreadyStored || pruned) {
                 publishEntryCount();
             }
             ProjectLog.info("local translation cache write status=STORED newEntry="

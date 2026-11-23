@@ -4,10 +4,8 @@ import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Binder;
 import android.os.Bundle;
 
 import androidx.annotation.NonNull;
@@ -85,25 +83,12 @@ public final class CacheCountProvider extends ContentProvider {
     }
 
     private boolean isDiscordCaller() {
-        Context context = getContext();
-        if (context == null) {
-            return false;
-        }
         try {
-            int callingUid = Binder.getCallingUid();
-            String[] packages = context.getPackageManager().getPackagesForUid(callingUid);
-            if (packages == null) {
-                return false;
-            }
-            for (String packageName : packages) {
-                if (ALLOWED_CALLER_PACKAGE.equals(packageName)) {
-                    return true;
-                }
-            }
+            // Android verifies that this package name belongs to the Binder caller UID.
+            return ALLOWED_CALLER_PACKAGE.equals(getCallingPackage());
         } catch (Throwable ignored) {
             return false;
         }
-        return false;
     }
 
     private static Bundle publishResult(boolean published) {
