@@ -41,6 +41,7 @@ public final class DiagnosticProvider extends ContentProvider {
     @Override
     public Bundle call(@NonNull String method, @Nullable String arg, @Nullable Bundle extras) {
         if (!isDiscordCaller()) {
+            recordRejectedCall(method);
             throw new SecurityException("Diagnostic caller is not the Discord application UID");
         }
         if (extras == null) {
@@ -49,9 +50,11 @@ public final class DiagnosticProvider extends ContentProvider {
         SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, 0);
         Bundle result = new Bundle();
         if (METHOD_PING.equals(method)) {
+            long now = System.currentTimeMillis();
             boolean stored = prefs.edit()
-                    .putLong("transport_last_ping_at", System.currentTimeMillis())
+                    .putLong("transport_last_ping_at", now)
                     .putInt("transport_last_calling_uid", Binder.getCallingUid())
+                    .putString("transport_last_method", METHOD_PING)
                     .commit();
             result.putBoolean("accepted", stored);
             return result;
@@ -78,7 +81,13 @@ public final class DiagnosticProvider extends ContentProvider {
                         updated = updated.substring(firstBreak + 1);
                     }
                 }
-                boolean stored = prefs.edit().putString(KEY_BUFFER, updated).commit();
+                long now = System.currentTimeMillis();
+                boolean stored = prefs.edit()
+                        .putString(KEY_BUFFER, updated)
+                        .putLong("transport_last_append_at", now)
+                        .putString("transport_last_method", METHOD_APPEND)
+                        .putInt("transport_last_calling_uid", Binder.getCallingUid())
+                        .commit();
                 result.putBoolean("accepted", stored);
             }
             return result;
@@ -90,11 +99,35 @@ public final class DiagnosticProvider extends ContentProvider {
                     .putBoolean(KEY_MODULE_ENABLED, enabled && valid)
                     .putBoolean(KEY_CONFIG_VALID, valid)
                     .putLong(KEY_CONFIGURED_AT, System.currentTimeMillis())
+                    .putLong("transport_last_configure_at", System.currentTimeMillis())
+                    .putString("transport_last_method", METHOD_CONFIGURE)
+                    .putInt("transport_last_calling_uid", Binder.getCallingUid())
                     .commit();
             result.putBoolean("accepted", stored);
             return result;
         }
         throw new IllegalArgumentException("Unknown diagnostic method");
+    }
+
+    /**
+     * Keep a bounded, content-free record of rejected calls so the settings screen can
+     * distinguish "provider was reached but rejected the caller" from "no call arrived".
+     * Rate limiting prevents unrelated applications from continuously rewriting prefs.
+     */
+    private void recordRejectedCall(@Nullable String method) {
+        if (getContext() == null) return;
+        SharedPreferences prefs = getContext().getSharedPreferences(PREFS_NAME, 0);
+        long now = System.currentTimeMillis();
+        synchronized (DiagnosticProvider.class) {
+            long previous = prefs.getLong("transport_last_reject_at", 0L);
+            if (now - previous < 1000L) return;
+            String safeMethod = method == null ? "null" : method.substring(0, Math.min(method.length(), 40));
+            prefs.edit()
+                    .putLong("transport_last_reject_at", now)
+                    .putInt("transport_last_reject_uid", Binder.getCallingUid())
+                    .putString("transport_last_reject_method", safeMethod)
+                    .commit();
+        }
     }
 
     private boolean isDiscordCaller() {
