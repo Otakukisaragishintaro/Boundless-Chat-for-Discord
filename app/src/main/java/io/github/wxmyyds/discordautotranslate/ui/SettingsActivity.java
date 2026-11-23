@@ -167,7 +167,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     @Nullable private FrameLayout navigationHost;
     @Nullable private ScrollView mainSettingsPage;
     @Nullable private View activeSubpageView;
-    @Nullable private LinearLayout activeSubpageContent;
+    @Nullable private View cacheSettingsPage;
+    @Nullable private View apiSettingsPage;
     @Nullable private String activeSettingsPage;
     private Button clearCacheButton;
     private Switch streamingInput;
@@ -1376,39 +1377,42 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (pageKey.equals(activeSettingsPage)) return;
         if (activeSettingsPage != null) closeSettingsSubpage();
 
-        // A page may be restored after Activity recreation; always detach the form from
-        // any stale parent before attaching it to the new page container.
-        ViewParent parent = content.getParent();
-        if (parent instanceof ViewGroup) {
-            ((ViewGroup) parent).removeView(content);
+        // Build each submenu exactly once. Reusing its view prevents style margins from
+        // accumulating and preserves the submenu's own scroll position when revisited.
+        View page = PAGE_CACHE.equals(pageKey) ? cacheSettingsPage : apiSettingsPage;
+        if (page == null) {
+            LinearLayout pageContent = new LinearLayout(this);
+            pageContent.setOrientation(LinearLayout.VERTICAL);
+            int padding = dp(16);
+            pageContent.setPadding(padding, padding, padding, padding);
+            pageContent.addView(content, matchWrap());
+
+            ScrollView pageScroll = new ScrollView(this);
+            pageScroll.setFillViewport(true);
+            pageScroll.setClipToPadding(false);
+            pageScroll.setSmoothScrollingEnabled(true);
+            pageScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+            pageScroll.addView(pageContent, new ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+            pageScroll.setOnApplyWindowInsetsListener((view, insets) -> {
+                // Match the main page: keep content clear of system bars and the native ActionBar.
+                view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                        insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+                return insets.consumeSystemWindowInsets();
+            });
+            SettingsUiStyle.apply(this, pageScroll, null);
+            page = pageScroll;
+            if (PAGE_CACHE.equals(pageKey)) {
+                cacheSettingsPage = page;
+            } else {
+                apiSettingsPage = page;
+            }
         }
 
-        LinearLayout pageContent = new LinearLayout(this);
-        pageContent.setOrientation(LinearLayout.VERTICAL);
-        int padding = dp(16);
-        pageContent.setPadding(padding, padding, padding, padding);
-        pageContent.addView(content, matchWrap());
-
-        ScrollView pageScroll = new ScrollView(this);
-        pageScroll.setFillViewport(true);
-        pageScroll.setClipToPadding(false);
-        pageScroll.setSmoothScrollingEnabled(true);
-        pageScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
-        pageScroll.addView(pageContent, new ViewGroup.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-        pageScroll.setOnApplyWindowInsetsListener((view, insets) -> {
-            // Match the main page: keep content clear of system bars and the native ActionBar.
-            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
-                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
-            return insets.consumeSystemWindowInsets();
-        });
-        SettingsUiStyle.apply(this, pageScroll, null);
-
         mainSettingsPage.setVisibility(View.GONE);
-        navigationHost.addView(pageScroll, new FrameLayout.LayoutParams(
+        navigationHost.addView(page, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        activeSubpageView = pageScroll;
-        activeSubpageContent = content;
+        activeSubpageView = page;
         activeSettingsPage = pageKey;
         setTitle(titleRes);
         if (getActionBar() != null) {
@@ -1419,16 +1423,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     /** 关闭当前子页面并恢复主设置页；不重建主页面表单。 */
     private void closeSettingsSubpage() {
-        if (activeSubpageContent != null) {
-            ViewParent parent = activeSubpageContent.getParent();
-            if (parent instanceof ViewGroup) {
-                ((ViewGroup) parent).removeView(activeSubpageContent);
-            }
-        }
         if (navigationHost != null && activeSubpageView != null) {
             navigationHost.removeView(activeSubpageView);
         }
-        activeSubpageContent = null;
         activeSubpageView = null;
         activeSettingsPage = null;
         if (mainSettingsPage != null) {
