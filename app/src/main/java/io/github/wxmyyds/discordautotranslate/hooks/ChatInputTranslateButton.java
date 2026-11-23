@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ChatInputTranslateButton {
     private static final int BUTTON_WIDTH_DP = 68;
     private static final int BUTTON_HEIGHT_DP = 38;
-    private static final int MAX_SEND_CANDIDATE_RETRIES = 6;
+    private static final int MAX_SEND_CANDIDATE_RETRIES = 40;
     private static final AtomicLong NEXT_REQUEST = new AtomicLong();
     private static final Map<Activity, Registration> REGISTRATIONS = new WeakHashMap<>();
 
@@ -637,7 +637,10 @@ public final class ChatInputTranslateButton {
             }
         };
         registration.retryRunnable = retry;
-        registration.decor.postOnAnimation(retry);
+        // Discord's React composer may publish its native send control well after the
+        // IME's first composing-text update. Keep checking for a short bounded window
+        // instead of exhausting six animation frames before the control exists.
+        registration.decor.postDelayed(retry, 100L);
     }
 
     private static void cancelSendCandidateRetry(Registration registration) {
