@@ -251,6 +251,9 @@ public class ModuleEntry extends XposedModule {
                 return;
             }
             ProjectLog.bootstrapInfo("Discord hook profile selected");
+            // Keep the translation cache in Discord's private app storage so it survives
+            // Discord relogins and process restarts without exposing it to another app.
+            TranslationCache.initialize(context);
             install(cl, config);
             installed = true;
             ProjectLog.bootstrapInfo("Discord required hooks installed and runtime activated");

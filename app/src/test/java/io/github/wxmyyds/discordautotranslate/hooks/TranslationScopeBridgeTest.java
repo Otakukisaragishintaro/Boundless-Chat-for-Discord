@@ -312,7 +312,7 @@ public class TranslationScopeBridgeTest {
     }
 
     @Test
-    public void matchingPolicyChangesClearStateCardsCacheAndInFlightGeneration() {
+    public void matchingPolicyChangesClearRuntimeStateButRetainPersistentTranslationCache() {
         TranslationScope scope = new TranslationScope(true,
                 Arrays.asList(rule("10", true), rule("11", false)),
                 Arrays.asList(rule("20", true), rule("21", false)));
@@ -366,8 +366,10 @@ public class TranslationScopeBridgeTest {
         assertNull(store.peek(poll));
         assertNull(CardState.forKey(embed));
         assertNull(CardState.forKey(poll));
-        assertNull(TranslationCache.get().get(hash));
-        assertNull(TranslationCache.get().get("embed-hash"));
+        // Runtime state is generation-scoped, but the persistent translation cache is not.
+        // Matching policy changes must not erase translations for otherwise identical inputs.
+        assertEquals("retained API result", TranslationCache.get().get(hash));
+        assertEquals("retained embed", TranslationCache.get().get("embed-hash"));
         assertTrue(bridge.translationAllowed(ROW, after));
 
         StateStore.Entry current = store.obtain(ROW, hash);
@@ -377,7 +379,7 @@ public class TranslationScopeBridgeTest {
         assertSame(current, store.peek(ROW));
         assertEquals(StateStore.Status.TRANSLATING, current.status);
         assertTrue(store.owns(task));
-        assertNull(TranslationCache.get().get(hash));
+        assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslateResult(task, true, "current generation", null);
         assertEquals(StateStore.Status.TRANSLATED, current.status);
         assertEquals("current generation", TranslationCache.get().get(hash));

@@ -1,88 +1,213 @@
 package io.github.wxmyyds.discordautotranslate.core;
 
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+
 import androidx.annotation.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * 翻译缓存（需求 §5.6）。
+ * Persistent, bounded translation cache.
  *
- * <p>键为 {@link Scheduler#contentHash(String, String)} 的结果，即
- * {@code SHA-256(正文 + 配置版本)}。配置版本包含 API URL、模型名、目标语言、
- * 供应商协议、系统提示词与凭据指纹，因此：
- * <ul>
- *   <li>同一内容重复出现（滚动回看、重复进入频道）时直接复用，减少请求与费用。</li>
- *   <li>任一影响结果的配置变化后，旧条目自然不再命中，不会错误复用。</li>
- *   <li>消息编辑后正文变化 → 哈希变化 → 不会命中旧译文。</li>
- * </ul>
+ * Cache keys are SHA-256 hashes of the exact source text and the complete translation
+ * configuration version. The database stores only the hash and translated result, never
+ * the original message text, API key, or request headers.
  *
- * <p>容量有上限（LRU 淘汰），避免无限增长。</p>
- *
- * <p>线程安全：所有访问都加锁。翻译结果回写发生在主线程，读取可能发生在渲染路径，
- * 但两者都不在锁内做耗时操作。</p>
+ * The database lives in Discord's private application storage. It survives process restarts,
+ * Discord relogins, and device reboots; clearing Discord app data removes it.
  */
 public final class TranslationCache {
+    private static final int MEMORY_ENTRIES = 512;
+    private static final int DISK_ENTRIES = 10000;
+    private static final String DATABASE_NAME = "boundless_translation_cache.db";
+    private static final String TABLE = "translations";
 
-    /** 缓存条目上限。 */
-    private static final int MAX_ENTRIES = 512;
-
+    private static volatile Context sContext;
     private static volatile TranslationCache sInstance;
 
+    /** Initialize with the target app context before translation hooks are activated. */
+    public static void initialize(@Nullable Context context) {
+        if (context == null) return;
+        sContext = context.getApplicationContext() == null
+                ? context : context.getApplicationContext();
+    }
+
     public static TranslationCache get() {
-        TranslationCache c = sInstance;
-        if (c == null) {
+        TranslationCache cache = sInstance;
+        if (cache == null) {
             synchronized (TranslationCache.class) {
-                c = sInstance;
-                if (c == null) {
-                    c = new TranslationCache(MAX_ENTRIES);
-                    sInstance = c;
+                cache = sInstance;
+                if (cache == null) {
+                    cache = new TranslationCache(MEMORY_ENTRIES);
+                    sInstance = cache;
                 }
             }
         }
-        return c;
+        return cache;
     }
 
-    /** 热重载：丢弃缓存，避免旧代次的对象图被保留。 */
+    /**
+     * Drop process-local objects during LSPosed hot reload. Do not delete the database:
+     * persistent translations must remain available to the next runtime generation.
+     */
     public static void reset() {
         synchronized (TranslationCache.class) {
+            TranslationCache old = sInstance;
             sInstance = null;
+            if (old != null) old.closeDatabase();
         }
     }
 
-    private final int maxEntries;
-    private final LinkedHashMap<String, String> lru;
+    private final int maxMemoryEntries;
+    private final LinkedHashMap<String, String> memory;
+    private DatabaseHelper helper;
+    private SQLiteDatabase database;
 
     TranslationCache(int maxEntries) {
-        this.maxEntries = Math.max(1, maxEntries);
-        // accessOrder=true 实现 LRU
-        this.lru = new LinkedHashMap<String, String>(16, 0.75f, true) {
+        maxMemoryEntries = Math.max(1, maxEntries);
+        memory = new LinkedHashMap<String, String>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
-                return size() > TranslationCache.this.maxEntries;
+                return size() > TranslationCache.this.maxMemoryEntries;
             }
         };
     }
 
+    /** Memory lookup first, then a persistent SQLite lookup on a miss. */
     @Nullable
     public synchronized String get(String key) {
-        return lru.get(key);
+        if (key == null || key.isEmpty()) return null;
+        String cached = memory.get(key);
+        if (cached != null) return cached;
+
+        SQLiteDatabase db = database();
+        if (db == null) return null;
+        Cursor cursor = null;
+        try {
+            cursor = db.query(TABLE, new String[]{"translated"},
+                    "cache_key=?", new String[]{key}, null, null, null, "1");
+            if (!cursor.moveToFirst()) return null;
+            cached = cursor.getString(0);
+            if (cached == null || cached.isEmpty()) return null;
+            memory.put(key, cached);
+            ContentValues touch = new ContentValues();
+            touch.put("last_access", System.currentTimeMillis());
+            db.update(TABLE, touch, "cache_key=?", new String[]{key});
+            return cached;
+        } catch (Throwable ignored) {
+            // A damaged/unavailable cache must never prevent a normal API translation.
+            return null;
+        } finally {
+            if (cursor != null) cursor.close();
+        }
     }
 
+    /** Store only successful, non-empty translations. */
     public synchronized void put(String key, String translated) {
-        if (key == null || translated == null || translated.isEmpty()) {
-            return;
+        if (key == null || key.isEmpty() || translated == null || translated.isEmpty()) return;
+        memory.put(key, translated);
+
+        SQLiteDatabase db = database();
+        if (db == null) return;
+        try {
+            ContentValues values = new ContentValues();
+            values.put("cache_key", key);
+            values.put("translated", translated);
+            values.put("last_access", System.currentTimeMillis());
+            db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
+            // Keep the persistent cache bounded using least-recently-used access timestamps.
+            db.execSQL("DELETE FROM " + TABLE
+                    + " WHERE cache_key NOT IN (SELECT cache_key FROM " + TABLE
+                    + " ORDER BY last_access DESC LIMIT " + DISK_ENTRIES + ")");
+        } catch (Throwable ignored) {
+            // Memory cache remains useful even when persistent storage is unavailable.
         }
-        lru.put(key, translated);
     }
 
     public synchronized void remove(String key) {
-        if (key != null) {
-            lru.remove(key);
+        if (key == null) return;
+        memory.remove(key);
+        SQLiteDatabase db = database();
+        if (db != null) {
+            try {
+                db.delete(TABLE, "cache_key=?", new String[]{key});
+            } catch (Throwable ignored) {
+                // Cache invalidation failure must not break message rendering.
+            }
         }
     }
 
+    /** Explicit full clear; normal configuration changes do not call this. */
     public synchronized void clear() {
-        lru.clear();
+        memory.clear();
+        SQLiteDatabase db = database();
+        if (db != null) {
+            try {
+                db.delete(TABLE, null, null);
+            } catch (Throwable ignored) {
+                // Cache clearing is best-effort if storage is unavailable.
+            }
+        }
+    }
+
+    @Nullable
+    private SQLiteDatabase database() {
+        if (database != null && database.isOpen()) return database;
+        Context context = sContext;
+        if (context == null) return null;
+        try {
+            if (helper == null) helper = new DatabaseHelper(context);
+            database = helper.getWritableDatabase();
+            return database;
+        } catch (Throwable ignored) {
+            database = null;
+            return null;
+        }
+    }
+
+    private synchronized void closeDatabase() {
+        if (database != null) {
+            try {
+                database.close();
+            } catch (Throwable ignored) {
+                // Best-effort close during runtime teardown.
+            }
+            database = null;
+        }
+        if (helper != null) {
+            try {
+                helper.close();
+            } catch (Throwable ignored) {
+                // Best-effort close during runtime teardown.
+            }
+            helper = null;
+        }
+    }
+
+    private static final class DatabaseHelper extends SQLiteOpenHelper {
+        DatabaseHelper(Context context) {
+            super(context, DATABASE_NAME, null, 1);
+            setWriteAheadLoggingEnabled(true);
+        }
+
+        @Override
+        public void onCreate(SQLiteDatabase db) {
+            db.execSQL("CREATE TABLE " + TABLE + " ("
+                    + "cache_key TEXT PRIMARY KEY NOT NULL,"
+                    + "translated TEXT NOT NULL,"
+                    + "last_access INTEGER NOT NULL)");
+            db.execSQL("CREATE INDEX idx_" + TABLE + "_last_access ON "
+                    + TABLE + "(last_access)");
+        }
+
+        @Override
+        public void onUpgrade(SQLiteDatabase db, int oldVersion, int newVersion) {
+            // Version 1 is the first persistent schema. Future upgrades must preserve entries.
+        }
     }
 }
