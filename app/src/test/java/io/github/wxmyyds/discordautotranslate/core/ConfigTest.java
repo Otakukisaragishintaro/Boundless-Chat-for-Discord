@@ -49,6 +49,7 @@ public class ConfigTest {
         assertEquals(Config.DEF_TARGET_LANG, s.targetLang);
         assertEquals(Config.DEF_SEND_TARGET_LANG, s.sendTargetLang);
         assertEquals(Config.DEF_SYSTEM_PROMPT, s.systemPrompt);
+        assertEquals(Config.DEF_SEND_SYSTEM_PROMPT, s.sendSystemPrompt);
         assertEquals(Config.DEF_PROTOCOL, s.protocol);
         assertEquals(Config.DEF_TIMEOUT_MS, s.timeoutMs);
         assertEquals(Config.DEF_MAX_CONCURRENCY, s.maxConcurrency);
@@ -112,9 +113,23 @@ public class ConfigTest {
         assertEquals("Incoming-only custom prompt", incoming.systemPrompt);
         assertEquals("English", outbound.targetLang);
         assertEquals("English", outbound.sendTargetLang);
-        assertEquals(Config.DEF_SYSTEM_PROMPT, outbound.systemPrompt);
-        assertTrue(Config.defaultSystemPromptFor(outbound.targetLang).contains("into English"));
+        assertEquals(Config.DEF_SEND_SYSTEM_PROMPT, outbound.systemPrompt);
+        assertTrue(outbound.systemPrompt.replace("{{target_language}}", outbound.targetLang)
+                .contains("into English"));
         assertNotEquals(incoming.version(), outbound.version());
+    }
+
+    @Test
+    public void outboundPromptIsIndependentAndExpandsItsTargetLanguageToken() {
+        Config.Snapshot incoming = Config.read(new MemoryPrefs()
+                .put(Config.KEY_SYSTEM_PROMPT, "Incoming prompt")
+                .put(Config.KEY_SEND_SYSTEM_PROMPT, "Translate only into {{target_language}}."));
+        Config.Snapshot outbound = incoming.forSendTranslation();
+
+        assertEquals("Incoming prompt", incoming.systemPrompt);
+        assertEquals("Translate only into {{target_language}}.", outbound.systemPrompt);
+        assertEquals("Translate only into English.",
+                outbound.systemPrompt.replace("{{target_language}}", outbound.targetLang));
     }
 
     @Test
