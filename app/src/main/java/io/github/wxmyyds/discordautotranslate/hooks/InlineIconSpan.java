@@ -179,6 +179,13 @@ public final class InlineIconSpan extends ImageSpan {
      * @param density   屏幕密度
      * @param status    当前翻译状态（配色已体现在 icon 上）
      */
+    /** Backward-compatible factory used by existing lifecycle and rerender tests. */
+    @Nullable
+    static InlineIconSpan create(@Nullable Drawable icon, float density,
+                                StateStore.Status status) {
+        return create(icon, density, status, null);
+    }
+
     @Nullable
     static InlineIconSpan create(@Nullable Drawable icon, float density,
                                 StateStore.Status status, @Nullable String languageLabel) {
