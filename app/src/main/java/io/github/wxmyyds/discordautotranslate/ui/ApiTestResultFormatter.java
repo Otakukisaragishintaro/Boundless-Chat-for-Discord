@@ -26,6 +26,10 @@ final class ApiTestResultFormatter {
                     return strings.get(R.string.result_translation_success, result.elapsedMs)
                             + strings.get(R.string.result_translation,
                                     Objects.requireNonNull(result.translated));
+                case SEND_TRANSLATION:
+                    return strings.get(R.string.result_send_translation_success, result.elapsedMs)
+                            + strings.get(R.string.result_translation,
+                                    Objects.requireNonNull(result.translated));
                 default:
                     throw new AssertionError(result.testKind);
             }
@@ -55,6 +59,7 @@ final class ApiTestResultFormatter {
             case CONFIGURATION: return R.string.result_kind_configuration;
             case CONNECTION: return R.string.result_kind_connection;
             case TRANSLATION: return R.string.result_kind_translation;
+            case SEND_TRANSLATION: return R.string.result_kind_send_translation;
             default: throw new AssertionError(testKind);
         }
     }
