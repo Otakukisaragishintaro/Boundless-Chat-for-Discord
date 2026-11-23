@@ -76,8 +76,8 @@ public final class OutboundButtonConfig {
         }
         try {
             JSONArray array = new JSONArray(json);
-            if (array.length() < 1 || array.length() > MAX_BUTTONS) {
-                throw new IllegalArgumentException("发送按钮数量必须为 1 到 " + MAX_BUTTONS);
+            if (array.length() > MAX_BUTTONS) {
+                throw new IllegalArgumentException("发送按钮最多 " + MAX_BUTTONS + " 个");
             }
             List<OutboundButtonConfig> result = new ArrayList<>();
             Set<String> ids = new HashSet<>();
@@ -98,8 +98,8 @@ public final class OutboundButtonConfig {
     }
 
     public static String toJson(List<OutboundButtonConfig> buttons) {
-        if (buttons == null || buttons.isEmpty() || buttons.size() > MAX_BUTTONS) {
-            throw new IllegalArgumentException("至少保留一个发送按钮，最多 " + MAX_BUTTONS + " 个");
+        if (buttons == null || buttons.size() > MAX_BUTTONS) {
+            throw new IllegalArgumentException("发送按钮最多 " + MAX_BUTTONS + " 个");
         }
         JSONArray array = new JSONArray();
         Set<String> ids = new HashSet<>();
