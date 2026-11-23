@@ -68,6 +68,14 @@ public class ModuleEntry extends XposedModule {
     private volatile boolean restartRequired;
     private volatile boolean bootstrapInstalled;
     private volatile HookConfiguration hookConfiguration;
+    @Nullable private SharedPreferences cacheCommandPreferences;
+    private final SharedPreferences.OnSharedPreferenceChangeListener cacheCommandListener =
+            (sharedPreferences, key) -> {
+                if (Config.KEY_CACHE_CLEAR_REQUEST.equals(key)) {
+                    TranslationCache.get().clear();
+                    ProjectLog.info("local translation cache cleared by settings command");
+                }
+            };
 
     // ------------------------------------------------------------ 生命周期
 
@@ -254,6 +262,7 @@ public class ModuleEntry extends XposedModule {
             // Keep the translation cache in Discord's private app storage so it survives
             // Discord relogins and process restarts without exposing it to another app.
             TranslationCache.initialize(context);
+            attachCacheCommandListener();
             install(cl, config);
             installed = true;
             ProjectLog.bootstrapInfo("Discord required hooks installed and runtime activated");
@@ -418,6 +427,7 @@ public class ModuleEntry extends XposedModule {
             if (!InlineIconSpan.resetAll(2000L)) {
                 throw new IllegalStateException("Inline icon cleanup incomplete; restart Discord required");
             }
+            detachCacheCommandListener();
             ChatInputTranslateButton.clear();
             int failures = HookCleanup.remove(hooks, XposedInterface.HookHandle::unhook);
             if (failures != 0) {
@@ -460,6 +470,34 @@ public class ModuleEntry extends XposedModule {
             ProjectLog.configure(Config.invalidSnapshot());
             ProjectLog.bootstrapWarn("remote preferences initialization failed errorClass="
                     + failure.getClass().getSimpleName());
+        }
+    }
+
+    private void attachCacheCommandListener() {
+        try {
+            SharedPreferences remote = getRemotePreferences(Config.GROUP);
+            if (remote == null) return;
+            if (cacheCommandPreferences != null && cacheCommandPreferences != remote) {
+                cacheCommandPreferences.unregisterOnSharedPreferenceChangeListener(
+                        cacheCommandListener);
+            }
+            cacheCommandPreferences = remote;
+            remote.registerOnSharedPreferenceChangeListener(cacheCommandListener);
+        } catch (Throwable failure) {
+            ProjectLog.warn("cache command listener unavailable errorClass="
+                    + failure.getClass().getSimpleName());
+        }
+    }
+
+    private void detachCacheCommandListener() {
+        SharedPreferences remote = cacheCommandPreferences;
+        cacheCommandPreferences = null;
+        if (remote != null) {
+            try {
+                remote.unregisterOnSharedPreferenceChangeListener(cacheCommandListener);
+            } catch (Throwable ignored) {
+                // Best-effort teardown.
+            }
         }
     }
 
