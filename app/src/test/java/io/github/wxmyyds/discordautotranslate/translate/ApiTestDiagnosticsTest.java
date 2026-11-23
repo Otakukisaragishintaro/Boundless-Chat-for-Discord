@@ -565,6 +565,8 @@ public class ApiTestDiagnosticsTest {
             ApiTester.Result result = harness.call(ApiTester.TestKind.TRANSLATION, input);
             assertFailure(result, ApiTester.TestKind.TRANSLATION, TranslationException.Kind.PARSE,
                     TranslationException.Reason.TRANSLATION_INVALID, 200, "TranslationException");
+            assertTrue(result.failure.detail.contains("疑似内容丢失"));
+            assertFalse(result.failure.detail.contains("1/"));
             assertEntries(enabled, start(ApiTester.TestKind.TRANSLATION, CHAT, false),
                     "api.http.response httpStatus=200", completion(result));
             for (Entry entry : entries) {
