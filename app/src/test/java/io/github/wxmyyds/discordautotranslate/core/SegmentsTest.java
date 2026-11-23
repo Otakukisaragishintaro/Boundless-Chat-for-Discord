@@ -58,6 +58,27 @@ public class SegmentsTest {
     }
 
     @Test
+    public void validationChecksCanBeDisabledIndependentlyAndLengthRatiosAreConfigurable() {
+        String wrapped = "<translate>hello</translate>";
+        assertEquals("译文包含包装标签", Segments.plainTextViolation(wrapped, "hello"));
+        assertNull(Segments.plainTextViolation(wrapped, "hello",
+                false, false, false, false, false, 10, 500));
+
+        String source = repeat('a', 40);
+        String shortTranslation = repeat('b', 8);
+        assertNotNull(Segments.plainTextViolation(shortTranslation, source,
+                false, false, false, false, true, 25, 500));
+        assertNull(Segments.plainTextViolation(shortTranslation, source,
+                false, false, false, false, true, 20, 500));
+
+        String longTranslation = repeat('b', 220);
+        assertNotNull(Segments.plainTextViolation(longTranslation, source,
+                false, false, false, false, true, 10, 500));
+        assertNull(Segments.plainTextViolation(longTranslation, source,
+                false, false, false, false, true, 10, 600));
+    }
+
+    @Test
     public void plainTextViolationChecksEmptyTextBeforeOtherValidation() {
         for (String text : new String[]{null, "", " \n\t "}) {
             assertEquals("译文为空", Segments.plainTextViolation(text, "hello<keep1/>"));
