@@ -40,7 +40,7 @@ public final class Segments {
      * 拦下，判失败由用户手动重试。</p>
      *
      * <p>长度比例只对较长的原文（≥40 字符）生效：正常中英互译长度在
-     * 0.25×～3× 之间，复读刷屏会明显超出，内容丢失会明显不足；
+     * 0.10×～5× 之间，极端比例才直接拒绝；中等偏差由诊断日志记录并供测试界面定位；
      * 过短的文本比例噪声太大，不做校验。</p>
      *
      * @return 违规描述；合格返回 null
@@ -66,13 +66,13 @@ public final class Segments {
         String sourceWithoutKeep = RetainedNodeMarkers.withoutMarkers(source);
         String translationWithoutKeep = RetainedNodeMarkers.withoutMarkers(translated);
         if (translationWithoutKeep.trim().isEmpty()) return "译文为空";
-        int n = sourceWithoutKeep.length();
+        int n = sourceWithoutKeep.codePointCount(0, sourceWithoutKeep.length());
         if (n >= 40) {
-            int m = translationWithoutKeep.length();
-            if (m * 4 < n) {
+            int m = translationWithoutKeep.codePointCount(0, translationWithoutKeep.length());
+            if (m * 10 < n) {
                 return "译文长度异常（" + m + "/" + n + "）：疑似内容丢失";
             }
-            if (m > n * 3) {
+            if (m > n * 5) {
                 return "译文长度异常（" + m + "/" + n + "）：疑似复读";
             }
         }
