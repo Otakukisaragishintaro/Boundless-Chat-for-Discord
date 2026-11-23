@@ -94,9 +94,14 @@ public final class ChatInputTranslateButton {
 
     /** Called from Activity.onResume on the main thread. */
     public static void attach(Activity activity) {
-        // Capture the actual focused editor hierarchy before attempting button discovery.
-        ChatInputViewDiagnostics.attach(activity);
         if (activity == null || activity.getWindow() == null) return;
+        // Diagnostics must never prevent the actual button hook from attaching.
+        try {
+            ChatInputViewDiagnostics.attach(activity);
+        } catch (Throwable failure) {
+            ProjectLog.warn("chat input hierarchy diagnostics failed errorClass="
+                    + failure.getClass().getSimpleName());
+        }
         View decor = activity.getWindow().getDecorView();
         ViewTreeObserver observer = decor.getViewTreeObserver();
         if (!observer.isAlive()) return;
@@ -191,6 +196,11 @@ public final class ChatInputTranslateButton {
 
     private static void updateFocusedEditor(Activity activity, Registration registration, View focused) {
         if (!(focused instanceof EditText)) {
+            if (focused != null) {
+                ProjectLog.infoOnce("chat-input-non-edittext-focus",
+                        "chat input focus target is not EditText class="
+                                + focused.getClass().getName());
+            }
             if (registration.binding != null
                     && !registration.binding.editor.isAttachedToWindow()) {
                 removeBinding(registration);
