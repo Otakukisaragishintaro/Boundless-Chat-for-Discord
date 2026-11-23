@@ -13,6 +13,7 @@ public class DiagnosticProviderTest {
         String[] events = {
                 "module lifecycle entered",
                 "diagnostic bootstrap context acquired before Application.attach",
+                "diagnostic bootstrap context unavailable errorClass=IllegalStateException",
                 "Discord package lifecycle entered",
                 "Application.attach bootstrap hook installed",
                 "Discord Application.attach hook triggered",
