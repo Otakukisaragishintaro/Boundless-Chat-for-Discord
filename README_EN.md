@@ -1,8 +1,12 @@
-# Discord AutoTranslate
+# Boundless Chat for Discord
 
 [简体中文](README.md) · [中文安装教程](docs/INSTALLATION_ZH.md) · [English installation guide](docs/INSTALLATION_EN.md)
 
-An LSPosed module for automatic translation in the official Discord Android app, built on LibXposed API 102. Eligible message text is sent to a translation service configured by the user.
+**Boundless Chat for Discord** is an independently maintained Android LSPosed translation module by **Kuorshin**, and the first project in the **Boundless Chat** series. It is an independent downstream project based on WXM YYDS's original DiscordAutoTranslate and uses LibXposed API 102. Eligible message text is sent to a translation service configured by the user.
+
+- [Latest release](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/releases/latest)
+- [GitHub Actions builds](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/actions)
+- [Project origin and licensing](NOTICE.md)
 
 ## Features
 
@@ -34,7 +38,7 @@ Only the listed Discord versions are currently supported. Thread previews, image
 ## Installation
 
 1. Install the module APK.
-2. Open LSPosed, enable **Discord AutoTranslate**, and add the official Discord package `com.discord` to the module scope.
+2. Open LSPosed, enable **Boundless Chat for Discord**, and add the official Discord package `com.discord` to the module scope.
 3. Open the module settings and enter your translation API base URL, API key, and model. Select the protocol and incoming target language.
 4. Save the configuration and wait for LSPosed synchronization to succeed. Force-stop and restart Discord.
 5. Run **Configuration check**, **Test connection**, and **Test translation** before using the module. **Test outbound translation** validates the send-translation configuration without sending a Discord message.
@@ -60,10 +64,12 @@ Non-2xx upstream HTTP response bodies may be displayed in test results and recor
 - [Translation engine and configuration](docs/translation-engine.md)
 - [Validation, signing, and releases](docs/development.md)
 
-## Acknowledgements
+## Acknowledgements and project origin
 
-This repository is based on **DiscordAutoTranslate by WXM YYDS ([@wxmyyds](https://github.com/wxmyyds))**. Thank you for the original implementation, LibXposed integration, Discord compatibility profiles, architecture, and continued maintenance. This derivative adds configurable outbound translation buttons, per-button prompts, and related settings improvements.
+This is an independent downstream project in the **Boundless Chat** series, maintained by **Kuorshin**. It is not an official branch or merged release of the original project.
 
-The original project and this derivative are distributed under the MIT License. See [LICENSE](LICENSE) and [NOTICE.md](NOTICE.md).
+This project is based on **DiscordAutoTranslate by WXM YYDS ([@wxmyyds](https://github.com/wxmyyds))**. We thank the original author for the initial implementation, LibXposed integration, Discord compatibility profiles, architecture, and continued maintenance. Subsequent features, UI improvements, outbound translation buttons, per-button prompts, settings improvements, and downstream maintenance are independently developed by Kuorshin.
+
+Original upstream code remains under its original MIT License. Kuorshin's original contributions are separately licensed under [LICENSE-KUORSHIN.md](LICENSE-KUORSHIN.md). See [NOTICE.md](NOTICE.md) for scope and attribution details.
 
 This project is not affiliated with Discord Inc. Discord is a trademark of Discord Inc. Use of this module may be subject to Discord’s Terms of Service.
