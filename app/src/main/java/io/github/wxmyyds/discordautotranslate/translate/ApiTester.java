@@ -10,7 +10,7 @@ import io.github.wxmyyds.discordautotranslate.core.TranslationException;
 
 /** Settings tests share the production request, decoder and cancellation owner. */
 public final class ApiTester {
-    public enum TestKind { CONFIGURATION, CONNECTION, TRANSLATION }
+    public enum TestKind { CONFIGURATION, CONNECTION, TRANSLATION, SEND_TRANSLATION }
 
     /** Failure metadata plus the unmodified non-2xx HTTP error body for settings-test display. */
     public static final class Failure {
@@ -59,7 +59,8 @@ public final class ApiTester {
         private Result(TestKind testKind, @Nullable String translated, long elapsedMs,
                        @Nullable Failure failure) {
             this.ok = failure == null;
-            this.translated = failure == null && testKind == TestKind.TRANSLATION
+            this.translated = failure == null
+                    && (testKind == TestKind.TRANSLATION || testKind == TestKind.SEND_TRANSLATION)
                     ? translated : null;
             this.elapsedMs = elapsedMs;
             this.testKind = testKind;
@@ -74,7 +75,9 @@ public final class ApiTester {
 
     /** Create before executor submission so cancellation also covers queued work. */
     public static Call newCall(Config.Snapshot cfg, TestKind testKind, String text) {
-        return new Call(new JsonApiEngine(cfg), testKind, text, cfg);
+        Config.Snapshot requestConfig = testKind == TestKind.SEND_TRANSLATION
+                ? cfg.forSendTranslation() : cfg;
+        return new Call(new JsonApiEngine(requestConfig), testKind, text, cfg);
     }
 
     /** One-shot owner; page cancellation actively disconnects HTTP I/O. */
@@ -89,7 +92,8 @@ public final class ApiTester {
         @Nullable private Thread worker;
 
         Call(JsonApiEngine engine, TestKind testKind, String text, Config.Snapshot cfg) {
-            if (testKind != TestKind.CONNECTION && testKind != TestKind.TRANSLATION) {
+            if (testKind != TestKind.CONNECTION && testKind != TestKind.TRANSLATION
+                    && testKind != TestKind.SEND_TRANSLATION) {
                 throw new IllegalArgumentException("Network tests require a network test kind");
             }
             this.engine = engine;
@@ -119,7 +123,7 @@ public final class ApiTester {
             int responseStatus = 0;
             try {
                 JsonApiEngine.Exchange exchange = engine.execute(text,
-                        testKind == TestKind.TRANSLATION);
+                        testKind == TestKind.TRANSLATION || testKind == TestKind.SEND_TRANSLATION);
                 responseStatus = exchange.httpStatus;
                 result = new Result(testKind, exchange.translated, elapsed(start), null);
             } catch (Exception failure) {
