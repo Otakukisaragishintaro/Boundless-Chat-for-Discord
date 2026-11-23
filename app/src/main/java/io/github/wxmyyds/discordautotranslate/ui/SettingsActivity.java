@@ -1588,7 +1588,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         loggingInput.setEnabled(formAvailable);
         cacheEnabledInput.setEnabled(formAvailable);
         updateCacheEntryCount();
-        cacheLimitInput.setEnabled(formAvailable);\n        if (cacheApplyButton != null) cacheApplyButton.setEnabled(formAvailable && available);\n        if (apiApplyButton != null) apiApplyButton.setEnabled(formAvailable && available);\n        if (cacheSettingsButton != null) cacheSettingsButton.setEnabled(formAvailable);\n        if (apiSettingsButton != null) apiSettingsButton.setEnabled(formAvailable);
+        cacheLimitInput.setEnabled(formAvailable);
+        if (cacheApplyButton != null) cacheApplyButton.setEnabled(formAvailable && available);
+        if (apiApplyButton != null) apiApplyButton.setEnabled(formAvailable && available);
+        if (cacheSettingsButton != null) cacheSettingsButton.setEnabled(formAvailable);
+        if (apiSettingsButton != null) apiSettingsButton.setEnabled(formAvailable);
         clearCacheButton.setEnabled(formAvailable && remotePrefs != null);
         checkWrapperInput.setEnabled(formAvailable);
         stripOuterWrapperInput.setEnabled(formAvailable);
