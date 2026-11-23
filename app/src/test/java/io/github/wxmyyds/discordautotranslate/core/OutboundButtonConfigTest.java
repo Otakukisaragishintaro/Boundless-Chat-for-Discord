@@ -32,6 +32,22 @@ public class OutboundButtonConfigTest {
     }
 
     @Test
+    public void requestSnapshotUsesSelectedButtonsLanguageAndPrompt() {
+        List<OutboundButtonConfig> buttons = new ArrayList<>();
+        buttons.add(OutboundButtonConfig.create("日语发送", "日本語", "Japanese prompt"));
+        buttons.add(OutboundButtonConfig.create("英语发送", "English", "English prompt"));
+        MemoryPrefs prefs = new MemoryPrefs();
+        prefs.put(Config.KEY_OUTBOUND_BUTTONS, OutboundButtonConfig.toJson(buttons));
+        Config.Snapshot base = Config.read(prefs);
+        Config.Snapshot japanese = base.forSendTranslation(base.outboundButtons.get(0));
+        Config.Snapshot english = base.forSendTranslation(base.outboundButtons.get(1));
+        assertEquals("日本語", japanese.targetLang);
+        assertEquals("Japanese prompt", japanese.systemPrompt);
+        assertEquals("English", english.targetLang);
+        assertEquals("English prompt", english.systemPrompt);
+    }
+
+    @Test
     public void emptyArrayDisablesAllButtons() {
         assertTrue(OutboundButtonConfig.parse("[]", "English",
                 Config.DEF_SEND_SYSTEM_PROMPT).isEmpty());
