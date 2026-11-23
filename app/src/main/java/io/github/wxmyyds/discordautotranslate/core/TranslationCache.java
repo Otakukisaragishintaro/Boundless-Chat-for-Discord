@@ -23,7 +23,7 @@ import java.util.Map;
  */
 public final class TranslationCache {
     private static final int MEMORY_ENTRIES = 512;
-    private static final int DISK_ENTRIES = 10000;
+    private static final int DEFAULT_DISK_ENTRIES = 100000;
     private static final String DATABASE_NAME = "boundless_translation_cache.db";
     private static final String TABLE = "translations";
 
@@ -64,6 +64,7 @@ public final class TranslationCache {
     }
 
     private final int maxMemoryEntries;
+    private volatile int maxDiskEntries = DEFAULT_DISK_ENTRIES;
     private final LinkedHashMap<String, String> memory;
     private DatabaseHelper helper;
     private SQLiteDatabase database;
@@ -107,6 +108,24 @@ public final class TranslationCache {
         }
     }
 
+    /** Change the persistent LRU capacity without deleting entries unnecessarily. */
+    public synchronized void setMaxDiskEntries(int maxEntries) {
+        int bounded = maxEntries == 1000000 ? 1000000 : 100000;
+        maxDiskEntries = bounded;
+        SQLiteDatabase db = database();
+        if (db != null) prune(db);
+    }
+
+    private void prune(SQLiteDatabase db) {
+        try {
+            db.execSQL("DELETE FROM " + TABLE
+                    + " WHERE cache_key NOT IN (SELECT cache_key FROM " + TABLE
+                    + " ORDER BY last_access DESC LIMIT " + maxDiskEntries + ")");
+        } catch (Throwable ignored) {
+            // Capacity maintenance must not interrupt translation.
+        }
+    }
+
     /** Store only successful, non-empty translations. */
     public synchronized void put(String key, String translated) {
         if (key == null || key.isEmpty() || translated == null || translated.isEmpty()) return;
@@ -121,9 +140,7 @@ public final class TranslationCache {
             values.put("last_access", System.currentTimeMillis());
             db.insertWithOnConflict(TABLE, null, values, SQLiteDatabase.CONFLICT_REPLACE);
             // Keep the persistent cache bounded using least-recently-used access timestamps.
-            db.execSQL("DELETE FROM " + TABLE
-                    + " WHERE cache_key NOT IN (SELECT cache_key FROM " + TABLE
-                    + " ORDER BY last_access DESC LIMIT " + DISK_ENTRIES + ")");
+            prune(db);
         } catch (Throwable ignored) {
             // Memory cache remains useful even when persistent storage is unavailable.
         }
