@@ -1,30 +1,44 @@
 package io.github.wxmyyds.discordautotranslate.core;
 
-import android.util.Log;
-import android.app.Application;
+import android.content.ContentResolver;
+import android.content.Context;
+import android.net.Uri;
+import android.os.Bundle;
 import android.os.Process;
-import android.content.SharedPreferences;
+import android.util.Log;
 
 import androidx.annotation.Nullable;
 
+import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Sole project log output. Fixed diagnostics; raw non-2xx upstream error bodies are the sole content exception.
+ * Sole project log output. Discord-process diagnostics are sent through a restricted
+ * ContentProvider IPC channel; remote Xposed preferences are read-only in hooked apps.
  */
 public final class ProjectLog {
     private static final String TAG = "DiscordAutoTranslate";
     private static final Set<String> REPORTED = new HashSet<>();
+    private static final ArrayDeque<PendingDiagnostic> PENDING = new ArrayDeque<>();
+    private static final int MAX_PENDING = 40;
     private static boolean enabled;
-    private static final String STORAGE_KEY = "__project_log_buffer_v1";
-    private static final int MAX_BUFFER_CHARS = 24000;
-    @Nullable private static SharedPreferences storage;
+    private static boolean configurationValid;
+    @Nullable private static Context transportContext;
+    @Nullable private static Uri transportUri;
     @Nullable private static Output framework;
 
-    /** Optional framework destination in addition to logcat; owned by ModuleEntry. */
     public interface Output {
         void write(int priority, String tag, String message);
+    }
+
+    private static final class PendingDiagnostic {
+        final int priority;
+        final String message;
+        PendingDiagnostic(int priority, String message) {
+            this.priority = priority;
+            this.message = message;
+        }
     }
 
     private ProjectLog() {}
@@ -33,43 +47,37 @@ public final class ProjectLog {
         framework = output;
     }
 
-    /** Persist the bounded diagnostic buffer in the same LSPosed remote preferences read by the settings UI. */
-    public static synchronized void setStorage(@Nullable SharedPreferences preferences) {
-        storage = preferences;
-    }
-
     /**
-     * Emit a fixed lifecycle diagnostic even when the user log gate is disabled or
-     * remote preferences could not be acquired. This path never records user content.
+     * Attach the IPC transport only after Discord Application.attach supplies a real
+     * target-process Context. The authority belongs to this module's own application.
      */
-    public static synchronized void bootstrapWarn(String message) {
-        write(Log.WARN, message, true);
-    }
-
-    /** Record a lifecycle checkpoint without depending on the configurable log gate. */
-    public static synchronized void bootstrapInfo(String message) {
-        write(Log.INFO, message, true);
+    public static synchronized void setTransport(
+            @Nullable Context context, @Nullable String modulePackageName) {
+        if (context == null || modulePackageName == null || modulePackageName.isEmpty()) {
+            transportContext = null;
+            transportUri = null;
+            return;
+        }
+        transportContext = context.getApplicationContext() == null
+                ? context : context.getApplicationContext();
+        transportUri = Uri.parse("content://" + modulePackageName + ".diagnostics");
+        flushPending();
+        reportConfiguration();
     }
 
     /** Invalid configuration cannot enable logging. Toggling never changes translation state. */
     public static synchronized void configure(Config.Snapshot snapshot) {
-        boolean next = snapshot.configError == null && snapshot.loggingEnabled;
-        if (enabled != next) REPORTED.clear();
-        enabled = next;
-        if (storage != null) {
-            try {
-                storage.edit()
-                        .putBoolean("__project_log_module_enabled", enabled)
-                        .putLong("__project_log_configured_at", System.currentTimeMillis())
-                        .remove("__project_log_storage_error")
-                        .commit();
-            } catch (Throwable failure) {
-                // The settings viewer exposes storage failures separately from log contents.
-            }
-        }
+        boolean nextValid = snapshot.configError == null;
+        boolean nextEnabled = nextValid && snapshot.loggingEnabled;
+        if (enabled != nextEnabled) REPORTED.clear();
+        enabled = nextEnabled;
+        configurationValid = nextValid;
+        reportConfiguration();
+        bootstrapInfo(nextValid
+                ? "module logging configuration initialized"
+                : "module logging configuration is invalid");
     }
 
-    /** Whether project diagnostics are currently enabled by the saved configuration. */
     public static synchronized boolean isEnabled() {
         return enabled;
     }
@@ -90,53 +98,92 @@ public final class ProjectLog {
         emit(Log.WARN, key, message);
     }
 
-    /** Serialize gate and both outputs: disabling waits for an already-started write. */
     private static synchronized void emit(int priority, @Nullable String key, String message) {
         if (!enabled || (key != null && !REPORTED.add(key))) return;
         write(priority, message, false);
     }
 
-    /** Shared output path. Bootstrap entries are fixed lifecycle facts, never message data. */
+    public static synchronized void bootstrapWarn(String message) {
+        write(Log.WARN, message, true);
+    }
+
+    public static synchronized void bootstrapInfo(String message) {
+        write(Log.INFO, message, true);
+    }
+
+    /** Bootstrap entries are fixed lifecycle facts and safe for the provider allow-list. */
     private static void write(int priority, String message, boolean force) {
-        // Bootstrap records are the independent proof that code executed inside a process.
-        // Include process identity so LSPosed/logcat output can distinguish Discord from settings.
+        String diagnostic = message == null ? "" : message;
         if (force) {
+            sendOrQueue(priority, diagnostic);
             String processName = "unknown";
             try {
-                String current = Application.getProcessName();
+                String current = android.app.Application.getProcessName();
                 if (current != null && !current.isEmpty()) processName = current;
             } catch (Throwable ignored) { }
-            message = "pid=" + Process.myPid() + " process=" + processName + " " + message;
-        }
-        if (storage != null) {
-            try {
-                String previous = storage.getString(STORAGE_KEY, "");
-                String updated = (previous == null ? "" : previous)
-                        + System.currentTimeMillis() + " " + (priority >= Log.WARN ? "W" : "I")
-                        + "/" + TAG + ": " + message + "\n";
-                if (updated.length() > MAX_BUFFER_CHARS) {
-                    updated = updated.substring(updated.length() - MAX_BUFFER_CHARS);
-                    int firstBreak = updated.indexOf("\n");
-                    if (firstBreak >= 0 && firstBreak + 1 < updated.length()) {
-                        updated = updated.substring(firstBreak + 1);
-                    }
-                }
-                boolean stored = storage.edit().putString(STORAGE_KEY, updated).commit();
-                if (!stored) Log.w(TAG, "diagnostic buffer commit returned false");
-            } catch (Throwable failure) {
-                try {
-                    storage.edit().putString("__project_log_storage_error",
-                            failure.getClass().getSimpleName()).commit();
-                } catch (Throwable ignored) { }
-            }
+            diagnostic = "pid=" + Process.myPid() + " process=" + processName + " " + diagnostic;
         }
         try {
-            Log.println(priority, TAG, message);
+            Log.println(priority, TAG, diagnostic);
         } catch (Throwable ignored) { }
         if (framework != null) {
             try {
-                framework.write(priority, TAG, message);
+                framework.write(priority, TAG, diagnostic);
             } catch (Throwable ignored) { }
+        }
+    }
+
+    private static void sendOrQueue(int priority, String message) {
+        if (transportContext != null && transportUri != null
+                && sendDiagnostic(priority, message)) {
+            return;
+        }
+        if (PENDING.size() >= MAX_PENDING) PENDING.removeFirst();
+        PENDING.addLast(new PendingDiagnostic(priority, message));
+    }
+
+    private static void flushPending() {
+        while (!PENDING.isEmpty()) {
+            PendingDiagnostic item = PENDING.peekFirst();
+            if (!sendDiagnostic(item.priority, item.message)) return;
+            PENDING.removeFirst();
+        }
+    }
+
+    private static boolean sendDiagnostic(int priority, String message) {
+        Context context = transportContext;
+        Uri uri = transportUri;
+        if (context == null || uri == null) return false;
+        try {
+            Bundle data = new Bundle();
+            data.putString("message", message);
+            data.putInt("priority", priority);
+            Bundle response = context.getContentResolver().call(uri, "append", null, data);
+            return response != null && response.getBoolean("accepted", false);
+        } catch (Throwable failure) {
+            try {
+                Log.w(TAG, "diagnostic IPC append failed errorClass="
+                        + failure.getClass().getSimpleName());
+            } catch (Throwable ignored) { }
+            return false;
+        }
+    }
+
+    private static void reportConfiguration() {
+        Context context = transportContext;
+        Uri uri = transportUri;
+        if (context == null || uri == null) return;
+        try {
+            Bundle data = new Bundle();
+            data.putBoolean("enabled", enabled);
+            data.putBoolean("valid", configurationValid);
+            Bundle response = context.getContentResolver().call(uri, "configure", null, data);
+            if (response == null || !response.getBoolean("accepted", false)) {
+                Log.w(TAG, "diagnostic IPC configuration acknowledgement failed");
+            }
+        } catch (Throwable failure) {
+            Log.w(TAG, "diagnostic IPC configuration failed errorClass="
+                    + failure.getClass().getSimpleName());
         }
     }
 }
