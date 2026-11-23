@@ -205,11 +205,9 @@ public class ModuleEntry extends XposedModule {
                             if (contextObject instanceof Context) {
                                 Context context = (Context) contextObject;
                                 if (TARGET_PACKAGE.equals(context.getPackageName())) {
-                                    // Retry remote-preference acquisition at the first point where
-                                    // the target Application context is fully attached. The earlier
-                                    // module/package callbacks can run before the remote store is
-                                    // ready; without this retry the settings UI would remain stuck
-                                    // at "process logging OFF / config not received" indefinitely.
+                                    // Establish the module-owned IPC route before emitting target-process
+                                    // diagnostics. Remote Xposed preferences are read-only in hooked apps.
+                                    ProjectLog.setTransport(context, getModuleApplicationInfo().packageName);
                                     configureLogging();
                                     ProjectLog.bootstrapInfo("Discord Application.attach reached; remote configuration acquisition retried");
                                     ProjectLog.info("Application.attach reached for Discord");
@@ -303,6 +301,7 @@ public class ModuleEntry extends XposedModule {
         }
         ProjectLog.info("installed hook profile versionCode=" + config.versionCode()
                 + " requiredHookIds=" + installedHookIds);
+        ProjectLog.bootstrapInfo("Discord hook profile installed versionCode=" + config.versionCode());
     }
 
     /**
@@ -360,7 +359,7 @@ public class ModuleEntry extends XposedModule {
                             }
                         }
                     }));
-            ProjectLog.info("chat input translate button lifecycle hooks installed");
+            ProjectLog.bootstrapInfo("chat input lifecycle hooks installed");
         } catch (Throwable failure) {
             ProjectLog.warn("chat input translate button hook installation failed errorClass="
                     + failure.getClass().getSimpleName());
@@ -437,15 +436,11 @@ public class ModuleEntry extends XposedModule {
 
     /** Read the log gate before any startup diagnostics, including unsupported versions. */
     private void configureLogging() {
-        // Do not leave a stale preferences handle in place if acquiring the current
-        // process' remote store fails.
-        ProjectLog.setStorage(null);
         try {
             SharedPreferences prefs = getRemotePreferences(Config.GROUP);
             if (prefs == null) {
                 throw new IllegalStateException("remote preferences unavailable");
             }
-            ProjectLog.setStorage(prefs);
             ProjectLog.bootstrapInfo("remote preferences acquired");
             Config.Snapshot snapshot = Config.read(prefs);
             ProjectLog.configure(snapshot);
@@ -462,7 +457,6 @@ public class ModuleEntry extends XposedModule {
     private void reloadConfig() {
         try {
             final SharedPreferences prefs = getRemotePreferences(Config.GROUP);
-            ProjectLog.setStorage(prefs);
             Config.Snapshot snapshot = Config.read(prefs);
             ProjectLog.configure(snapshot);
             HookBridge.get().updateConfig(snapshot);
