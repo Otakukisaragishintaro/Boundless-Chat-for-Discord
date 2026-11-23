@@ -36,6 +36,7 @@ import io.github.wxmyyds.discordautotranslate.core.Protocols;
 import io.github.wxmyyds.discordautotranslate.core.MemoryPrefs;
 import io.github.wxmyyds.discordautotranslate.core.PreferenceCommit;
 import io.github.wxmyyds.discordautotranslate.core.ProjectLog;
+import io.github.wxmyyds.discordautotranslate.core.DiagnosticProvider;
 import io.github.wxmyyds.discordautotranslate.translate.ApiTester;
 
 import java.util.ArrayList;
@@ -1325,37 +1326,42 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private void showProjectLogs() {
         String connectionState;
-        SharedPreferences source = remotePrefs;
+        SharedPreferences remote = remotePrefs;
         if (service != null) {
             try {
-                source = service.getRemotePreferences(Config.GROUP);
-                remotePrefs = source;
+                remote = service.getRemotePreferences(Config.GROUP);
+                remotePrefs = remote;
                 connectionState = chineseUi ? "已重新连接远程设置" : "Remote preferences refreshed";
             } catch (Throwable failure) {
                 connectionState = (chineseUi ? "远程设置读取失败：" : "Remote preferences unavailable: ")
                         + failure.getClass().getSimpleName();
-                source = null;
+                remote = null;
             }
         } else {
             connectionState = chineseUi ? "设置服务尚未连接" : "Settings service is not connected";
         }
+
+        // Discord writes diagnostics to this module-owned store through the restricted
+        // DiagnosticProvider. Never read process logs from Xposed remote preferences.
+        SharedPreferences diagnostics = getSharedPreferences(
+                DiagnosticProvider.PREFS_NAME, MODE_PRIVATE);
         boolean uiLoggingEnabled = loggingInput != null && loggingInput.isChecked();
-        boolean remoteConfigHasLoggingSetting = source != null
-                && source.contains(Config.KEY_LOGGING_ENABLED);
-        boolean remoteConfigLoggingEnabled = source != null
-                && source.getBoolean(Config.KEY_LOGGING_ENABLED, false);
-        long configuredAt = source == null ? 0L
-                : source.getLong("__project_log_configured_at", 0L);
-        // A missing acknowledgement is UNKNOWN, not OFF. The Discord process may
-        // have failed before remote preferences became available, so false is not proof.
-        boolean moduleLoggingEnabled = configuredAt > 0L && source != null
-                && source.getBoolean("__project_log_module_enabled", false);
-        String storageError = source == null ? "" : source.getString("__project_log_storage_error", "");
-        String logs = source == null ? "" : source.getString("__project_log_buffer_v1", "");
+        boolean remoteConfigHasLoggingSetting = remote != null
+                && remote.contains(Config.KEY_LOGGING_ENABLED);
+        boolean remoteConfigLoggingEnabled = remote != null
+                && remote.getBoolean(Config.KEY_LOGGING_ENABLED, false);
+        long configuredAt = diagnostics.getLong(DiagnosticProvider.KEY_CONFIGURED_AT, 0L);
+        boolean moduleLoggingEnabled = diagnostics.getBoolean(
+                DiagnosticProvider.KEY_MODULE_ENABLED, false);
+        boolean configValid = diagnostics.getBoolean(DiagnosticProvider.KEY_CONFIG_VALID, false);
+        String logs = diagnostics.getString(DiagnosticProvider.KEY_BUFFER, "");
         if (logs == null) logs = "";
+
         StringBuilder display = new StringBuilder();
         if (!logs.trim().isEmpty()) display.append(logs);
-        else display.append(chineseUi ? "目前没有收集到日志。\n\n" : "No diagnostic entries collected yet.\n\n");
+        else display.append(chineseUi
+                ? "目前还没有收到 Discord 进程的诊断记录。请完全退出并重新打开 Discord 后刷新。\n\n"
+                : "No Discord-process diagnostics received yet. Fully close and reopen Discord, then refresh.\n\n");
         display.append("\n--- ").append(chineseUi ? "诊断状态" : "Diagnostic status").append(" ---\n")
                 .append(chineseUi ? "设置页日志开关：" : "Settings toggle: ")
                 .append(uiLoggingEnabled ? "ON" : "OFF").append('\n')
@@ -1363,24 +1369,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .append(!remoteConfigHasLoggingSetting ? "MISSING"
                         : remoteConfigLoggingEnabled ? "ON" : "OFF").append('\n')
                 .append(chineseUi ? "Discord 进程日志开关：" : "Discord process logging: ")
-                .append(configuredAt == 0L
-                        ? (chineseUi ? "UNKNOWN（未收到 Discord 进程回执，不能判定 OFF）"
-                                : "UNKNOWN (no Discord-process acknowledgement; OFF cannot be inferred)")
-                        : moduleLoggingEnabled ? "ON" : "OFF").append('\n')
-                .append(chineseUi ? "模块配置时间：" : "Module config time: ")
-                .append(configuredAt == 0L ? (chineseUi ? "尚未收到 Discord 进程回执" : "no Discord-process acknowledgement")
+                .append(configuredAt == 0L ? "UNKNOWN"
+                        : !configValid ? "INVALID" : moduleLoggingEnabled ? "ON" : "OFF").append('\n')
+                .append(chineseUi ? "Discord 进程回执时间：" : "Discord process acknowledgement: ")
+                .append(configuredAt == 0L ? (chineseUi ? "尚未收到" : "not received")
                         : new java.text.SimpleDateFormat("yyyy-MM-dd HH:mm:ss", java.util.Locale.getDefault())
                                 .format(new java.util.Date(configuredAt))).append('\n')
                 .append(chineseUi ? "独立诊断通道：" : "Independent diagnostics: ")
                 .append(chineseUi
-                        ? "Discord 进程会直接写入 Android Logcat（标签：DiscordAutoTranslate），不依赖远程设置存储。"
-                        : "Discord writes bootstrap checkpoints directly to Android Logcat (tag: DiscordAutoTranslate), independent of remote preferences.")
+                        ? "ContentProvider IPC（仅接受已验证的 Discord UID 和白名单生命周期事件）"
+                        : "ContentProvider IPC (verified Discord UID; allow-listed lifecycle events only)")
                 .append('\n')
                 .append(chineseUi ? "设置连接：" : "Settings connection: ")
                 .append(connectionState);
-        if (storageError != null && !storageError.trim().isEmpty()) {
-            display.append('\n').append(chineseUi ? "日志存储错误：" : "Log storage error: ").append(storageError);
-        }
+
         final String displayed = display.toString();
         TextView content = new TextView(this);
         content.setText(displayed);
