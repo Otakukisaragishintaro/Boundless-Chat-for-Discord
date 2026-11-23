@@ -93,6 +93,8 @@ public final class Config {
 
     /** Independent system prompt for translating messages before they are sent. */
     public static final String KEY_SEND_SYSTEM_PROMPT = "send_system_prompt";
+    /** JSON array of independently configured outbound translation buttons. */
+    public static final String KEY_OUTBOUND_BUTTONS = "outbound_translation_buttons";
 
     /**
      * 默认系统提示词。
@@ -172,6 +174,8 @@ public final class Config {
         public final String extraHeaders;
         public final String systemPrompt;
         public final String sendSystemPrompt;
+        public final String outboundButtonsJson;
+        public final java.util.List<OutboundButtonConfig> outboundButtons;
         /** 供应商协议，取值为 {@link #PROTOCOL_OPENAI_COMPATIBLE}、
          * {@link #PROTOCOL_OPENAI_RESPONSES} 或 {@link #PROTOCOL_ANTHROPIC_MESSAGES}。 */
         public final String protocol;
@@ -203,6 +207,10 @@ public final class Config {
             extraHeaders = str(p, KEY_EXTRA_HEADERS, DEF_EXTRA_HEADERS);
             systemPrompt = str(p, KEY_SYSTEM_PROMPT, DEF_SYSTEM_PROMPT);
             sendSystemPrompt = str(p, KEY_SEND_SYSTEM_PROMPT, DEF_SEND_SYSTEM_PROMPT);
+            outboundButtonsJson = p.contains(KEY_OUTBOUND_BUTTONS)
+                    ? str(p, KEY_OUTBOUND_BUTTONS, "") : "";
+            outboundButtons = OutboundButtonConfig.parse(
+                    outboundButtonsJson, sendTargetLang, sendSystemPrompt);
             protocol = readProtocol(p);
             streaming = readBoolean(p, KEY_STREAMING, DEF_STREAMING);
             timeoutMs = positiveInt(p, KEY_TIMEOUT_MS, DEF_TIMEOUT_MS);
@@ -234,6 +242,9 @@ public final class Config {
             extraHeaders = DEF_EXTRA_HEADERS;
             systemPrompt = DEF_SYSTEM_PROMPT;
             sendSystemPrompt = DEF_SEND_SYSTEM_PROMPT;
+            outboundButtonsJson = "";
+            outboundButtons = OutboundButtonConfig.defaults(
+                    DEF_SEND_TARGET_LANG, DEF_SEND_SYSTEM_PROMPT);
             protocol = DEF_PROTOCOL;
             streaming = DEF_STREAMING;
             timeoutMs = DEF_TIMEOUT_MS;
@@ -315,6 +326,7 @@ public final class Config {
         public String version() {
             return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
                     + encode(Boolean.toString(streaming)) + encode(systemPrompt) + encode(sendSystemPrompt)
+                    + encode(outboundButtonsJson)
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
                     + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
                     + encode(Boolean.toString(checkRetainedMarkers)) + encode(Boolean.toString(checkLength))
@@ -339,22 +351,35 @@ public final class Config {
          * Incoming translation preferences and cache identity remain untouched.
          */
         public Snapshot forSendTranslation() {
-            return new Snapshot(this);
+            OutboundButtonConfig button = outboundButtons.isEmpty()
+                    ? OutboundButtonConfig.defaults(sendTargetLang, sendSystemPrompt).get(0)
+                    : outboundButtons.get(0);
+            return forSendTranslation(button);
+        }
+
+        public Snapshot forSendTranslation(OutboundButtonConfig button) {
+            return new Snapshot(this, button);
         }
 
         private Snapshot(Snapshot source) {
+            this(source, null);
+        }
+
+        private Snapshot(Snapshot source, @Nullable OutboundButtonConfig outboundButton) {
             enabled = source.enabled;
             loggingEnabled = source.loggingEnabled;
             translationScope = source.translationScope;
             apiUrl = source.apiUrl;
             apiKey = source.apiKey;
             model = source.model;
-            targetLang = source.sendTargetLang;
-            sendTargetLang = source.sendTargetLang;
+            targetLang = outboundButton == null ? source.sendTargetLang
+                    : outboundButton.targetLanguage;
+            sendTargetLang = targetLang;
             extraHeaders = source.extraHeaders;
             // Outbound translation uses its own independently editable prompt.
-            systemPrompt = source.sendSystemPrompt;
-            sendSystemPrompt = source.sendSystemPrompt;
+            systemPrompt = outboundButton == null ? source.sendSystemPrompt
+                    : outboundButton.systemPrompt;
+            sendSystemPrompt = systemPrompt;
             protocol = source.protocol;
             streaming = source.streaming;
             configError = source.configError;
@@ -368,6 +393,8 @@ public final class Config {
             checkLength = source.checkLength;
             minLengthPercent = source.minLengthPercent;
             maxLengthPercent = source.maxLengthPercent;
+            outboundButtonsJson = source.outboundButtonsJson;
+            outboundButtons = source.outboundButtons;
         }
 
         /** 是否已具备发起请求的最小配置。 */
