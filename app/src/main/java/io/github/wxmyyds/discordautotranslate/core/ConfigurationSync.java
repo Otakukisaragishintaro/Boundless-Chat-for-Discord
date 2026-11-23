@@ -13,7 +13,8 @@ public final class ConfigurationSync {
     public static final List<String> CONFIG_KEYS = Collections.unmodifiableList(Arrays.asList(
             Config.KEY_ENABLED, Config.KEY_LOGGING_ENABLED, Config.KEY_TRANSLATION_SCOPE, Config.KEY_API_URL,
             Config.KEY_API_KEY, Config.KEY_MODEL,
-            Config.KEY_TARGET_LANG, Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT,
+            Config.KEY_TARGET_LANG, Config.KEY_SEND_TARGET_LANG,
+            Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT,
             Config.KEY_PROTOCOL, Config.KEY_STREAMING, Config.KEY_TIMEOUT_MS,
             Config.KEY_MAX_CONCURRENCY));
     private static final String KEY_LOCAL_INITIALIZED = "settings_initialized";
@@ -219,6 +220,8 @@ public final class ConfigurationSync {
             putUnlessDefault(raw, Config.KEY_API_KEY, snapshot.apiKey, Config.DEF_API_KEY);
             putUnlessDefault(raw, Config.KEY_MODEL, snapshot.model, Config.DEF_MODEL);
             putUnlessDefault(raw, Config.KEY_TARGET_LANG, snapshot.targetLang, Config.DEF_TARGET_LANG);
+            putUnlessDefault(raw, Config.KEY_SEND_TARGET_LANG, snapshot.sendTargetLang,
+                    Config.DEF_SEND_TARGET_LANG);
             putUnlessDefault(raw, Config.KEY_EXTRA_HEADERS, snapshot.extraHeaders,
                     Config.DEF_EXTRA_HEADERS);
             putUnlessDefault(raw, Config.KEY_SYSTEM_PROMPT, snapshot.systemPrompt,
