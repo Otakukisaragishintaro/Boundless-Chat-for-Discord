@@ -93,9 +93,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
             if (validateTranslation) {
                 String violation = Segments.plainTextViolation(translated, text);
                 if (violation != null) {
+                    String safeViolation = violation.replaceAll("（[0-9]+/[0-9]+）", "");
                     throw new TranslationException(TranslationException.Kind.PARSE,
                             TranslationException.Reason.TRANSLATION_INVALID,
-                            "译文未通过防损坏校验：" + violation, response.status, null);
+                            "译文未通过防损坏校验：" + safeViolation, response.status, null);
                 }
             }
             request.checkCancelled();
