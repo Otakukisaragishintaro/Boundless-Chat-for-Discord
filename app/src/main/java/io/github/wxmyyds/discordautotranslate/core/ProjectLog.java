@@ -41,6 +41,17 @@ public final class ProjectLog {
         boolean next = snapshot.configError == null && snapshot.loggingEnabled;
         if (enabled != next) REPORTED.clear();
         enabled = next;
+        if (storage != null) {
+            try {
+                storage.edit()
+                        .putBoolean("__project_log_module_enabled", enabled)
+                        .putLong("__project_log_configured_at", System.currentTimeMillis())
+                        .remove("__project_log_storage_error")
+                        .commit();
+            } catch (Throwable failure) {
+                // The settings viewer exposes storage failures separately from log contents.
+            }
+        }
     }
 
     /** Whether project diagnostics are currently enabled by the saved configuration. */
@@ -84,8 +95,12 @@ public final class ProjectLog {
                 if (!stored) {
                     Log.w(TAG, "diagnostic buffer commit returned false");
                 }
-            } catch (Throwable ignored) {
-                // Persistent diagnostics are optional and must never affect Discord.
+            } catch (Throwable failure) {
+                try {
+                    storage.edit().putString("__project_log_storage_error",
+                            failure.getClass().getSimpleName() + ": "
+                                    + String.valueOf(failure.getMessage())).commit();
+                } catch (Throwable ignored) { }
             }
         }
         try {
