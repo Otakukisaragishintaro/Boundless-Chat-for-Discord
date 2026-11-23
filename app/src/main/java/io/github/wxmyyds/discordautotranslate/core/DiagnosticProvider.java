@@ -154,7 +154,7 @@ public final class DiagnosticProvider extends ContentProvider {
     }
 
     /** Accept only fixed lifecycle checkpoints; never persist arbitrary application text. */
-    private static boolean isAllowedDiagnostic(String message) {
+    static boolean isAllowedDiagnostic(String message) {
         if (message == null || message.isEmpty()) return false;
         return message.equals("module lifecycle entered")
                 || message.equals("Discord package lifecycle entered")
