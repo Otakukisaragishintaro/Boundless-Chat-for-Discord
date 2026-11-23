@@ -216,7 +216,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             outboundButtonsDialog.dismiss();
             outboundButtonsDialog = null;
         }
-        if (cacheSettingsDialog != null) { cacheSettingsDialog.dismiss(); cacheSettingsDialog = null; }\n        if (apiSettingsDialog != null) { apiSettingsDialog.dismiss(); apiSettingsDialog = null; }\n        if (advancedSettingsDialog != null) {
+        if (cacheSettingsDialog != null) { cacheSettingsDialog.dismiss(); cacheSettingsDialog = null; }
+        if (apiSettingsDialog != null) { apiSettingsDialog.dismiss(); apiSettingsDialog = null; }\n        if (advancedSettingsDialog != null) {
             advancedSettingsDialog.dismiss();
             advancedSettingsDialog = null;
         }
@@ -533,7 +534,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         // API、服务协议与流式请求集中在独立二级菜单中。
         apiBacking = new LinearLayout(this);
-        apiBacking.setOrientation(LinearLayout.VERTICAL);\n        // 供应商协议：请求体与译文解析按所选协议内置实现，
+        apiBacking.setOrientation(LinearLayout.VERTICAL);
+        // 供应商协议：请求体与译文解析按所选协议内置实现，
         // 不再让用户手写 JSON 请求模板与译文提取路径。
         TextView protocolLabel = new TextView(this);
         protocolLabel.setText(R.string.label_protocol);
@@ -551,18 +553,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 updateStreamingAvailability();
                 markSpinnerDirty();
+                if (!loadingUi && hasUnsavedChanges) save();
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 updateStreamingAvailability();
                 markSpinnerDirty();
+                if (!loadingUi && hasUnsavedChanges) save();
             }
         });
         TextView protocolHint = new TextView(this);
         protocolHint.setTextSize(12f);
         protocolHint.setText(R.string.hint_protocol);
-        root.addView(protocolHint, matchWrap());
+        apiBacking.addView(protocolHint, matchWrap());
 
         streamingInput = new Switch(this);
         streamingHint = addToggle(apiBacking, streamingInput, SettingsToggleText.Setting.STREAMING);
@@ -575,10 +579,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         urlInput = addField(apiBacking, getString(R.string.label_api_url),
                 getString(R.string.hint_api_url),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
+        addFieldApplyButton(apiBacking);
         keyInput = addField(apiBacking, getString(R.string.label_api_key), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        addFieldApplyButton(apiBacking);
         modelInput = addField(apiBacking, getString(R.string.label_model), Config.DEF_MODEL,
                 InputType.TYPE_CLASS_TEXT);
+        addFieldApplyButton(apiBacking);
         TextView targetLanguageLabel = new TextView(this);
         targetLanguageLabel.setText(R.string.label_target_language);
         targetLanguageLabel.setPadding(0, dp(8), 0, 0);
@@ -613,6 +620,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         sendTargetLanguageSpinner.setSelection(targetLanguagePosition(Config.DEF_SEND_TARGET_LANG));
         headersInput = addField(apiBacking, getString(R.string.label_headers), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        addFieldApplyButton(apiBacking);
 
         apiApplyButton = new Button(this);
         apiApplyButton.setText(R.string.button_apply_api_settings);
@@ -683,8 +691,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         timeoutInput = addField(apiBacking, getString(R.string.label_timeout),
                 String.valueOf(Config.DEF_TIMEOUT_MS), InputType.TYPE_CLASS_NUMBER);
+        addFieldApplyButton(apiBacking);
         concurrencyInput = addField(apiBacking, getString(R.string.label_concurrency),
                 String.valueOf(Config.DEF_MAX_CONCURRENCY), InputType.TYPE_CLASS_NUMBER);
+        addFieldApplyButton(apiBacking);
 
         testTextInput = addField(root, getString(R.string.label_test_text),
                 getString(R.string.hint_test_text),
@@ -997,6 +1007,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         return button;
     }
 
+    /** 每个文本配置项都有独立应用入口；输入内容在点击前只作为草稿显示。 */
+    private void addFieldApplyButton(LinearLayout parent) {
+        Button apply = new Button(this);
+        apply.setText(R.string.button_apply_field);
+        apply.setOnClickListener(view -> save());
+        parent.addView(apply, matchWrap());
+    }
+
     private EditText addField(LinearLayout parent, String label, String hint, int inputType) {
         TextView tv = new TextView(this);
         tv.setText(label);
@@ -1069,7 +1087,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         concurrencyInput.addTextChangedListener(watcher);
         minLengthPercentInput.addTextChangedListener(watcher);
         maxLengthPercentInput.addTextChangedListener(watcher);
-        testTextInput.addTextChangedListener(watcher);\n        cacheLimitInput.addTextChangedListener(watcher);
+        testTextInput.addTextChangedListener(watcher);
+        cacheLimitInput.addTextChangedListener(watcher);
         sendTestTextInput.addTextChangedListener(watcher);
     }
 
@@ -1566,7 +1585,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scopeButton.setEnabled(canOpenScopeEditor());
         scopeSummary.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         loggingInput.setEnabled(formAvailable);
-        cacheEnabledInput.setEnabled(formAvailable);\n        updateCacheEntryCount();
+        cacheEnabledInput.setEnabled(formAvailable);
+        updateCacheEntryCount();
         cacheLimitInput.setEnabled(formAvailable);\n        if (cacheApplyButton != null) cacheApplyButton.setEnabled(formAvailable && available);\n        if (apiApplyButton != null) apiApplyButton.setEnabled(formAvailable && available);\n        if (cacheSettingsButton != null) cacheSettingsButton.setEnabled(formAvailable);\n        if (apiSettingsButton != null) apiSettingsButton.setEnabled(formAvailable);
         clearCacheButton.setEnabled(formAvailable && remotePrefs != null);
         checkWrapperInput.setEnabled(formAvailable);
