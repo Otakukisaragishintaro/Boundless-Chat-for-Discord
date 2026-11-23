@@ -223,38 +223,6 @@ public class ModuleEntry extends XposedModule {
                     });
             hooks.add(handle);
 
-            // Fallback checkpoint: libxposed's package-ready callback is expected
-            // before Application creation, but vendor lifecycle differences must not
-            // leave diagnostics permanently disconnected if attach was missed.
-            java.lang.reflect.Method onCreate = Application.class.getDeclaredMethod("onCreate");
-            hooks.add(hook(onCreate)
-                    .setId("dat.applicationOnCreateFallback")
-                    .setExceptionMode(XposedInterface.ExceptionMode.PROTECTIVE)
-                    .intercept(chain -> {
-                        Object applicationObject = chain.getThisObject();
-                        try {
-                            if (applicationObject instanceof Application) {
-                                Application application = (Application) applicationObject;
-                                Context base = application.getBaseContext();
-                                if (base != null && TARGET_PACKAGE.equals(base.getPackageName())) {
-                                    ProjectLog.setTransport(base,
-                                            getModuleApplicationInfo().packageName);
-                                    configureLogging();
-                                    ProjectLog.bootstrapInfo(
-                                            "Discord Application.onCreate reached; diagnostic transport fallback");
-                                    if (!installed && !restartRequired) {
-                                        installForApplication(base, application.getClassLoader());
-                                    }
-                                }
-                            }
-                        } catch (Throwable failure) {
-                            ProjectLog.bootstrapWarn(
-                                    "Application.onCreate fallback failed errorClass="
-                                            + failure.getClass().getSimpleName());
-                        }
-                        return chain.proceed();
-                    }));
-
             bootstrapInstalled = true;
             ProjectLog.bootstrapInfo("Application.attach bootstrap hook installed");
             ProjectLog.bootstrapInfo("waiting for Discord Application.attach");
