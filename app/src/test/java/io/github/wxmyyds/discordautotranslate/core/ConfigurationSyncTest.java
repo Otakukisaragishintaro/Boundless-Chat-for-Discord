@@ -52,9 +52,11 @@ public class ConfigurationSyncTest {
     @Test
     public void sendTargetLanguageUsesTheSameImportAndSaveTransactionChain() {
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_TARGET_LANG));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_SYSTEM_PROMPT));
         FakePrefs local = localBeforeImport();
         FakePrefs remote = remoteValues();
         remote.memory.put(Config.KEY_SEND_TARGET_LANG, "日本語");
+        remote.memory.put(Config.KEY_SEND_SYSTEM_PROMPT, "Custom {{target_language}} prompt");
         local.outcomes.add(true);
 
         ConfigurationSync.Result imported = ConfigurationSync.synchronize(local.prefs, remote.prefs);
@@ -62,9 +64,12 @@ public class ConfigurationSyncTest {
         assertTrue(imported.imported());
         assertEquals("日本語", local.disk.get(Config.KEY_SEND_TARGET_LANG));
         assertEquals("日本語", ConfigurationSync.loadLocal(local.prefs).snapshot.sendTargetLang);
+        assertEquals("Custom {{target_language}} prompt",
+                ConfigurationSync.loadLocal(local.prefs).snapshot.sendSystemPrompt);
 
         Config.Snapshot snapshot = Config.read(new MemoryPrefs()
-                .put(Config.KEY_SEND_TARGET_LANG, "Français"));
+                .put(Config.KEY_SEND_TARGET_LANG, "Français")
+                .put(Config.KEY_SEND_SYSTEM_PROMPT, "Saved {{target_language}} prompt"));
         local.outcomes.add(true);
         remote.outcomes.add(true);
         ConfigurationSync.Result saved = ConfigurationSync.save(local.prefs, remote.prefs, snapshot);
@@ -72,6 +77,8 @@ public class ConfigurationSyncTest {
         assertTrue(saved.succeeded());
         assertEquals("Français", local.disk.get(Config.KEY_SEND_TARGET_LANG));
         assertEquals("Français", remote.disk.get(Config.KEY_SEND_TARGET_LANG));
+        assertEquals("Saved {{target_language}} prompt", local.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
+        assertEquals("Saved {{target_language}} prompt", remote.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
     }
 
     @Test
