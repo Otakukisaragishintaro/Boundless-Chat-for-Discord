@@ -64,14 +64,14 @@ public class ConfigurationSyncTest {
         assertEquals("日本語", ConfigurationSync.loadLocal(local.prefs).snapshot.sendTargetLang);
 
         Config.Snapshot snapshot = Config.read(new MemoryPrefs()
-                .put(Config.KEY_SEND_TARGET_LANG, "English"));
+                .put(Config.KEY_SEND_TARGET_LANG, "Français"));
         local.outcomes.add(true);
         remote.outcomes.add(true);
         ConfigurationSync.Result saved = ConfigurationSync.save(local.prefs, remote.prefs, snapshot);
 
         assertTrue(saved.succeeded());
-        assertEquals("English", local.disk.get(Config.KEY_SEND_TARGET_LANG));
-        assertEquals("English", remote.disk.get(Config.KEY_SEND_TARGET_LANG));
+        assertEquals("Français", local.disk.get(Config.KEY_SEND_TARGET_LANG));
+        assertEquals("Français", remote.disk.get(Config.KEY_SEND_TARGET_LANG));
     }
 
     @Test
