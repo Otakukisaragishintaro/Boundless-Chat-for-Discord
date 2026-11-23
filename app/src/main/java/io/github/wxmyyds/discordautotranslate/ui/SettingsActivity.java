@@ -217,7 +217,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             outboundButtonsDialog = null;
         }
         if (cacheSettingsDialog != null) { cacheSettingsDialog.dismiss(); cacheSettingsDialog = null; }
-        if (apiSettingsDialog != null) { apiSettingsDialog.dismiss(); apiSettingsDialog = null; }\n        if (advancedSettingsDialog != null) {
+        if (apiSettingsDialog != null) { apiSettingsDialog.dismiss(); apiSettingsDialog = null; }
+        if (advancedSettingsDialog != null) {
             advancedSettingsDialog.dismiss();
             advancedSettingsDialog = null;
         }
