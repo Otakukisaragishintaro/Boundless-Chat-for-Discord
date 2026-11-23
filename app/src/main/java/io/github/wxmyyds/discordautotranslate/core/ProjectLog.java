@@ -78,8 +78,10 @@ public final class ProjectLog {
             return true;
         } catch (Throwable failure) {
             Throwable cause = failure.getCause() == null ? failure : failure.getCause();
-            reportTransportStatus(Log.WARN, "diagnostic bootstrap context unavailable errorClass="
-                    + cause.getClass().getSimpleName());
+            String message = "diagnostic bootstrap context unavailable errorClass="
+                    + cause.getClass().getSimpleName();
+            reportTransportStatus(Log.WARN, message);
+            bootstrapWarn(message);
             return false;
         }
     }
