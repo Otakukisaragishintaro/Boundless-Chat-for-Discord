@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="module_name">Discord 自动翻译</string>
-    <string name="module_description">自动翻译 Discord 消息，可切换原文与译文。</string>
+    <string name="module_name">Boundless Chat for Discord</string>
+    <string name="module_description">翻译 Discord 消息，切换原文与译文，并使用可自定义的翻译发送按钮。</string>
     <string name="status_local_ready">设置保存在本机；LSPosed 可用时自动同步。</string>
     <string name="status_syncing">正在同步设置…</string>
     <string name="status_sync_pending">已保存在本机；LSPosed 重连后重试同步。</string>
