@@ -95,10 +95,12 @@ jobs:
             exit 1
           fi
           mkdir -p "$RUNNER_TEMP/keystore"
-          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore/release.jks"
-          chmod 600 "$RUNNER_TEMP/keystore/release.jks"
-          printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
-            "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEYSTORE_PASSWORD" \
+          printf '%s' "$KUROSHIN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore/kuroshinkey.jks"
+          chmod 600 "$RUNNER_TEMP/keystore/kuroshinkey.jks"
+          keytool -list -keystore "$RUNNER_TEMP/keystore/kuroshinkey.jks" \\
+            -storepass "$KUROSHIN_KEYSTORE_PASSWORD" -alias kuroshinkey > /dev/null
+          printf 'storeFile=kuroshinkey.jks\\nstorePassword=%s\\nkeyAlias=kuroshinkey\\nkeyPassword=%s\\n' \\
+            "$KUROSHIN_KEYSTORE_PASSWORD" "$KUROSHIN_KEYSTORE_PASSWORD" \\
             > "$RUNNER_TEMP/keystore/keystore.properties"
           chmod 600 "$RUNNER_TEMP/keystore/keystore.properties"
           echo "KEYSTORE_PROPERTIES=$RUNNER_TEMP/keystore/keystore.properties" >> "$GITHUB_ENV"
