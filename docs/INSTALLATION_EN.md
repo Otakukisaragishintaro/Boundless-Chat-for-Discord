@@ -1,4 +1,4 @@
-# Installation and Setup Guide
+# Boundless Chat for Discord — Installation and Setup Guide
 
 ## 1. Requirements
 
@@ -12,7 +12,7 @@ The module hooks the Discord client. Other Discord versions are not guaranteed t
 ## 2. Install and enable the module
 
 1. Install the module APK.
-2. Open LSPosed and enable **Discord AutoTranslate**.
+2. Open LSPosed and enable **Boundless Chat for Discord**.
 3. Add the official Discord app, package name `com.discord`, to the module scope.
 4. Complete any restart requested by LSPosed, then open the module settings activity.
 
