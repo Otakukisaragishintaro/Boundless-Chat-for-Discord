@@ -50,6 +50,31 @@ public class ConfigurationSyncTest {
     }
 
     @Test
+    public void sendTargetLanguageUsesTheSameImportAndSaveTransactionChain() {
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_TARGET_LANG));
+        FakePrefs local = localBeforeImport();
+        FakePrefs remote = remoteValues();
+        remote.memory.put(Config.KEY_SEND_TARGET_LANG, "日本語");
+        local.outcomes.add(true);
+
+        ConfigurationSync.Result imported = ConfigurationSync.synchronize(local.prefs, remote.prefs);
+
+        assertTrue(imported.imported());
+        assertEquals("日本語", local.disk.get(Config.KEY_SEND_TARGET_LANG));
+        assertEquals("日本語", ConfigurationSync.loadLocal(local.prefs).snapshot.sendTargetLang);
+
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_SEND_TARGET_LANG, "English"));
+        local.outcomes.add(true);
+        remote.outcomes.add(true);
+        ConfigurationSync.Result saved = ConfigurationSync.save(local.prefs, remote.prefs, snapshot);
+
+        assertTrue(saved.succeeded());
+        assertEquals("English", local.disk.get(Config.KEY_SEND_TARGET_LANG));
+        assertEquals("English", remote.disk.get(Config.KEY_SEND_TARGET_LANG));
+    }
+
+    @Test
     public void invalidScopeCannotCreateAnEditorOrOverwriteSavedRules() {
         for (Object value : new Object[]{"{}", "", false, 7}) {
             FakePrefs local = localBeforeImport();
