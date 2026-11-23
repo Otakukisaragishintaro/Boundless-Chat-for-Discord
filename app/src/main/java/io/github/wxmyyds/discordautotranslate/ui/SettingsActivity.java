@@ -1327,9 +1327,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         SharedPreferences source = remotePrefs;
         String logs = source == null ? "" : source.getString("__project_log_buffer_v1", "");
         if (logs == null || logs.trim().isEmpty()) {
-            logs = chineseUi
-                    ? "暂时没有日志。请确认已开启「项目日志」，保存设置并同步，然后重启 Discord。打开 Discord 聊天输入框后，再返回这里刷新。"
-                    : "No logs yet. Enable Project logs, save and sync settings, restart Discord, focus the chat input, then refresh here.";
+            String state;
+            if (source == null) {
+                state = chineseUi ? "远程设置连接：未连接" : "Remote settings: disconnected";
+            } else {
+                boolean enabled = source.getBoolean(Config.KEY_LOGGING_ENABLED, false);
+                state = chineseUi
+                        ? "远程设置连接：已连接\n项目日志开关：" + (enabled ? "已开启" : "未开启")
+                        : "Remote settings: connected\nProject logging: " + (enabled ? "enabled" : "disabled");
+            }
+            logs = (chineseUi ? "目前日志缓冲区为空。\n" : "The diagnostic log buffer is empty.\n")
+                    + state + "\n"
+                    + (chineseUi
+                        ? "请把上面显示的连接状态和开关状态告诉我。不要反复重装或清除设置。"
+                        : "Tell me the connection and switch states shown above. Do not reinstall or clear settings.");
         }
         final String displayed = logs;
         TextView content = new TextView(this);
