@@ -1,8 +1,10 @@
-# Discord AutoTranslate
+# Boundless Chat for Discord
 
-Discord Android 的 LSPosed 自动翻译模块，基于 LibXposed API 102。消息发送到用户配置的翻译服务，默认目标语言为简体中文。
+[English](README_EN.md) · [中文安装教程](docs/INSTALLATION_ZH.md) · [English installation guide](docs/INSTALLATION_EN.md)
 
-[下载最新版](https://github.com/wxmyyds/DiscordAutoTranslate/releases/latest) · [LSPosed 模块仓库](https://github.com/Xposed-Modules-Repo/io.github.wxmyyds.discordautotranslate) · [GitHub Actions](https://github.com/wxmyyds/DiscordAutoTranslate/actions)
+**Boundless Chat for Discord** 是由 **Kuorshin** 独立维护的 Android Discord LSPosed 翻译模块，也是 **Boundless Chat** 系列的首个项目。它基于原作者 WXM YYDS 的 DiscordAutoTranslate 独立发展，使用 LibXposed API 102。消息会发送到用户自行配置的翻译服务。
+
+[下载最新版](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/releases/latest) · [GitHub Actions 构建](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/actions) · [项目来源与授权](NOTICE.md)
 
 ## 功能与支持版本
 
@@ -11,6 +13,7 @@ Discord Android 的 LSPosed 自动翻译模块，基于 LibXposed API 102。消�
 - 回复预览跟随被引用消息的已有译文和显示选择；引用本身不发起翻译请求。
 - 投票标题控制整卡原文/译文切换，保留选项、图片及投票行为。图片选项仅翻译无障碍描述。
 - 独立设置页支持目标语言、API、三种供应商协议、流式请求、配置检查和翻译测试。
+- 支持最多 8 个自定义翻译发送按钮；每个按钮可单独设置显示名称、目标语言和提示词，翻译后调用 Discord 原生发送动作。
 - 翻译范围支持服务器/频道规则：频道优先于服务器，未命中时使用默认策略；通过手动输入 ID 添加，备注不参与匹配。
 
 | Discord Stable | versionCode | 已接入能力 | Discord 安装包 |
@@ -24,7 +27,7 @@ Discord Android 的 LSPosed 自动翻译模块，基于 LibXposed API 102。消�
 
 要求 Android 8.0+、Root，以及支持 LibXposed API 102 的 LSPosed。
 
-1. 安装模块 APK，在 LSPosed 中启用模块，作用域勾选 `com.discord`。
+1. 安装模块 APK，在 LSPosed 中启用 **Boundless Chat for Discord**，作用域勾选 `com.discord`。
 2. 打开模块设置，填写 API 基础地址、密钥和模型，选择协议及目标语言。
 3. 保存并确认同步成功，强制停止并重启 Discord。模块尚未启用时也可先保存，服务连接后同步。
 4. 使用“配置检查”检查格式。“测试连接”验证请求、协议和非空结果，不检查译文防损坏；“测试翻译”和实际翻译仍保留完整译文校验。失败时显示具体原因；非 2xx HTTP 错误展示上游原文。
@@ -59,3 +62,11 @@ API 基础地址示例：`https://api.openai.com/v1`，协议端点由模块追�
 - [项目协作规则](AGENTS.md)
 
 本项目与 Discord Inc. 无关联；Discord 为其商标。使用模块可能违反 Discord 服务条款，请自行评估。
+
+## 鸣谢与项目来源
+
+本项目是 **Boundless Chat** 系列的独立下游项目，由 **Kuorshin** 独立开发和维护，并非原作者仓库的官方分支或合并版本。
+
+本项目基于 **WXM YYDS（[@wxmyyds](https://github.com/wxmyyds)）** 的 [DiscordAutoTranslate](https://github.com/wxmyyds/DiscordAutoTranslate) 开发。感谢原作者提供的初始实现、LibXposed 接入、Discord 版本适配配置、项目架构与持续维护。此后新增的功能、界面改进、发送翻译按钮、独立提示词、设置体验和相关维护由 Kuorshin 独立完成。
+
+原作者代码继续遵循原项目 MIT License；Kuorshin 的原创贡献另按 [LICENSE-KUORSHIN.md](LICENSE-KUORSHIN.md) 授权。具体范围见 [NOTICE.md](NOTICE.md)。
