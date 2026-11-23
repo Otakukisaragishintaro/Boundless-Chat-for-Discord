@@ -222,18 +222,21 @@ public final class ChatInputTranslateButton {
         if (registration.binding != null && registration.binding.editor == editor
                 && registration.binding.button.getParent() == registration.binding.overlay) {
             Candidate refreshed = findSendCandidate(editor);
-            if (refreshed == null || !refreshed.sendView.isAttachedToWindow()) {
-                removeBinding(registration);
-                ProjectLog.infoOnce("diagnostic.chatInputSendControlMissingAfterBind",
-                        "Discord chat input send control disappeared after binding");
-                return;
-            }
-            if (registration.binding.sendView != refreshed.sendView) {
-                registration.binding.sendView.removeOnLayoutChangeListener(
-                        registration.binding.positionListener);
-                registration.binding.sendView = refreshed.sendView;
-                registration.binding.sendView.addOnLayoutChangeListener(
-                        registration.binding.positionListener);
+            // Discord may temporarily replace, hide, or disable its native send action
+            // while the IME is opening/closing. Do not destroy our binding on one
+            // transient lookup miss; keep the action anchored to the editor until the
+            // native control can be resolved again.
+            if (refreshed != null && refreshed.sendView.isAttachedToWindow()) {
+                if (registration.binding.sendView != refreshed.sendView) {
+                    registration.binding.sendView.removeOnLayoutChangeListener(
+                            registration.binding.positionListener);
+                    registration.binding.sendView = refreshed.sendView;
+                    registration.binding.sendView.addOnLayoutChangeListener(
+                            registration.binding.positionListener);
+                }
+            } else {
+                ProjectLog.infoOnce("diagnostic.chatInputSendControlTemporarilyMissing",
+                        "Discord native send control temporarily unavailable; keeping translation button");
             }
             positionButton(registration.binding);
             reportHierarchyIfEnabled(editor);
@@ -332,17 +335,19 @@ public final class ChatInputTranslateButton {
 
     /** Position the action in the window overlay, independently of Discord's composer layout. */
     private static void positionButton(ButtonBinding binding) {
-        if (binding == null || binding.sendView == null
-                || !binding.sendView.isAttachedToWindow()
+        if (binding == null || !binding.editor.isAttachedToWindow()
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
         int[] overlayLocation = new int[2];
         binding.overlay.getLocationOnScreen(overlayLocation);
-        Rect send = boundsOnScreen(binding.sendView);
+        // Prefer the native send control. During IME transitions Discord can
+        // temporarily detach/recreate it, so fall back to the editor bounds.
+        Rect anchor = binding.sendView != null && binding.sendView.isAttachedToWindow()
+                ? boundsOnScreen(binding.sendView) : boundsOnScreen(binding.editor);
         int width = dp(binding.activity, BUTTON_WIDTH_DP);
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
-        int left = send.right - width;
-        int top = send.top - height - margin;
+        int left = anchor.right - width;
+        int top = anchor.top - height - margin;
         left -= overlayLocation[0];
         top -= overlayLocation[1];
         left = Math.max(0, Math.min(left, binding.overlay.getWidth() - width));
@@ -498,7 +503,7 @@ public final class ChatInputTranslateButton {
     private static View findSendAction(View view, Rect inputBounds, int depth) {
         if (view == null || depth > 7 || view.getVisibility() != View.VISIBLE) return null;
 
-        if (view.isClickable() && isSendActionLabel(sendActionLabel(view))) {
+        if (isSendActionLabel(sendActionLabel(view))) {
             Rect rect = boundsOnScreen(view);
             int overlap = Math.max(0, Math.min(rect.bottom, inputBounds.bottom)
                     - Math.max(rect.top, inputBounds.top));
