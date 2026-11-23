@@ -266,6 +266,33 @@ public final class Config {
             return v.length() + ":" + v;
         }
 
+        /**
+         * Create an isolated request snapshot for the outbound send action.
+         * Incoming translation preferences and cache identity remain untouched.
+         */
+        public Snapshot forSendTranslation() {
+            return new Snapshot(this);
+        }
+
+        private Snapshot(Snapshot source) {
+            enabled = source.enabled;
+            loggingEnabled = source.loggingEnabled;
+            translationScope = source.translationScope;
+            apiUrl = source.apiUrl;
+            apiKey = source.apiKey;
+            model = source.model;
+            targetLang = source.sendTargetLang;
+            sendTargetLang = source.sendTargetLang;
+            extraHeaders = source.extraHeaders;
+            // Outbound translation always gets its own generated target-language prompt.
+            systemPrompt = DEF_SYSTEM_PROMPT;
+            protocol = source.protocol;
+            streaming = source.streaming;
+            configError = source.configError;
+            timeoutMs = source.timeoutMs;
+            maxConcurrency = source.maxConcurrency;
+        }
+
         /** 是否已具备发起请求的最小配置。 */
         public boolean isUsable() {
             return configError == null && !apiUrl.isEmpty();
