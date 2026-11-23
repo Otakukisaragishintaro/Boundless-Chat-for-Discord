@@ -1431,8 +1431,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     : "The provider received a request but rejected caller authentication. Check the rejection record below.\n\n");
         } else {
             display.append(chineseUi
-                    ? "模块端尚未观察到 Discord 诊断 Provider 的任何调用。此状态不能单独判断 Hook 是否执行；请查看下面的分阶段状态。\n\n"
-                    : "No diagnostic-provider call has been observed by the module. This alone cannot determine whether the hook ran; inspect the stage details below.\n\n");
+                    ? "尚未收到 Discord 进程诊断回执。模块现在会在 Application.attach 之前主动尝试建立诊断连接；此状态仍不能单独判断 Hook 是否执行。\n\n"
+                    : "No Discord-process diagnostic acknowledgement has arrived. The module now attempts to establish diagnostics before Application.attach; this alone still cannot determine whether hooks ran.\n\n");
         }
         display.append("\n--- ").append(chineseUi ? "诊断状态" : "Diagnostic status").append(" ---\n")
                 .append(chineseUi ? "设置页日志开关：" : "Settings toggle: ")
@@ -1470,9 +1470,18 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .append('\n')
                 .append(chineseUi ? "独立诊断通道：" : "Independent diagnostics: ")
                 .append(chineseUi
-                        ? "ContentProvider IPC（仅接受已验证的 Discord UID 和白名单生命周期事件）"
-                        : "ContentProvider IPC (verified Discord UID; allow-listed lifecycle events only)")
+                        ? "ContentProvider IPC（验证 Discord UID；仅保存不含聊天内容的生命周期事件）"
+                        : "ContentProvider IPC (Discord UID verified; content-free lifecycle events only)")
                 .append('\n')
+                .append(chineseUi ? "Discord 进程 PID/UID：" : "Discord process PID/UID: ")
+                .append(diagnostics.getInt("transport_last_process_pid", -1)).append("/")
+                .append(diagnostics.getInt("transport_last_process_uid", -1)).append('\n')
+                .append(chineseUi ? "Discord 进程名称：" : "Discord process name: ")
+                .append(diagnostics.getString("transport_last_process_name", "unknown")).append('\n')
+                .append(chineseUi ? "Provider 调用上下文：" : "Provider caller context: ")
+                .append(diagnostics.getString("transport_last_context_package", "unknown")).append('\n')
+                .append(chineseUi ? "Android SDK：" : "Android SDK: ")
+                .append(diagnostics.getInt("transport_last_android_sdk", -1)).append('\n')
                 .append(chineseUi ? "Xposed 设置服务：" : "Xposed settings service: ")
                 .append(connectionState)
                 .append("\n\n--- ").append(chineseUi ? "Hook 分阶段确认" : "Hook stage checkpoints")
@@ -1502,8 +1511,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 "Discord translation button attached", logs, providerConnected);
         if (!providerConnected) {
             display.append(chineseUi
-                    ? "\nProvider 尚未完成握手：以上阶段无法通过此页面读取。请在 LSPosed 管理器的 Xposed 日志中搜索 DiscordAutoTranslate，查看模块入口、包生命周期及 Application.attach Hook 安装记录。\n"
-                     : "\nThe provider handshake is not confirmed, so this page cannot read the stages above. Check the LSPosed Xposed log for DiscordAutoTranslate to verify module entry, package lifecycle, and Application.attach Hook installation.\n");
+                    ? "\nProvider 尚未完成握手：以上阶段暂时无法读取。可使用设置页的「分享完整诊断包」导出模块当前已收集的数据。\n"
+                     : "\nProvider handshake is not confirmed, so these stages are not yet readable. Use Share diagnostic package to export the data currently collected by the module.\n");
         }
 
         final String displayed = display.toString();
