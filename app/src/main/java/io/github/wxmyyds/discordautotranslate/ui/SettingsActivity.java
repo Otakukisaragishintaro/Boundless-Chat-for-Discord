@@ -1422,7 +1422,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         ? "ContentProvider IPC（仅接受已验证的 Discord UID 和白名单生命周期事件）"
                         : "ContentProvider IPC (verified Discord UID; allow-listed lifecycle events only)")
                 .append('\n')
-                .append(chineseUi ? "设置连接：" : "Settings connection: ")
+                .append(chineseUi ? "Xposed 设置服务：" : "Xposed settings service: ")
                 .append(connectionState);
 
         final String displayed = display.toString();
