@@ -1,6 +1,8 @@
 # 架构与生命周期
 
-用户功能及支持版本见 [README](../README.md)，协作要求见 [AGENTS.md](../AGENTS.md)。具体宿主类、字段、参数和构造器以 `app/src/main/assets/hook-config/<versionCode>.json` 为唯一配置来源。
+用户功能及支持版本见 [README](../README.md)，协作要求见 [AGENTS.md](../AGENTS.md)。具体宿主类、字段、参数和构造器以 `app/src/main/assets/hook-config/<versionCode>.json` 为唯一配置来源。跨聊天软件适配目录及职责边界见 [宿主适配层说明](platform-adaptation.md)。
+
+当前 `core/`、`translate/` 和 `ui/` 承载通用业务；现有 Discord Hook 仍位于 `hooks/`。`platform/common/` 与 `platform/discord/` 已建立为未来适配契约和 Discord 专属实现的目标目录，本轮只准备目录和备注，不搬迁 Hook 类或改变运行调用链。
 
 ## 唯一处理链
 
