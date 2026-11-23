@@ -42,6 +42,8 @@ public final class OutboundButtonsEditor {
                 .setTitle("发送语言按钮管理")
                 .setView(scroll)
                 .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("完成", (d, which) ->
+                        listener.onChanged(new ArrayList<>(draft)))
                 .create();
 
         Runnable[] refresh = new Runnable[1];
@@ -78,7 +80,6 @@ public final class OutboundButtonsEditor {
                         .setNegativeButton(android.R.string.cancel, null)
                         .setPositiveButton("删除", (d, which) -> {
                             draft.remove(index);
-                            listener.onChanged(new ArrayList<>(draft));
                             refresh[0].run();
                         }).show());
                 actions.addView(delete, new LinearLayout.LayoutParams(0,
@@ -173,7 +174,6 @@ public final class OutboundButtonsEditor {
                                 visibleLabel, target, prompt[0]);
                         if (adding) draft.add(updated);
                         else draft.set(index, updated);
-                        listener.onChanged(new ArrayList<>(draft));
                         editor.dismiss();
                         refresh.run();
                     } catch (IllegalArgumentException invalid) {
