@@ -726,10 +726,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         privacy.setText(R.string.privacy_notice);
         root.addView(privacy, matchWrap());
 
-        saveButton = new Button(this);
-        saveButton.setText(R.string.button_save);
         // 总保存按钮已移除；各设置分区通过各自的应用操作提交。
-        saveButton.setVisibility(View.GONE);
+        saveButton = null;
 
         resetButton = new Button(this);
         resetButton.setText(R.string.button_reset_saved_settings);
@@ -923,6 +921,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     minLengthPercentInput.setText(String.valueOf(min));
                     maxLengthPercentInput.setText(String.valueOf(max));
                     markDirty();
+                    save();
                     dialog.dismiss();
                 }));
         advancedSettingsDialog = dialog;
