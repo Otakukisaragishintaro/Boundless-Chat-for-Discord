@@ -95,6 +95,8 @@ public final class ChatInputTranslateButton {
     /** Called from Activity.onResume on the main thread. */
     public static void attach(Activity activity) {
         if (activity == null || activity.getWindow() == null) return;
+        ProjectLog.infoOnce("diagnostic.chatInputActivityAttach",
+                "Discord chat input Activity attach entered");
         // Diagnostics must never prevent the actual button hook from attaching.
         try {
             ChatInputViewDiagnostics.attach(activity);
@@ -208,6 +210,8 @@ public final class ChatInputTranslateButton {
             return;
         }
         EditText editor = (EditText) focused;
+        ProjectLog.infoOnce("diagnostic.chatInputEditorFocused",
+                "Discord chat input editor focused");
         if (registration.binding != null && registration.binding.editor == editor
                 && registration.binding.button.getParent() == registration.binding.parent) {
             reportHierarchyIfEnabled(editor);
@@ -217,9 +221,13 @@ public final class ChatInputTranslateButton {
 
         Candidate candidate = findSendCandidate(editor);
         if (candidate == null) {
+            ProjectLog.infoOnce("diagnostic.chatInputSendControlMissing",
+                    "Discord chat input send control not found");
             ProjectLog.info("chat input send control not found near focused editor");
             return;
         }
+        ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
+                "Discord chat input send control found");
 
         TextView button = new TextView(activity);
         button.setText("翻译发送");
@@ -245,11 +253,15 @@ public final class ChatInputTranslateButton {
             ButtonBinding binding = new ButtonBinding(activity, editor, candidate, button);
             registration.binding = binding;
             button.setOnClickListener(view -> startTranslation(binding));
+            ProjectLog.infoOnce("diagnostic.translationButtonAttached",
+                    "Discord translation button attached");
             ProjectLog.info("chat input translate button attached editor="
                     + editor.getClass().getName() + " send="
                     + candidate.sendView.getClass().getName());
             reportHierarchyIfEnabled(editor);
         } catch (Throwable failure) {
+            ProjectLog.infoOnce("diagnostic.translationButtonAttachFailed",
+                    "Discord translation button attach failed");
             ProjectLog.warn("chat input translate button attach failed errorClass="
                     + failure.getClass().getSimpleName());
         }
