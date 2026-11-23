@@ -93,8 +93,6 @@ public final class JsonApiEngine implements Scheduler.Engine {
             if (validateTranslation) {
                 String violation = Segments.plainTextViolation(translated, text);
                 if (violation != null) {
-                    ProjectLog.warn("translation.validation.failed httpStatus="
-                            + response.status + " reason=" + violation);
                     throw new TranslationException(TranslationException.Kind.PARSE,
                             TranslationException.Reason.TRANSLATION_INVALID,
                             "译文未通过防损坏校验：" + violation, response.status, null);
