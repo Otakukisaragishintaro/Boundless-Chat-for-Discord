@@ -79,6 +79,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private SharedPreferences prefs;
     @Nullable
     private SharedPreferences remotePrefs;
+    /** 监听 Discord 进程同步的缓存数量，只刷新只读文本，不触发配置保存。 */
+    private final SharedPreferences.OnSharedPreferenceChangeListener cacheCountListener =
+            (shared, key) -> {
+                if (Config.KEY_CACHE_ENTRY_COUNT.equals(key)) {
+                    mainHandler.post(this::updateCacheEntryCount);
+                }
+            };
     @Nullable
     private Future<?> testFuture;
     @Nullable
@@ -198,6 +205,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         != XposedServiceConnectionHolder.connectionGeneration())) {
             onServiceDied(service);
         }
+        if (remotePrefs != null) remotePrefs.registerOnSharedPreferenceChangeListener(cacheCountListener);
         XposedServiceConnectionHolder.bind(this);
         persistence.start();
         if (pendingScopeEditor != null && configurationLoaded && !persistence.isLoading()) openScopeEditor();
@@ -222,6 +230,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             advancedSettingsDialog.dismiss();
             advancedSettingsDialog = null;
         }
+        if (remotePrefs != null) remotePrefs.unregisterOnSharedPreferenceChangeListener(cacheCountListener);
         XposedServiceConnectionHolder.unbind(this);
         cancelPendingTest();
         updateSaveButtonState();
@@ -343,6 +352,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         syncInProgress = false;
         try {
             remotePrefs = connectedService.getRemotePreferences(Config.GROUP);
+            if (remotePrefs != null) remotePrefs.registerOnSharedPreferenceChangeListener(cacheCountListener);
             updateCacheEntryCount();
         } catch (Throwable t) {
             remotePrefs = null;
@@ -441,6 +451,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             return;
         }
         service = null;
+        if (remotePrefs != null) remotePrefs.unregisterOnSharedPreferenceChangeListener(cacheCountListener);
         remotePrefs = null;
         serviceGeneration++;
         syncJobGeneration++;
@@ -1328,6 +1339,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             }
         });
         cacheSettingsDialog.show();
+        SettingsUiStyle.styleDialog(this, cacheSettingsDialog);
         updateCacheEntryCount();
     }
 
@@ -1348,6 +1360,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             }
         });
         apiSettingsDialog.show();
+        SettingsUiStyle.styleDialog(this, apiSettingsDialog);
     }
 
     /** 缓存容量允许自定义输入，范围为 1 到 1,000,000 条。 */
@@ -1363,8 +1376,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     /** 从 Discord 进程同步的只读计数，离线时保留最近一次同步值。 */
     private void updateCacheEntryCount() {
         if (cacheEntryCountText == null) return;
-        int count = remotePrefs == null ? 0
-                : remotePrefs.getInt(Config.KEY_CACHE_ENTRY_COUNT, 0);
+        if (remotePrefs == null) {
+            cacheEntryCountText.setText(R.string.label_cache_count_unavailable);
+            return;
+        }
+        int count = remotePrefs.getInt(Config.KEY_CACHE_ENTRY_COUNT, 0);
         cacheEntryCountText.setText(getString(R.string.label_cache_entry_count, count));
     }
 
