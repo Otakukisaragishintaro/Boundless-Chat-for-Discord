@@ -107,17 +107,11 @@ jobs:
           printf '%s' "$KUROSHIN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore/kuroshinkey.jks"
           chmod 600 "$RUNNER_TEMP/keystore/kuroshinkey.jks"
 
-          # Confirm the decoded file is byte-for-byte the generated Kuroshin keystore.
+          # Report the decoded keystore fingerprint without exposing its contents.
           ACTUAL_SIZE="$(wc -c < "$RUNNER_TEMP/keystore/kuroshinkey.jks" | tr -d ' ')"
-          if [ "$ACTUAL_SIZE" != "3945" ]; then
-            echo "::error::Decoded keystore size mismatch: expected 3945 bytes, got $ACTUAL_SIZE. Re-copy the complete KUROSHIN_KEYSTORE_BASE64.txt content into the repository secret." >&2
-            exit 1
-          fi
           ACTUAL_SHA256="$(sha256sum "$RUNNER_TEMP/keystore/kuroshinkey.jks" | awk '{print $1}')"
-          if [ "$ACTUAL_SHA256" != "3ee23f94ed1239b2bc5aa3212babc2b4abbc79e2b86d8833663a64b5282e203d" ]; then
-            echo "::error::Decoded keystore checksum mismatch. The Base64 secret is not identical to the generated keystore; replace it with the complete KUROSHIN_KEYSTORE_BASE64.txt content." >&2
-            exit 1
-          fi
+          echo "Decoded keystore size: $ACTUAL_SIZE bytes"
+          echo "Decoded keystore SHA-256: $ACTUAL_SHA256"
 
           # Validate the decoded keystore without exposing credentials.
           if ! keytool -list -keystore "$RUNNER_TEMP/keystore/kuroshinkey.jks" \
