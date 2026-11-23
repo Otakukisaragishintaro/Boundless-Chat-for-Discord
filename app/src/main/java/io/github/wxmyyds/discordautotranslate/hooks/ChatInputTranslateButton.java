@@ -409,7 +409,8 @@ public final class ChatInputTranslateButton {
             }
             Rect fallbackScreen = boundsOnScreen(fallback);
             Rect editorScreen = boundsOnScreen(binding.editor);
-            left = fallbackScreen.right - width - margin - overlayScreen.left;
+            int sendSlotHalfWidth = dp(binding.activity, 24);
+            left = fallbackScreen.right - sendSlotHalfWidth - width / 2 - overlayScreen.left;
             top = editorScreen.top - margin - height - stackOffset - overlayScreen.top;
         }
 
@@ -455,7 +456,7 @@ public final class ChatInputTranslateButton {
     private static View findComposerFallbackAnchor(EditText editor) {
         if (editor == null) return null;
         Rect editorBounds = boundsOnScreen(editor);
-        int requiredTrailingSpace = dp(editor.getContext(), BUTTON_WIDTH_DP + 16);
+        int requiredTrailingSpace = dp(editor.getContext(), 24);
         ViewParent parent = editor.getParent();
         View best = null;
         int bestExtraWidth = Integer.MAX_VALUE;
