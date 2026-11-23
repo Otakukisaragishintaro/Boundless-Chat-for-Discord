@@ -1,6 +1,8 @@
 package io.github.wxmyyds.discordautotranslate.hooks;
 
 import static org.junit.Assert.*;
+import io.github.wxmyyds.discordautotranslate.core.Config;
+import io.github.wxmyyds.discordautotranslate.core.MemoryPrefs;
 import io.github.wxmyyds.discordautotranslate.core.StateStore;
 import io.github.wxmyyds.discordautotranslate.core.TranslationTaskId;
 import io.github.wxmyyds.discordautotranslate.core.TranslationCache;
@@ -16,6 +18,7 @@ public class TranslationResultOwnershipTest {
     private final StateStore store = StateStore.get();
     @Before public void setup() {
         store.onNewGeneration(); bridge.reset(); TranslationCache.get().clear();
+        bridge.updateConfig(Config.read(new MemoryPrefs().put(Config.KEY_CACHE_ENABLED, true)));
         bridge.rememberMessageLocation("row", new MessageLocation(null, "123456789012345678"));
     }
     @After public void cleanup() { store.onNewGeneration(); bridge.reset(); TranslationCache.get().clear(); }
