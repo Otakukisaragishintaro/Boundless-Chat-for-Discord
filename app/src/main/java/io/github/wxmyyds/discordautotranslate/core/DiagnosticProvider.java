@@ -130,6 +130,8 @@ public final class DiagnosticProvider extends ContentProvider {
                 || message.equals("module logging configuration is invalid")
                 || message.startsWith("remote preferences initialization failed errorClass=")
                 || message.startsWith("Discord Application.attach reached")
+                || message.startsWith("Discord Application.onCreate reached")
+                || message.startsWith("Application.onCreate fallback failed errorClass=")
                 || message.equals("Discord application attached; selecting version profile")
                 || message.equals("no hook profile matches installed Discord version")
                 || message.startsWith("Discord hook installation failed errorClass=")
