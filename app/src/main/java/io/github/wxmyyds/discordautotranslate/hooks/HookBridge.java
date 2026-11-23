@@ -156,7 +156,8 @@ public final class HookBridge {
         if (old == null || !old.version().equals(c.version())
                 || !old.translationScope.sameMatchingPolicy(c.translationScope)) {
             StateStore.get().onNewGeneration();
-            TranslationCache.get().clear();
+            // Cache keys include the complete translation configuration version. Keep old
+            // entries on disk; changed languages/prompts/models naturally use different keys.
             CardState.clear();
         }
         // 引擎随配置重建，保证下一次请求使用最新配置。
