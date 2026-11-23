@@ -277,21 +277,15 @@ public final class ChatInputTranslateButton {
         removeBinding(registration);
 
         Candidate candidate = findSendCandidate(editor);
-        boolean hasInputText = editor.getText() != null
-                && !editor.getText().toString().trim().isEmpty();
-        if (candidate == null && !hasInputText) {
-            scheduleSendCandidateRetry(activity, registration, editor);
-            ProjectLog.infoOnce("diagnostic.chatInputSendControlMissing",
-                    "Discord chat input send control not found");
-            ProjectLog.info("chat input send control not found near focused editor");
-            return;
-        }
         if (candidate != null) {
             ProjectLog.infoOnce("diagnostic.chatInputSendControlFound",
                     "Discord chat input send control found");
         } else {
+            // The native send control is normally hidden while the composer is empty.
+            // Attach anyway: translation-button placement is anchored to the editor,
+            // never gated by the native send button's visibility or the text contents.
             ProjectLog.infoOnce("diagnostic.chatInputFallbackAnchor",
-                    "Discord translation button attached using editor fallback anchor");
+                    "Discord translation button attached using stable editor anchor");
         }
 
         if (!(registration.decor instanceof FrameLayout)) {
@@ -385,53 +379,43 @@ public final class ChatInputTranslateButton {
         }
     }
 
-    /** Position the action in the window overlay, independently of Discord's composer layout. */
+    /** Position actions from the editor's window coordinates only.
+     *
+     * The native send control is intentionally not used as a positional anchor:
+     * Discord hides/recreates it when the editor is empty or contains only whitespace.
+     * Mixing getGlobalVisibleRect() (root-relative) with getLocationOnScreen() (screen
+     * coordinates) also caused false geometry checks on windows with insets.
+     */
     private static void positionButton(ButtonBinding binding) {
         if (binding == null || !isComposerUsable(binding.editor)
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
-        Rect editorBounds = boundsOnScreen(binding.editor);
+
         Rect editorVisibleBounds = new Rect();
         if (!binding.editor.getGlobalVisibleRect(editorVisibleBounds)
-                || editorVisibleBounds.width() <= 0 || editorVisibleBounds.height() <= 0
-                || !editorVisibleBounds.contains(editorBounds)) {
-            // During IME open/close Android can briefly report transient coordinates.
-            // Keep the last confirmed location; never animate through the screen center.
+                || editorVisibleBounds.width() <= 0 || editorVisibleBounds.height() <= 0) {
+            // During IME transitions, keep the last confirmed location.
             return;
         }
-        Rect overlayBounds = boundsOnScreen(binding.overlay);
-        if (!overlayBounds.contains(editorBounds)) return;
-        boolean useEditorAnchor = binding.sendView == null
-                || !binding.sendView.isAttachedToWindow();
-        Rect anchor = useEditorAnchor ? editorBounds : boundsOnScreen(binding.sendView);
-        if (useEditorAnchor) {
-            // The composer may receive IME composing text before Discord exposes its
-            // native send control. Keep the action visible above the editor meanwhile.
-            if (editorBounds.width() <= 0 || editorBounds.height() <= 0) return;
-        } else {
-            int verticalOverlap = Math.max(0, Math.min(anchor.bottom, editorBounds.bottom)
-                    - Math.max(anchor.top, editorBounds.top));
-            if (anchor.width() <= 0 || anchor.height() <= 0
-                    || anchor.centerX() <= editorBounds.centerX()
-                    || verticalOverlap * 3 < Math.max(1,
-                            Math.min(anchor.height(), editorBounds.height()))) {
-                return;
-            }
+
+        Rect editorBounds = boundsInWindow(binding.editor);
+        Rect overlayBounds = boundsInWindow(binding.overlay);
+        if (editorBounds.width() <= 0 || editorBounds.height() <= 0
+                || !overlayBounds.contains(editorBounds)) {
+            return;
         }
-        int[] overlayLocation = new int[2];
-        binding.overlay.getLocationOnScreen(overlayLocation);
+
+        // Always anchor to the editor. The native send view is used only by the
+        // submit path; it may be absent for empty/whitespace-only input.
         int width = dp(binding.activity, BUTTON_WIDTH_DP);
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
-        int left = anchor.right - width;
+        int left = editorBounds.right - width - overlayBounds.left;
         int stackOffset = binding.buttonIndex * (height + dp(binding.activity, 4));
-        int top = anchor.top - height - margin - stackOffset;
+        int top = editorBounds.top - height - margin - stackOffset - overlayBounds.top;
         if (top < 0) {
-            // If the stack does not fit above the composer, place it below instead of
-            // clamping every action to y=0 and making the buttons overlap.
-            top = anchor.bottom + margin + stackOffset;
+            top = editorBounds.bottom + margin + stackOffset - overlayBounds.top;
         }
-        left -= overlayLocation[0];
-        top -= overlayLocation[1];
+
         left = Math.max(0, Math.min(left, binding.overlay.getWidth() - width));
         top = Math.max(0, Math.min(top, binding.overlay.getHeight() - height));
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)
@@ -447,7 +431,6 @@ public final class ChatInputTranslateButton {
             params.topMargin = top;
             binding.button.setLayoutParams(params);
         }
-        // Avoid requesting another layout pass when the overlay is already topmost.
         int childCount = binding.overlay.getChildCount();
         if (childCount > 0 && binding.overlay.getChildAt(childCount - 1) != binding.button) {
             binding.button.bringToFront();
@@ -742,6 +725,14 @@ public final class ChatInputTranslateButton {
     private static Rect boundsOnScreen(View view) {
         int[] location = new int[2];
         view.getLocationOnScreen(location);
+        return new Rect(location[0], location[1],
+                location[0] + view.getWidth(), location[1] + view.getHeight());
+    }
+
+    /** Bounds relative to the current window; compatible with overlay layout params. */
+    private static Rect boundsInWindow(View view) {
+        int[] location = new int[2];
+        view.getLocationInWindow(location);
         return new Rect(location[0], location[1],
                 location[0] + view.getWidth(), location[1] + view.getHeight());
     }
