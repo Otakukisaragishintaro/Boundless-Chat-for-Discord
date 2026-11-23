@@ -1340,6 +1340,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             connectionState = chineseUi ? "设置服务尚未连接" : "Settings service is not connected";
         }
         boolean uiLoggingEnabled = loggingInput != null && loggingInput.isChecked();
+        boolean remoteConfigHasLoggingSetting = source != null
+                && source.contains(Config.KEY_LOGGING_ENABLED);
+        boolean remoteConfigLoggingEnabled = source != null
+                && source.getBoolean(Config.KEY_LOGGING_ENABLED, false);
         boolean moduleLoggingEnabled = source != null
                 && source.getBoolean("__project_log_module_enabled", false);
         long configuredAt = source == null ? 0L
@@ -1353,6 +1357,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         display.append("\n--- ").append(chineseUi ? "诊断状态" : "Diagnostic status").append(" ---\n")
                 .append(chineseUi ? "设置页日志开关：" : "Settings toggle: ")
                 .append(uiLoggingEnabled ? "ON" : "OFF").append('\n')
+                .append(chineseUi ? "远程配置日志开关：" : "Remote config logging: ")
+                .append(!remoteConfigHasLoggingSetting ? "MISSING"
+                        : remoteConfigLoggingEnabled ? "ON" : "OFF").append('\n')
                 .append(chineseUi ? "Discord 进程日志开关：" : "Discord process logging: ")
                 .append(moduleLoggingEnabled ? "ON" : "OFF").append('\n')
                 .append(chineseUi ? "模块配置时间：" : "Module config time: ")
