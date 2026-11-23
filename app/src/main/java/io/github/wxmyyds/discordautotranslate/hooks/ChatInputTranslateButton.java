@@ -379,45 +379,42 @@ public final class ChatInputTranslateButton {
         }
     }
 
-    /** Position actions from the editor's window coordinates only.
+    /** Position actions using one coordinate space: physical screen coordinates.
      *
-     * The native send control is intentionally not used as a positional anchor:
-     * Discord hides/recreates it when the editor is empty or contains only whitespace.
-     * Mixing getGlobalVisibleRect() (root-relative) with getLocationOnScreen() (screen
-     * coordinates) also caused false geometry checks on windows with insets.
+     * DecorView and React Native composer can have different window/inset offsets.
+     * Convert both screen-space rectangles into overlay-local coordinates instead of
+     * mixing root, window and screen coordinates or requiring full containment.
      */
     private static void positionButton(ButtonBinding binding) {
         if (binding == null || !isComposerUsable(binding.editor)
                 || binding.overlay.getWidth() <= 0 || binding.overlay.getHeight() <= 0) return;
 
-        Rect editorVisibleBounds = new Rect();
-        if (!binding.editor.getGlobalVisibleRect(editorVisibleBounds)
-                || editorVisibleBounds.width() <= 0 || editorVisibleBounds.height() <= 0) {
-            // During IME transitions, keep the last confirmed location.
+        Rect editorScreen = boundsOnScreen(binding.editor);
+        Rect overlayScreen = boundsOnScreen(binding.overlay);
+        if (editorScreen.width() <= 0 || editorScreen.height() <= 0
+                || overlayScreen.width() <= 0 || overlayScreen.height() <= 0) {
             return;
         }
 
-        Rect editorBounds = boundsInWindow(binding.editor);
-        Rect overlayBounds = boundsInWindow(binding.overlay);
-        if (editorBounds.width() <= 0 || editorBounds.height() <= 0
-                || !overlayBounds.contains(editorBounds)) {
-            return;
-        }
-
-        // Always anchor to the editor. The native send view is used only by the
-        // submit path; it may be absent for empty/whitespace-only input.
+        // The EditText may be partially clipped while the IME animates. Its measured
+        // screen position is still the stable anchor; do not reject it based on a
+        // visible-rect or full-overlay-containment test.
         int width = dp(binding.activity, BUTTON_WIDTH_DP);
         int height = dp(binding.activity, BUTTON_HEIGHT_DP);
         int margin = dp(binding.activity, 8);
-        int left = editorBounds.right - width - overlayBounds.left;
+        int left = editorScreen.right - width - overlayScreen.left;
         int stackOffset = binding.buttonIndex * (height + dp(binding.activity, 4));
-        int top = editorBounds.top - height - margin - stackOffset - overlayBounds.top;
+        int top = editorScreen.top - height - margin - stackOffset - overlayScreen.top;
+
         if (top < 0) {
-            top = editorBounds.bottom + margin + stackOffset - overlayBounds.top;
+            top = editorScreen.bottom + margin + stackOffset - overlayScreen.top;
         }
 
-        left = Math.max(0, Math.min(left, binding.overlay.getWidth() - width));
-        top = Math.max(0, Math.min(top, binding.overlay.getHeight() - height));
+        int maxLeft = Math.max(0, binding.overlay.getWidth() - width);
+        int maxTop = Math.max(0, binding.overlay.getHeight() - height);
+        left = Math.max(0, Math.min(left, maxLeft));
+        top = Math.max(0, Math.min(top, maxTop));
+
         FrameLayout.LayoutParams params = (FrameLayout.LayoutParams)
                 binding.button.getLayoutParams();
         boolean changed = params.width != width || params.height != height
