@@ -181,6 +181,9 @@ public class ModuleEntry extends XposedModule {
         }
         ModuleResources.attach(this);
         reloadConfig();
+        // clearRuntime() destroys the old cache singleton and its listener. Package lifecycle
+        // callbacks are not replayed during hot reload, so explicitly restore the count publisher.
+        attachCacheCountPublisher();
         if (restored != null && recovered != null) {
             try {
                 install(recovered, restored);
@@ -488,13 +491,46 @@ public class ModuleEntry extends XposedModule {
             cacheCommandPreferences = remote;
             remote.registerOnSharedPreferenceChangeListener(cacheCommandListener);
             // 同时处理 Discord 未运行期间由设置页发出的清空请求。
-            TranslationCache.get().setCountListener(count -> {
-                try { remote.edit().putInt(Config.KEY_CACHE_ENTRY_COUNT, count).apply(); }
-                catch (Throwable ignored) { /* 计数同步失败不影响翻译。 */ }
-            });
+            attachCacheCountPublisher(remote);
             handleCacheClearCommand(remote);
         } catch (Throwable failure) {
             ProjectLog.warn("cache command listener unavailable errorClass="
+                    + failure.getClass().getSimpleName());
+        }
+    }
+
+    /**
+     * Attach the cache's count publisher to the current libxposed remote preferences.
+     * This is separate from the clear-command listener because hot reload recreates the
+     * cache singleton but does not replay Application.attach or package lifecycle callbacks.
+     */
+    private void attachCacheCountPublisher() {
+        try {
+            attachCacheCountPublisher(getRemotePreferences(Config.GROUP));
+        } catch (Throwable failure) {
+            ProjectLog.warn("cache count publisher unavailable errorClass="
+                    + failure.getClass().getSimpleName());
+        }
+    }
+
+    private void attachCacheCountPublisher(@Nullable SharedPreferences remote) {
+        if (remote == null) {
+            ProjectLog.warn("cache count publisher unavailable reason=remote_preferences_missing");
+            return;
+        }
+        try {
+            TranslationCache.get().setCountListener(count -> {
+                try {
+                    remote.edit().putInt(Config.KEY_CACHE_ENTRY_COUNT, count).apply();
+                    ProjectLog.info("local translation cache count published count=" + count);
+                } catch (Throwable failure) {
+                    ProjectLog.warn("local translation cache count publish failed errorClass="
+                            + failure.getClass().getSimpleName());
+                }
+            });
+            ProjectLog.info("local translation cache count publisher attached");
+        } catch (Throwable failure) {
+            ProjectLog.warn("cache count publisher attach failed errorClass="
                     + failure.getClass().getSimpleName());
         }
     }
