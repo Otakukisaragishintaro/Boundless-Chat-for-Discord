@@ -1351,7 +1351,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         apiSettingsDialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.menu_api_settings)
                 .setView(content)
-                .setPositiveButton(R.string.button_done, null)
+                .setPositiveButton(R.string.outbound_done, null)
                 .create();
         apiSettingsDialog.setOnDismissListener(dialog -> {
             apiSettingsDialog = null;
