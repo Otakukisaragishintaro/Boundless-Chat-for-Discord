@@ -15,7 +15,10 @@ import android.text.InputType;
 import android.text.TextWatcher;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.ViewParent;
+import android.view.MenuItem;
 import android.widget.AdapterView;
+import android.widget.FrameLayout;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.Switch;
@@ -59,6 +62,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private static final String LOCAL_PREFS_NAME = "settings_before_activation";
     private static final String STATE_DRAFT = "configuration_draft";
+    private static final String STATE_ACTIVE_SETTINGS_PAGE = "active_settings_page";
+    private static final String PAGE_CACHE = "cache";
+    private static final String PAGE_API = "api";
 
     private static final String[] TARGET_LANGUAGE_VALUES = {
             "简体中文", "繁體中文", "English", "日本語", "한국어", "Русский",
@@ -157,8 +163,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Button apiApplyButton;
     private LinearLayout cacheBacking;
     private LinearLayout apiBacking;
-    @Nullable private Dialog cacheSettingsDialog;
-    @Nullable private Dialog apiSettingsDialog;
+    /** Main settings page stays attached so its scroll position and draft widgets are preserved. */
+    @Nullable private FrameLayout navigationHost;
+    @Nullable private ScrollView mainSettingsPage;
+    @Nullable private View activeSubpageView;
+    @Nullable private LinearLayout activeSubpageContent;
+    @Nullable private String activeSettingsPage;
     private Button clearCacheButton;
     private Switch streamingInput;
     private TextView enabledHint;
@@ -185,6 +195,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setTitle(R.string.module_name);
+        if (getActionBar() != null) {
+            getActionBar().setDisplayHomeAsUpEnabled(false);
+        }
         setContentView(buildContentView());
         prefs = getSharedPreferences(LOCAL_PREFS_NAME, MODE_PRIVATE);
         installDirtyTracking();
@@ -194,6 +207,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         updateSaveButtonState();
         if (!persistedConfigInvalid) {
             updateStatus(getString(R.string.status_local_ready));
+        }
+        String restoredPage = savedInstanceState == null ? null
+                : savedInstanceState.getString(STATE_ACTIVE_SETTINGS_PAGE);
+        if (PAGE_CACHE.equals(restoredPage)) {
+            openCacheSettings();
+        } else if (PAGE_API.equals(restoredPage)) {
+            openApiSettings();
         }
     }
 
@@ -228,8 +248,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             outboundButtonsDialog.dismiss();
             outboundButtonsDialog = null;
         }
-        if (cacheSettingsDialog != null) { cacheSettingsDialog.dismiss(); cacheSettingsDialog = null; }
-        if (apiSettingsDialog != null) { apiSettingsDialog.dismiss(); apiSettingsDialog = null; }
         if (advancedSettingsDialog != null) {
             advancedSettingsDialog.dismiss();
             advancedSettingsDialog = null;
@@ -255,6 +273,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     @Override
     protected void onSaveInstanceState(@NonNull Bundle outState) {
         super.onSaveInstanceState(outState);
+        outState.putString(STATE_ACTIVE_SETTINGS_PAGE, activeSettingsPage);
         if (scopeDialog != null) outState.putBundle(STATE_SCOPE_EDITOR, TranslationScopeEditor.saveState(scopeDialog));
         else if (pendingScopeEditor != null) outState.putBundle(STATE_SCOPE_EDITOR, pendingScopeEditor);
         if (persistedConfigInvalid || !hasUnsavedChanges) {
@@ -784,7 +803,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         SettingsUiStyle.apply(this, scroll, saveButton);
-        return scroll;
+
+        // Keep the original settings hierarchy alive underneath pushed subpages. This avoids
+        // rebuilding EditTexts/Spinners and therefore preserves pending drafts and scroll state.
+        mainSettingsPage = scroll;
+        navigationHost = new FrameLayout(this);
+        navigationHost.addView(scroll, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        return navigationHost;
     }
 
     private void updateOutboundButtonsSummary() {
@@ -1328,45 +1354,108 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
     }
 
-    /** 打开本地翻译缓存二级菜单。 */
+    /** 打开本地翻译缓存独立页面。 */
     private void openCacheSettings() {
-        if (cacheSettingsDialog != null || persistedConfigInvalid) return;
-        ScrollView content = new ScrollView(this);
-        content.addView(cacheBacking);
-        cacheSettingsDialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.menu_translation_cache)
-                .setView(content)
-                .setPositiveButton(R.string.outbound_done, null)
-                .create();
-        cacheSettingsDialog.setOnDismissListener(dialog -> {
-            cacheSettingsDialog = null;
-            if (cacheBacking.getParent() instanceof ViewGroup) {
-                ((ViewGroup) cacheBacking.getParent()).removeView(cacheBacking);
-            }
-        });
-        cacheSettingsDialog.show();
-        SettingsUiStyle.styleDialog(this, cacheSettingsDialog);
+        if (persistedConfigInvalid) return;
+        showSettingsSubpage(PAGE_CACHE, R.string.menu_translation_cache, cacheBacking);
         updateCacheEntryCount();
     }
 
-    /** 打开 API 与请求协议二级菜单。 */
+    /** 打开 API 与请求协议独立页面。 */
     private void openApiSettings() {
-        if (apiSettingsDialog != null || persistedConfigInvalid) return;
-        ScrollView content = new ScrollView(this);
-        content.addView(apiBacking);
-        apiSettingsDialog = new AlertDialog.Builder(this)
-                .setTitle(R.string.menu_api_settings)
-                .setView(content)
-                .setPositiveButton(R.string.outbound_done, null)
-                .create();
-        apiSettingsDialog.setOnDismissListener(dialog -> {
-            apiSettingsDialog = null;
-            if (apiBacking.getParent() instanceof ViewGroup) {
-                ((ViewGroup) apiBacking.getParent()).removeView(apiBacking);
-            }
+        if (persistedConfigInvalid) return;
+        showSettingsSubpage(PAGE_API, R.string.menu_api_settings, apiBacking);
+    }
+
+    /**
+     * 将目标设置内容推入全屏页面层，而不是放进 AlertDialog。
+     * 主设置页只隐藏、不销毁；子页面退出时原样恢复。
+     */
+    private void showSettingsSubpage(String pageKey, int titleRes, LinearLayout content) {
+        if (navigationHost == null || mainSettingsPage == null || persistedConfigInvalid) return;
+        if (pageKey.equals(activeSettingsPage)) return;
+        if (activeSettingsPage != null) closeSettingsSubpage();
+
+        // A page may be restored after Activity recreation; always detach the form from
+        // any stale parent before attaching it to the new page container.
+        ViewParent parent = content.getParent();
+        if (parent instanceof ViewGroup) {
+            ((ViewGroup) parent).removeView(content);
+        }
+
+        LinearLayout pageContent = new LinearLayout(this);
+        pageContent.setOrientation(LinearLayout.VERTICAL);
+        int padding = dp(16);
+        pageContent.setPadding(padding, padding, padding, padding);
+        pageContent.addView(content, matchWrap());
+
+        ScrollView pageScroll = new ScrollView(this);
+        pageScroll.setFillViewport(true);
+        pageScroll.setClipToPadding(false);
+        pageScroll.setSmoothScrollingEnabled(true);
+        pageScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
+        pageScroll.addView(pageContent, new ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        pageScroll.setOnApplyWindowInsetsListener((view, insets) -> {
+            // Match the main page: keep content clear of system bars and the native ActionBar.
+            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets.consumeSystemWindowInsets();
         });
-        apiSettingsDialog.show();
-        SettingsUiStyle.styleDialog(this, apiSettingsDialog);
+        SettingsUiStyle.apply(this, pageScroll, null);
+
+        mainSettingsPage.setVisibility(View.GONE);
+        navigationHost.addView(pageScroll, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        activeSubpageView = pageScroll;
+        activeSubpageContent = content;
+        activeSettingsPage = pageKey;
+        setTitle(titleRes);
+        if (getActionBar() != null) {
+            getActionBar().setDisplayHomeAsUpEnabled(true);
+            getActionBar().setHomeButtonEnabled(true);
+        }
+    }
+
+    /** 关闭当前子页面并恢复主设置页；不重建主页面表单。 */
+    private void closeSettingsSubpage() {
+        if (activeSubpageContent != null) {
+            ViewParent parent = activeSubpageContent.getParent();
+            if (parent instanceof ViewGroup) {
+                ((ViewGroup) parent).removeView(activeSubpageContent);
+            }
+        }
+        if (navigationHost != null && activeSubpageView != null) {
+            navigationHost.removeView(activeSubpageView);
+        }
+        activeSubpageContent = null;
+        activeSubpageView = null;
+        activeSettingsPage = null;
+        if (mainSettingsPage != null) {
+            mainSettingsPage.setVisibility(View.VISIBLE);
+        }
+        setTitle(R.string.module_name);
+        if (getActionBar() != null) {
+            getActionBar().setDisplayHomeAsUpEnabled(false);
+        }
+    }
+
+    @Override
+    public boolean onOptionsItemSelected(@NonNull MenuItem item) {
+        if (item.getItemId() == android.R.id.home && activeSettingsPage != null) {
+            closeSettingsSubpage();
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+
+    @Override
+    public void onBackPressed() {
+        if (activeSettingsPage != null) {
+            closeSettingsSubpage();
+            return;
+        }
+        super.onBackPressed();
     }
 
     /** 缓存容量允许自定义输入，范围为 1 到 1,000,000 条。 */
