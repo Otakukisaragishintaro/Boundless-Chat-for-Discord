@@ -20,6 +20,7 @@ import io.github.wxmyyds.discordautotranslate.core.Config;
 import io.github.wxmyyds.discordautotranslate.core.ProjectLog;
 import io.github.wxmyyds.discordautotranslate.core.OutboundButtonConfig;
 import io.github.wxmyyds.discordautotranslate.core.Scheduler;
+import io.github.wxmyyds.discordautotranslate.core.TranslationCache;
 import io.github.wxmyyds.discordautotranslate.core.TranslationTaskId;
 import io.github.wxmyyds.discordautotranslate.translate.JsonApiEngine;
 
@@ -471,81 +472,102 @@ public final class ChatInputTranslateButton {
         AtomicBoolean valid = new AtomicBoolean(true);
         binding.requestValid.set(true);
 
+        // A previous outbound translation with the same source and button configuration
+        // can be reused immediately without another provider request or token charge.
+        String cached = TranslationCache.get().get(hash);
+        if (cached != null) {
+            ProjectLog.info("outbound translation cache hit");
+            try (HookRuntime.Lease lease = HookRuntime.enter()) {
+                if (lease != null && requestId.equals(binding.requestId)
+                        && base.version().equals(HookBridge.get().configSnapshot().version())
+                        && source.contentEquals(binding.editor.getText())) {
+                    completeTranslation(binding, requestId, source, hash, true, cached, null);
+                }
+            }
+            return;
+        }
+
         Scheduler.get().submit(task, source, new JsonApiEngine(outbound),
                 identity -> valid.get()
                         && binding.requestValid.get()
                         && HookRuntime.isActive()
                         && binding.editor.isAttachedToWindow()
                         && source.contentEquals(binding.editor.getText())
-                        && base.version().equals(io.github.wxmyyds.discordautotranslate.hooks
-                                .HookBridge.get().configSnapshot().version()),
+                        && base.version().equals(HookBridge.get().configSnapshot().version()),
                 (identity, accepted, translated, error) -> {
                     try (HookRuntime.Lease lease = HookRuntime.enter()) {
-                        if (lease == null || !requestId.equals(binding.requestId)) return;
-                        binding.inFlight = false;
-                        binding.button.setEnabled(true);
-                        binding.button.setText(binding.outboundConfig.label);
-
-                        if (!accepted || error != null || translated == null
-                                || translated.trim().isEmpty()) {
-                            if (error != null) {
-                                ProjectLog.warn("outbound translation failed errorClass="
-                                        + error.getClass().getSimpleName());
-                            }
-                            Toast.makeText(binding.activity,
-                                    accepted ? "翻译失败，原文未发送" : "输入内容或配置已变化，未发送",
-                                    Toast.LENGTH_SHORT).show();
-                            return;
-                        }
-
-                        String result = translated.trim();
-                        binding.editor.setText(result);
-                        binding.editor.setSelection(result.length());
-                        // Let React Native's TextWatcher/event bridge receive the new text first.
-                        binding.editor.postDelayed(() -> {
-                            if (!binding.requestValid.get()
-                                    || !isComposerUsable(binding.editor)
-                                    || !result.contentEquals(binding.editor.getText())) {
-                                return;
-                            }
-                            // Discord may recreate or detach its native send view while
-                            // the IME is visible. Resolve the current control at send time.
-                            Candidate currentCandidate = findSendCandidate(binding.editor);
-                            if (currentCandidate == null
-                                    || !currentCandidate.sendView.isAttachedToWindow()) {
-                                binding.editor.setText(source);
-                                binding.editor.setSelection(source.length());
-                                Toast.makeText(binding.activity,
-                                        "已翻译，但未找到当前发送按钮；已恢复原文",
-                                        Toast.LENGTH_SHORT).show();
-                                return;
-                            }
-                            if (binding.sendView != currentCandidate.sendView) {
-                                if (binding.sendView != null) {
-                                    binding.sendView.removeOnLayoutChangeListener(
-                                            binding.positionListener);
-                                }
-                                binding.sendView = currentCandidate.sendView;
-                                binding.sendView.addOnLayoutChangeListener(
-                                        binding.positionListener);
-                            }
-                            boolean sent = false;
-                            try {
-                                sent = binding.sendView.performClick();
-                            } catch (Throwable clickFailure) {
-                                ProjectLog.warn("native send click failed errorClass="
-                                        + clickFailure.getClass().getSimpleName());
-                            }
-                            if (!sent) {
-                                binding.editor.setText(source);
-                                binding.editor.setSelection(source.length());
-                                Toast.makeText(binding.activity,
-                                        "已翻译，但未能触发原发送按钮；已恢复原文",
-                                        Toast.LENGTH_SHORT).show();
-                            }
-                        }, 120L);
+                        if (lease == null) return;
+                        completeTranslation(binding, requestId, source, hash,
+                                accepted, translated, error);
                     }
                 });
+    }
+
+    /** Apply a successful translation using the same safe native-send path for cache and API results. */
+    private static void completeTranslation(ButtonBinding binding, String requestId,
+                                             String source, String cacheKey, boolean accepted,
+                                             String translated, Throwable error) {
+        if (!requestId.equals(binding.requestId)) return;
+        binding.inFlight = false;
+        binding.button.setEnabled(true);
+        binding.button.setText(binding.outboundConfig.label);
+
+        if (!accepted || error != null || translated == null || translated.trim().isEmpty()) {
+            if (error != null) {
+                ProjectLog.warn("outbound translation failed errorClass="
+                        + error.getClass().getSimpleName());
+            }
+            Toast.makeText(binding.activity,
+                    accepted ? "翻译失败，原文未发送" : "输入内容或配置已变化，未发送",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        String result = translated.trim();
+        // Persist only validated successful output. This also refreshes the LRU timestamp on a hit.
+        TranslationCache.get().put(cacheKey, result);
+        binding.editor.setText(result);
+        binding.editor.setSelection(result.length());
+        // Let React Native's TextWatcher/event bridge receive the new text first.
+        binding.editor.postDelayed(() -> {
+            if (!binding.requestValid.get()
+                    || !isComposerUsable(binding.editor)
+                    || !result.contentEquals(binding.editor.getText())) {
+                return;
+            }
+            // Discord may recreate or detach its native send view while the IME is visible.
+            Candidate currentCandidate = findSendCandidate(binding.editor);
+            if (currentCandidate == null
+                    || !currentCandidate.sendView.isAttachedToWindow()) {
+                binding.editor.setText(source);
+                binding.editor.setSelection(source.length());
+                Toast.makeText(binding.activity,
+                        "已翻译，但未找到当前发送按钮；已恢复原文",
+                        Toast.LENGTH_SHORT).show();
+                return;
+            }
+            if (binding.sendView != currentCandidate.sendView) {
+                if (binding.sendView != null) {
+                    binding.sendView.removeOnLayoutChangeListener(binding.positionListener);
+                }
+                binding.sendView = currentCandidate.sendView;
+                binding.sendView.addOnLayoutChangeListener(binding.positionListener);
+            }
+            boolean sent = false;
+            try {
+                sent = binding.sendView.performClick();
+            } catch (Throwable clickFailure) {
+                ProjectLog.warn("native send click failed errorClass="
+                        + clickFailure.getClass().getSimpleName());
+            }
+            if (!sent) {
+                binding.editor.setText(source);
+                binding.editor.setSelection(source.length());
+                Toast.makeText(binding.activity,
+                        "已翻译，但未能触发原发送按钮；已恢复原文",
+                        Toast.LENGTH_SHORT).show();
+            }
+        }, 120L);
     }
 
     private static Candidate findSendCandidate(EditText editor) {
