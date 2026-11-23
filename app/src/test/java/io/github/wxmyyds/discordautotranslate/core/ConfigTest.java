@@ -47,6 +47,7 @@ public class ConfigTest {
         assertEquals(Config.DEF_API_URL, s.apiUrl);
         assertEquals(Config.DEF_MODEL, s.model);
         assertEquals(Config.DEF_TARGET_LANG, s.targetLang);
+        assertEquals(Config.DEF_SEND_TARGET_LANG, s.sendTargetLang);
         assertEquals(Config.DEF_SYSTEM_PROMPT, s.systemPrompt);
         assertEquals(Config.DEF_PROTOCOL, s.protocol);
         assertEquals(Config.DEF_TIMEOUT_MS, s.timeoutMs);
@@ -81,6 +82,21 @@ public class ConfigTest {
                 .put(Config.KEY_PROTOCOL, "invalid"));
         assertFalse(invalid.loggingEnabled);
         assertFalse(Config.invalidSnapshot().loggingEnabled);
+    }
+
+    @Test
+    public void sendTargetLanguageIsIndependentFromIncomingTranslationSettings() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        Config.Snapshot sendEnglish = Config.read(new MemoryPrefs()
+                .put(Config.KEY_SEND_TARGET_LANG, "English"));
+        Config.Snapshot sendJapanese = Config.read(new MemoryPrefs()
+                .put(Config.KEY_SEND_TARGET_LANG, "日本語"));
+
+        assertEquals("English", defaults.sendTargetLang);
+        assertEquals("日本語", sendJapanese.sendTargetLang);
+        assertEquals(defaults.targetLang, sendJapanese.targetLang);
+        assertEquals(defaults.version(), sendEnglish.version());
+        assertEquals(defaults.version(), sendJapanese.version());
     }
 
     @Test
