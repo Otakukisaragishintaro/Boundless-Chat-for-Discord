@@ -150,18 +150,32 @@ public final class ProjectLog {
         }
     }
 
+    /** Report transport failures through Logcat and the independent LSPosed log. */
+    private static void reportTransportStatus(int priority, String message) {
+        try {
+            Log.println(priority, TAG, message);
+        } catch (Throwable ignored) { }
+        Output output = framework;
+        if (output != null) {
+            try {
+                output.write(priority, TAG, message);
+            } catch (Throwable ignored) { }
+        }
+    }
+
     private static boolean sendPing() {
         Context context = transportContext;
         Uri uri = transportUri;
         if (context == null || uri == null) return false;
         try {
             Bundle response = context.getContentResolver().call(uri, "ping", null, new Bundle());
-            return response != null && response.getBoolean("accepted", false);
+            boolean accepted = response != null && response.getBoolean("accepted", false);
+            reportTransportStatus(accepted ? Log.INFO : Log.WARN,
+                    "diagnostic IPC ping " + (accepted ? "accepted" : "not acknowledged"));
+            return accepted;
         } catch (Throwable failure) {
-            try {
-                Log.w(TAG, "diagnostic IPC ping failed errorClass="
-                        + failure.getClass().getSimpleName());
-            } catch (Throwable ignored) { }
+            reportTransportStatus(Log.WARN, "diagnostic IPC ping failed errorClass="
+                    + failure.getClass().getSimpleName());
             return false;
         }
     }
@@ -177,10 +191,8 @@ public final class ProjectLog {
             Bundle response = context.getContentResolver().call(uri, "append", null, data);
             return response != null && response.getBoolean("accepted", false);
         } catch (Throwable failure) {
-            try {
-                Log.w(TAG, "diagnostic IPC append failed errorClass="
-                        + failure.getClass().getSimpleName());
-            } catch (Throwable ignored) { }
+            reportTransportStatus(Log.WARN, "diagnostic IPC append failed errorClass="
+                    + failure.getClass().getSimpleName());
             return false;
         }
     }
@@ -195,10 +207,10 @@ public final class ProjectLog {
             data.putBoolean("valid", configurationValid);
             Bundle response = context.getContentResolver().call(uri, "configure", null, data);
             if (response == null || !response.getBoolean("accepted", false)) {
-                Log.w(TAG, "diagnostic IPC configuration acknowledgement failed");
+                reportTransportStatus(Log.WARN, "diagnostic IPC configuration acknowledgement failed");
             }
         } catch (Throwable failure) {
-            Log.w(TAG, "diagnostic IPC configuration failed errorClass="
+            reportTransportStatus(Log.WARN, "diagnostic IPC configuration failed errorClass="
                     + failure.getClass().getSimpleName());
         }
     }
