@@ -7,7 +7,7 @@
 | 工作流 | 用途与触发方式 |
 |---|---|
 | [build.yml](../.github/workflows/build.yml) | 非 `main` 分支 push，或面向 `main` 的 PR，在变更匹配 `app/**`、`build.gradle`、`settings.gradle`、`gradle.properties`、`.github/workflows/**` 时自动运行 Debug 构建；手动可选 Debug/Release |
-| [release.yml](../.github/workflows/release.yml) | 仅手动发布；stable 固定来源 main，prerelease 使用指定分支或完整 SHA |
+| [release.yml](../.github/workflows/release.yml) | 手动发布；stable 固定来源 main，prerelease 使用指定分支或完整 SHA。推送 `publish/X.Y.Z` 分支可触发 main 正式版发布 |
 | [release-notes.yml](../.github/workflows/release-notes.yml) | 更新日志、共享脚本或发布工作流变更时检查说明并生成双模式预览；也可手动触发，不创建发布 |
 
 普通文档/Skill 改动不触发自动构建；`docs/releases/Update-Log.md` 改动只触发发布说明检查，不触发 APK 构建。合并后的 `main` push 不触发这些验证；如需验证，手动选择对应分支。构建工作流执行单元测试、上传 HTML 报告、检查 Xposed 元数据及图标资源、验证 APK 签名并上传 APK。发布工作流先检查并生成更新日志，再执行测试、Release 打包及签名验证后创建 tag/Release。
@@ -20,10 +20,8 @@
 
 | Secret | 用途 |
 |---|---|
-| `KEYSTORE_BASE64` | 已备份正式 keystore 的 base64 内容 |
-| `KEYSTORE_PASSWORD` | keystore 与 key 共用口令 |
-| `KEY_ALIAS` | 签名 alias |
-| `LSPOSED_REPO_TOKEN` | 仅 stable 发布要求；对目标模块仓库具有 Contents 读写权限 |
+| `KUROSHIN_KEYSTORE_BASE64` | 已备份 Kuroshin keystore 的 base64 内容 |
+| `KUROSHIN_KEYSTORE_PASSWORD` | keystore 与 key 共用口令；key alias 固定为 `kuroshinkey` |
 
 工作流将密钥写入 runner 临时目录，通过 `KEYSTORE_PROPERTIES` 提供给 `app/build.gradle`。Debug/Release 使用同一证书；缺配置明确失败，不产生替代签名。密钥及 properties 不提交、不输出，原始 keystore 应独立离线备份。旧版本覆盖升级要求包名和签名一致。
 

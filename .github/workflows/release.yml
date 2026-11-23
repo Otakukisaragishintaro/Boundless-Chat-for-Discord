@@ -1,6 +1,10 @@
 name: Release
 
 on:
+  push:
+    branches:
+      - 'publish/**'
+
   workflow_dispatch:
     inputs:
       mode:
@@ -34,7 +38,7 @@ concurrency:
 
 jobs:
   release:
-    name: Build, tag and publish (${{ inputs.mode }})
+    name: Build, tag and publish (${{ inputs.mode || 'stable' }})
     runs-on: ubuntu-24.04
     steps:
       # Resolve branches explicitly and pin checkout to a commit; tags are not build sources.
@@ -42,8 +46,8 @@ jobs:
         id: source
         env:
           GH_TOKEN: ${{ github.token }}
-          MODE: ${{ inputs.mode }}
-          SOURCE_REF: ${{ inputs.mode == 'stable' && 'main' || inputs.source_ref }}
+          MODE: ${{ inputs.mode || 'stable' }}
+          SOURCE_REF: ${{ (inputs.mode == 'stable' || github.event_name == 'push') && 'main' || inputs.source_ref }}
         run: |
           set -euo pipefail
           if [[ "$MODE" == "prerelease" && "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]; then
@@ -107,10 +111,14 @@ jobs:
         id: resolve
         shell: bash
         env:
-          MODE: ${{ inputs.mode }}
+          MODE: ${{ inputs.mode || 'stable' }}
           INPUT: ${{ inputs.version }}
         run: |
           set -euo pipefail
+
+          if [[ -z "$INPUT" && "$GITHUB_REF_NAME" == publish/* ]]; then
+            INPUT="${GITHUB_REF_NAME#publish/}"
+          fi
 
           read_version() {
             git show "$1:app/build.gradle" 2>/dev/null \
@@ -216,10 +224,10 @@ jobs:
       # Generate and preview both release modes through the same renderer, before any tag is pushed.
       - name: Prepare release notes
         env:
-          MODE: ${{ inputs.mode }}
+          MODE: ${{ inputs.mode || 'stable' }}
           VERSION: ${{ steps.resolve.outputs.version }}
           VERSION_CODE: ${{ steps.resolve.outputs.versionCode }}
-          SOURCE_REF: ${{ inputs.mode == 'stable' && 'main' || inputs.source_ref }}
+          SOURCE_REF: ${{ (inputs.mode == 'stable' || github.event_name == 'push') && 'main' || inputs.source_ref }}
           SOURCE_SHA: ${{ steps.resolve.outputs.sourceSha }}
         run: |
           set -euo pipefail
@@ -234,18 +242,21 @@ jobs:
       - name: Materialize release keystore
         shell: bash
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
+          KEYSTORE_BASE64: ${{ secrets.KUROSHIN_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.KUROSHIN_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: kuroshinkey
         run: |
           set -euo pipefail
           if [ -z "$KEYSTORE_BASE64" ] || [ -z "$KEYSTORE_PASSWORD" ] || [ -z "$KEY_ALIAS" ]; then
             echo "::error::Required signing secrets are missing"
             exit 1
           fi
+          KEYSTORE_PASSWORD="$(printf '%s' "$KEYSTORE_PASSWORD" | sed ':a;N;$!ba;s/[\r\n]*$//')"
+          test -n "$KEYSTORE_PASSWORD" || { echo "::error::Keystore password is empty"; exit 1; }
           mkdir -p "$RUNNER_TEMP/keystore"
-          printf '%s' "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/keystore/release.jks"
+          printf '%s' "$KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/keystore/release.jks"
           chmod 600 "$RUNNER_TEMP/keystore/release.jks"
+          keytool -list -keystore "$RUNNER_TEMP/keystore/release.jks" -storepass "$KEYSTORE_PASSWORD" -alias "$KEY_ALIAS" >/dev/null
           printf 'storeFile=release.jks\nstorePassword=%s\nkeyAlias=%s\nkeyPassword=%s\n' \
             "$KEYSTORE_PASSWORD" "$KEY_ALIAS" "$KEYSTORE_PASSWORD" \
             > "$RUNNER_TEMP/keystore/keystore.properties"
@@ -280,7 +291,7 @@ jobs:
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          MODE: ${{ inputs.mode }}
+          MODE: ${{ inputs.mode || 'stable' }}
           VERSION: ${{ steps.resolve.outputs.version }}
           VERSION_CODE: ${{ steps.resolve.outputs.versionCode }}
           TAG: ${{ steps.resolve.outputs.tag }}
