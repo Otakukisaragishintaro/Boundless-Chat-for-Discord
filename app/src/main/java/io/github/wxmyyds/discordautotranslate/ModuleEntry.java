@@ -205,6 +205,13 @@ public class ModuleEntry extends XposedModule {
                             if (contextObject instanceof Context) {
                                 Context context = (Context) contextObject;
                                 if (TARGET_PACKAGE.equals(context.getPackageName())) {
+                                    // Retry remote-preference acquisition at the first point where
+                                    // the target Application context is fully attached. The earlier
+                                    // module/package callbacks can run before the remote store is
+                                    // ready; without this retry the settings UI would remain stuck
+                                    // at "process logging OFF / config not received" indefinitely.
+                                    configureLogging();
+                                    ProjectLog.bootstrapInfo("Discord Application.attach reached; remote configuration acquisition retried");
                                     ProjectLog.info("Application.attach reached for Discord");
                                     installForApplication(context, context.getClassLoader());
                                 }
