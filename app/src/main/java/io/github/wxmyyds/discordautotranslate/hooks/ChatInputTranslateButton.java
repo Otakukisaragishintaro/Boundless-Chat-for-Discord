@@ -37,6 +37,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public final class ChatInputTranslateButton {
     private static final int BUTTON_WIDTH_DP = 68;
     private static final int BUTTON_HEIGHT_DP = 38;
+    private static final int MAX_SEND_CANDIDATE_RETRIES = 6;
     private static final AtomicLong NEXT_REQUEST = new AtomicLong();
     private static final Map<Activity, Registration> REGISTRATIONS = new WeakHashMap<>();
 
@@ -51,6 +52,9 @@ public final class ChatInputTranslateButton {
         ButtonBinding binding;
         EditText pendingEditor;
         TextWatcher pendingTextWatcher;
+        EditText retryEditor;
+        Runnable retryRunnable;
+        int retryCount;
 
         Registration(View decor, ViewTreeObserver observer,
                      ViewTreeObserver.OnGlobalFocusChangeListener focusListener,
@@ -180,6 +184,7 @@ public final class ChatInputTranslateButton {
             registration.observer.removeOnGlobalLayoutListener(registration.layoutListener);
         }
         clearPendingEditorWatcher(registration);
+        cancelSendCandidateRetry(registration);
         removeBinding(registration);
     }
 
@@ -203,6 +208,7 @@ public final class ChatInputTranslateButton {
                     registration.observer.removeOnGlobalLayoutListener(registration.layoutListener);
                 }
                 clearPendingEditorWatcher(registration);
+                cancelSendCandidateRetry(registration);
                 removeBinding(registration);
             }
             REGISTRATIONS.clear();
@@ -212,6 +218,7 @@ public final class ChatInputTranslateButton {
     private static void updateFocusedEditor(Activity activity, Registration registration, View focused) {
         if (!(focused instanceof EditText)) {
             clearPendingEditorWatcher(registration);
+            cancelSendCandidateRetry(registration);
             if (focused != null) {
                 ProjectLog.infoOnce("chat-input-non-edittext-focus",
                         "chat input focus target is not EditText class="
@@ -231,6 +238,7 @@ public final class ChatInputTranslateButton {
                 "Discord chat input editor focused");
         if (registration.binding != null && registration.binding.editor == editor
                 && registration.binding.button.getParent() == registration.binding.overlay) {
+            cancelSendCandidateRetry(registration);
             Candidate refreshed = findSendCandidate(editor);
             // Discord may temporarily replace, hide, or disable its native send action
             // while the IME is opening/closing. Do not destroy our binding on one
@@ -256,6 +264,7 @@ public final class ChatInputTranslateButton {
 
         Candidate candidate = findSendCandidate(editor);
         if (candidate == null) {
+            scheduleSendCandidateRetry(activity, registration, editor);
             ProjectLog.infoOnce("diagnostic.chatInputSendControlMissing",
                     "Discord chat input send control not found");
             ProjectLog.info("chat input send control not found near focused editor");
@@ -294,6 +303,7 @@ public final class ChatInputTranslateButton {
             ButtonBinding binding = new ButtonBinding(activity, editor, overlay,
                     candidate.sendView, button);
             registration.binding = binding;
+            cancelSendCandidateRetry(registration);
             clearPendingEditorWatcher(registration);
             button.setOnClickListener(view -> startTranslation(binding));
             ProjectLog.infoOnce("diagnostic.translationButtonAttached",
@@ -604,6 +614,42 @@ public final class ChatInputTranslateButton {
                 && visible.width() > 0 && visible.height() > 0;
     }
 
+    private static void scheduleSendCandidateRetry(Activity activity,
+                                                   Registration registration,
+                                                   EditText editor) {
+        if (registration.retryEditor != editor) {
+            cancelSendCandidateRetry(registration);
+            registration.retryEditor = editor;
+        }
+        if (registration.retryRunnable != null
+                || registration.retryCount >= MAX_SEND_CANDIDATE_RETRIES) return;
+        registration.retryCount++;
+        Runnable retry = new Runnable() {
+            @Override public void run() {
+                if (registration.retryEditor != editor) return;
+                registration.retryRunnable = null;
+                if (registration.binding != null || !editor.hasFocus()
+                        || !isComposerUsable(editor)) {
+                    cancelSendCandidateRetry(registration);
+                    return;
+                }
+                updateFocusedEditor(activity, registration, editor);
+            }
+        };
+        registration.retryRunnable = retry;
+        registration.decor.postOnAnimation(retry);
+    }
+
+    private static void cancelSendCandidateRetry(Registration registration) {
+        if (registration == null) return;
+        if (registration.retryRunnable != null) {
+            registration.decor.removeCallbacks(registration.retryRunnable);
+        }
+        registration.retryEditor = null;
+        registration.retryRunnable = null;
+        registration.retryCount = 0;
+    }
+
     private static void ensurePendingEditorWatcher(Activity activity,
                                                    Registration registration,
                                                    EditText editor) {
@@ -617,6 +663,7 @@ public final class ChatInputTranslateButton {
             @Override public void afterTextChanged(Editable editable) {
                 if (registration.binding == null && editor.hasFocus()
                         && isComposerUsable(editor)) {
+                    cancelSendCandidateRetry(registration);
                     updateFocusedEditor(activity, registration, editor);
                 }
             }
