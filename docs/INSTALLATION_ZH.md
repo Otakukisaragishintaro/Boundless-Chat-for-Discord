@@ -1,4 +1,4 @@
-# 安装与配置教程
+# Boundless Chat for Discord 安装与配置教程
 
 ## 1. 安装前准备
 
@@ -12,7 +12,7 @@
 ## 2. 安装模块
 
 1. 安装本项目发布的模块 APK。
-2. 打开 LSPosed，找到并启用 **Discord AutoTranslate**。
+2. 打开 LSPosed，找到并启用 **Boundless Chat for Discord**。
 3. 在模块作用域中勾选官方 Discord 应用（包名 `com.discord`）。
 4. 按 LSPosed 的提示完成所需重启，然后打开模块设置页面。
 
