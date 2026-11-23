@@ -2,6 +2,7 @@ package io.github.wxmyyds.discordautotranslate.core;
 
 import android.content.Context;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Bundle;
 import android.os.Process;
 import android.util.Log;
@@ -11,6 +12,7 @@ import androidx.annotation.Nullable;
 import java.util.ArrayDeque;
 import java.util.HashSet;
 import java.util.Set;
+import java.lang.reflect.Method;
 
 /**
  * Sole project log output. Discord-process diagnostics are sent through a restricted
@@ -25,6 +27,7 @@ public final class ProjectLog {
     private static boolean configurationValid;
     @Nullable private static Context transportContext;
     @Nullable private static Uri transportUri;
+    @Nullable private static String modulePackageName;
     @Nullable private static Output framework;
 
     public interface Output {
@@ -47,9 +50,40 @@ public final class ProjectLog {
     }
 
     /**
-     * Attach the IPC transport only after Discord Application.attach supplies a real
-     * target-process Context. The authority belongs to this module's own application.
+     * Establish the module-owned diagnostics channel before Application.attach.
+     * ActivityThread's system Context exists during app-process startup and its
+     * ContentResolver still performs Binder calls under the calling Discord UID.
      */
+    public static synchronized boolean connectBeforeApplicationAttach(
+            @Nullable String modulePackage) {
+        if (transportContext != null && transportUri != null) return true;
+        if (modulePackage == null || modulePackage.isEmpty()) return false;
+        try {
+            Class<?> activityThreadClass = Class.forName("android.app.ActivityThread");
+            Method currentMethod = activityThreadClass.getDeclaredMethod("currentActivityThread");
+            currentMethod.setAccessible(true);
+            Object activityThread = currentMethod.invoke(null);
+            if (activityThread == null) {
+                throw new IllegalStateException("ActivityThread is not available");
+            }
+            Method systemContextMethod = activityThreadClass.getDeclaredMethod("getSystemContext");
+            systemContextMethod.setAccessible(true);
+            Object contextObject = systemContextMethod.invoke(activityThread);
+            if (!(contextObject instanceof Context)) {
+                throw new IllegalStateException("ActivityThread system Context is unavailable");
+            }
+            setTransport((Context) contextObject, modulePackage);
+            bootstrapInfo("diagnostic bootstrap context acquired before Application.attach");
+            return true;
+        } catch (Throwable failure) {
+            Throwable cause = failure.getCause() == null ? failure : failure.getCause();
+            reportTransportStatus(Log.WARN, "diagnostic bootstrap context unavailable errorClass="
+                    + cause.getClass().getSimpleName());
+            return false;
+        }
+    }
+
+    /** Attach the single module-owned ContentProvider transport. */
     public static synchronized void setTransport(
             @Nullable Context context, @Nullable String modulePackageName) {
         if (context == null || modulePackageName == null || modulePackageName.isEmpty()) {
@@ -59,6 +93,7 @@ public final class ProjectLog {
         }
         transportContext = context.getApplicationContext() == null
                 ? context : context.getApplicationContext();
+        ProjectLog.modulePackageName = modulePackageName;
         transportUri = Uri.parse("content://" + modulePackageName + ".diagnostics");
         // Verify that Android can resolve and start the module-owned provider before
         // treating the transport as available. This also leaves a timestamp in the
@@ -163,12 +198,29 @@ public final class ProjectLog {
         }
     }
 
+    @NonNull
+    private static String currentProcessName() {
+        try {
+            String name = android.app.Application.getProcessName();
+            return name == null || name.isEmpty() ? "unknown" : name;
+        } catch (Throwable ignored) {
+            return "unknown";
+        }
+    }
+
     private static boolean sendPing() {
         Context context = transportContext;
         Uri uri = transportUri;
         if (context == null || uri == null) return false;
         try {
-            Bundle response = context.getContentResolver().call(uri, "ping", null, new Bundle());
+            Bundle data = new Bundle();
+            data.putInt("process_pid", Process.myPid());
+            data.putInt("process_uid", Process.myUid());
+            data.putInt("android_sdk", Build.VERSION.SDK_INT);
+            data.putString("process_name", currentProcessName());
+            data.putString("module_package", modulePackageName);
+            data.putString("context_package", context.getPackageName());
+            Bundle response = context.getContentResolver().call(uri, "ping", null, data);
             boolean accepted = response != null && response.getBoolean("accepted", false);
             reportTransportStatus(accepted ? Log.INFO : Log.WARN,
                     "diagnostic IPC ping " + (accepted ? "accepted" : "not acknowledged"));
