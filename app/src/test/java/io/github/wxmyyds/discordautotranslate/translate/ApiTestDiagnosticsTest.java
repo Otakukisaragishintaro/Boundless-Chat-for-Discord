@@ -839,7 +839,7 @@ public class ApiTestDiagnosticsTest {
         assertEquals(enabled ? messages.length : 0, entries.size());
         for (int i = 0; i < entries.size(); i++) {
             Entry entry = entries.get(i);
-            assertEquals("DiscordAutoTranslate", entry.tag);
+            assertEquals("BoundlessChatDiscord", entry.tag);
             assertEquals(messages[i], entry.message);
             boolean upstreamBodyLine = entry.message.startsWith("api.upstream.error httpStatus=");
             assertEquals(messages[i].contains("outcome=FAILURE") || upstreamBodyLine
