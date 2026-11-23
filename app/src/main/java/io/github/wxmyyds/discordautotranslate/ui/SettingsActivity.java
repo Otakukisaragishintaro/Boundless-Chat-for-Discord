@@ -141,11 +141,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private TextView statusText;
     private TextView resultText;
     private EditText testTextInput;
+    private EditText sendTestTextInput;
     private Button saveButton;
     private Button resetButton;
     private Button configCheckButton;
     private Button testConnectionButton;
     private Button testTranslationButton;
+    private Button sendTestTranslationButton;
     private Button scopeButton;
     private TextView scopeSummary;
     private TranslationScope scopeDraft = TranslationScope.ALL;
@@ -545,6 +547,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         testTextInput = addField(root, getString(R.string.label_test_text),
                 getString(R.string.hint_test_text),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        sendTestTextInput = addField(root, getString(R.string.label_send_test_text),
+                getString(R.string.hint_send_test_text),
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
 
         fieldHints = new CharSequence[configurationFields().length];
         EditText[] fields = configurationFields();
@@ -591,6 +596,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
 
         root.addView(testRow, matchWrap());
+
+        sendTestTranslationButton = new Button(this);
+        sendTestTranslationButton.setText(R.string.button_test_send_translation);
+        sendTestTranslationButton.setOnClickListener(v ->
+                runTestTranslation(ApiTester.TestKind.SEND_TRANSLATION));
+        root.addView(sendTestTranslationButton, matchWrap());
 
         resultText = new TextView(this);
         resultText.setTextSize(12f);
@@ -737,6 +748,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         timeoutInput.addTextChangedListener(watcher);
         concurrencyInput.addTextChangedListener(watcher);
         testTextInput.addTextChangedListener(watcher);
+        sendTestTextInput.addTextChangedListener(watcher);
     }
 
     private void markDirty() {
@@ -1207,14 +1219,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
      * @param connectionTest true=由 ApiTester 选择固定探针，false=翻译测试文本输入框
      */
     private void runTestTranslation(boolean connectionTest) {
+        runTestTranslation(connectionTest ? ApiTester.TestKind.CONNECTION
+                : ApiTester.TestKind.TRANSLATION);
+    }
+
+    private void runTestTranslation(ApiTester.TestKind testKind) {
         if (!started || destroyed || !configurationLoaded || persistence.isLoading()
                 || persistedConfigInvalid || saveInProgress || syncInProgress
                 || testFuture != null) {
             return;
         }
         Config.Snapshot snapshot = snapshotFromUi();
-        final String text = testTextInput.getText().toString();
-        if (!connectionTest && text.trim().isEmpty()) {
+        final String text = testKind == ApiTester.TestKind.SEND_TRANSLATION
+                ? sendTestTextInput.getText().toString() : testTextInput.getText().toString();
+        if (testKind != ApiTester.TestKind.CONNECTION && text.trim().isEmpty()) {
             resultText.setText(R.string.status_enter_test_text);
             return;
         }
@@ -1223,9 +1241,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resultText.setText(R.string.status_requesting);
         setTestButtonsEnabled(false);
 
-        final ApiTester.Call call = ApiTester.newCall(snapshot,
-                connectionTest ? ApiTester.TestKind.CONNECTION : ApiTester.TestKind.TRANSLATION,
-                text);
+        final ApiTester.Call call = ApiTester.newCall(snapshot, testKind, text);
         testCall = call;
         FutureTask<ApiTester.Result> task = new FutureTask<ApiTester.Result>(call) {
             @Override
@@ -1321,6 +1337,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
         if (testTranslationButton != null) {
             testTranslationButton.setEnabled(enabled);
+        }
+        if (sendTestTranslationButton != null) {
+            sendTestTranslationButton.setEnabled(enabled);
         }
     }
 
