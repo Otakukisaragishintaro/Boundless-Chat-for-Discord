@@ -62,14 +62,12 @@ public final class ChatInputTranslateButton {
         final View branch;
         final View sendView;
         final int branchIndex;
-        final int distance;
 
-        Candidate(ViewGroup parent, View branch, View sendView, int branchIndex, int distance) {
+        Candidate(ViewGroup parent, View branch, View sendView, int branchIndex) {
             this.parent = parent;
             this.branch = branch;
             this.sendView = sendView;
             this.branchIndex = branchIndex;
-            this.distance = distance;
         }
     }
 
@@ -257,7 +255,20 @@ public final class ChatInputTranslateButton {
                     "Discord translation button attached");
             ProjectLog.info("chat input translate button attached editor="
                     + editor.getClass().getName() + " send="
-                    + candidate.sendView.getClass().getName());
+                    + candidate.sendView.getClass().getName() + " label="
+                    + sendActionLabel(candidate.sendView));
+            button.post(() -> {
+                if (button.getParent() != candidate.parent || !button.isAttachedToWindow()
+                        || button.getWidth() <= 0 || button.getHeight() <= 0) {
+                    ProjectLog.warn("chat input translate button layout verification failed parent="
+                            + (button.getParent() == null ? "none"
+                            : button.getParent().getClass().getName())
+                            + " size=" + button.getWidth() + "x" + button.getHeight());
+                } else {
+                    ProjectLog.info("chat input translate button layout verified bounds="
+                            + boundsOnScreen(button).toShortString());
+                }
+            });
             reportHierarchyIfEnabled(editor);
         } catch (Throwable failure) {
             ProjectLog.infoOnce("diagnostic.translationButtonAttachFailed",
@@ -381,30 +392,42 @@ public final class ChatInputTranslateButton {
             ViewGroup parent = (ViewGroup) ancestor;
             int inputIndex = indexOf(parent, branch);
             Candidate best = null;
+            int bestCenterX = Integer.MIN_VALUE;
             for (int i = 0; i < parent.getChildCount(); i++) {
                 if (i == inputIndex) continue;
                 View child = parent.getChildAt(i);
-                View clickable = findNearestClickable(child, inputBounds, 0);
-                if (clickable == null) continue;
-                Rect rect = boundsOnScreen(clickable);
-                int distance = Math.abs(rect.centerX() - inputBounds.right);
-                Candidate candidate = new Candidate(parent, child, clickable, i, distance);
-                if (best == null || candidate.distance < best.distance) best = candidate;
+                View sendAction = findSendAction(child, inputBounds, 0);
+                if (sendAction == null) continue;
+                Rect rect = boundsOnScreen(sendAction);
+                if (rect.centerX() > bestCenterX) {
+                    bestCenterX = rect.centerX();
+                    best = new Candidate(parent, child, sendAction, i);
+                }
             }
-            if (best != null) return best;
+            if (best != null) {
+                ProjectLog.info("chat input native send action found parent="
+                        + parent.getClass().getName() + " branch="
+                        + best.branch.getClass().getName() + " control="
+                        + best.sendView.getClass().getName() + " label="
+                        + sendActionLabel(best.sendView));
+                return best;
+            }
             branch = parent;
             ancestor = parent.getParent();
         }
         return null;
     }
 
-    private static View findNearestClickable(View view, Rect inputBounds, int depth) {
-        if (view == null || depth > 6 || view.getVisibility() != View.VISIBLE
+    /**
+     * Find Discord's actual send action by its accessibility label, not by proximity.
+     * The emoji button is closer to the editor on current Discord layouts, so distance
+     * alone is not a valid way to distinguish the send action.
+     */
+    private static View findSendAction(View view, Rect inputBounds, int depth) {
+        if (view == null || depth > 7 || view.getVisibility() != View.VISIBLE
                 || !view.isEnabled()) return null;
-        View best = null;
-        int bestDistance = Integer.MAX_VALUE;
 
-        if (view != null && view.isClickable()) {
+        if (view.isClickable() && isSendActionLabel(sendActionLabel(view))) {
             Rect rect = boundsOnScreen(view);
             int overlap = Math.max(0, Math.min(rect.bottom, inputBounds.bottom)
                     - Math.max(rect.top, inputBounds.top));
@@ -412,25 +435,46 @@ public final class ChatInputTranslateButton {
             if (rect.centerX() > inputBounds.centerX()
                     && overlap * 3 >= minHeight
                     && rect.width() > 0 && rect.height() > 0) {
-                best = view;
-                bestDistance = Math.abs(rect.centerX() - inputBounds.right);
+                return view;
             }
         }
+
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {
-                View nested = findNearestClickable(group.getChildAt(i), inputBounds, depth + 1);
-                if (nested != null) {
-                    Rect rect = boundsOnScreen(nested);
-                    int distance = Math.abs(rect.centerX() - inputBounds.right);
-                    if (distance < bestDistance) {
-                        best = nested;
-                        bestDistance = distance;
-                    }
-                }
+                View match = findSendAction(group.getChildAt(i), inputBounds, depth + 1);
+                if (match != null) return match;
             }
         }
-        return best;
+        return null;
+    }
+
+    private static String sendActionLabel(View view) {
+        if (view == null) return "";
+        CharSequence description = view.getContentDescription();
+        if (description != null && description.length() > 0) {
+            return description.toString().trim();
+        }
+        if (view instanceof TextView) {
+            CharSequence text = ((TextView) view).getText();
+            if (text != null) return text.toString().trim();
+        }
+        return "";
+    }
+
+    private static boolean isSendActionLabel(String label) {
+        if (label == null) return false;
+        String normalized = label.trim().toLowerCase(java.util.Locale.ROOT);
+        return normalized.equals("发送")
+                || normalized.equals("发送消息")
+                || normalized.equals("send")
+                || normalized.equals("send message")
+                || normalized.equals("送信")
+                || normalized.equals("보내기")
+                || normalized.equals("enviar")
+                || normalized.equals("envoyer")
+                || normalized.equals("senden")
+                || normalized.equals("отправить");
     }
 
     private static Rect boundsOnScreen(View view) {
