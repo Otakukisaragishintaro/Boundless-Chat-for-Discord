@@ -1424,8 +1424,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .append('\n')
                 .append(chineseUi ? "Xposed 设置服务：" : "Xposed settings service: ")
                 .append(connectionState)
-                .append("\\n\\n--- ").append(chineseUi ? "Hook 分阶段确认" : "Hook stage checkpoints")
-                .append(" ---\\n");
+                .append("\n\n--- ").append(chineseUi ? "Hook 分阶段确认" : "Hook stage checkpoints")
+                .append(" ---\n");
         boolean providerConnected = transportPingAt > 0L;
         appendDiagnosticStage(display, chineseUi ? "模块进入进程" : "Module entry loaded",
                 "module lifecycle entered", logs, providerConnected);
@@ -1451,8 +1451,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 "Discord translation button attached", logs, providerConnected);
         if (!providerConnected) {
             display.append(chineseUi
-                    ? "\\nProvider 尚未完成握手：以上阶段无法通过此页面读取。请在 LSPosed 管理器的 Xposed 日志中搜索 DiscordAutoTranslate，查看模块入口、包生命周期及 Application.attach Hook 安装记录。\\n"
-                    : "\\nThe provider handshake is not confirmed, so this page cannot read the stages above. Check the LSPosed Xposed log for DiscordAutoTranslate to verify module entry, package lifecycle, and Application.attach Hook installation.\\n");
+                    ? "\nProvider 尚未完成握手：以上阶段无法通过此页面读取。请在 LSPosed 管理器的 Xposed 日志中搜索 DiscordAutoTranslate，查看模块入口、包生命周期及 Application.attach Hook 安装记录。\n"
+                     : "\nThe provider handshake is not confirmed, so this page cannot read the stages above. Check the LSPosed Xposed log for DiscordAutoTranslate to verify module entry, package lifecycle, and Application.attach Hook installation.\n");
         }
 
         final String displayed = display.toString();
@@ -1491,7 +1491,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     ? (chineseUi ? "无法读取（IPC 未握手）" : "UNAVAILABLE (IPC not connected)")
                     : (chineseUi ? "尚未记录" : "NOT RECORDED"));
         }
-        display.append('\\n');
+        display.append('\n');
     }
 
     private void updateStatus(String status) {
