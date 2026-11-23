@@ -6,25 +6,29 @@ plugins {
     id "com.android.application"
 }
 
-// 所有构建使用 Actions 注入的同一签名，不生成调试证书或未签名产物。
+// 所有构建使用 Actions 注入的同一把 Kuroshin 签名密钥。
+// 密钥文件和属性仅存在于 Actions runner 临时目录，不进入仓库。
 def keystorePropsPath = System.getenv("KEYSTORE_PROPERTIES")
 if (keystorePropsPath == null || keystorePropsPath.isBlank()) {
     throw new GradleException("KEYSTORE_PROPERTIES is required; build through GitHub Actions")
 }
 def propsFile = new File(keystorePropsPath)
 if (!propsFile.isFile() || !propsFile.canRead()) {
-    throw new GradleException("Signing properties are missing or unreadable")
+    throw new GradleException("Kuroshin signing properties are missing or unreadable")
 }
 def signingProps = new Properties()
 propsFile.withInputStream { signingProps.load(it) }
 for (key in ["storeFile", "storePassword", "keyAlias", "keyPassword"]) {
     if (signingProps.getProperty(key) == null || signingProps.getProperty(key).isBlank()) {
-        throw new GradleException("Required signing property is missing: " + key)
+        throw new GradleException("Required Kuroshin signing property is missing: " + key)
     }
+}
+if (signingProps.getProperty("keyAlias") != "kuroshinkey") {
+    throw new GradleException("Kuroshin signing key alias must be kuroshinkey")
 }
 def signingStoreFile = new File(propsFile.parentFile, signingProps.storeFile)
 if (!signingStoreFile.isFile() || !signingStoreFile.canRead()) {
-    throw new GradleException("Signing keystore is missing or unreadable")
+    throw new GradleException("Kuroshin keystore is missing or unreadable")
 }
 
 android {
@@ -70,7 +74,7 @@ android {
 
     testOptions {
         unitTests {
-            // 纯逻辑单测（协议请求构造、路径提取、调度语义、缓存）不依赖 Android 框架，
+            // 纯逻辑单测（模板转义、路径提取、调度语义、缓存）不依赖 Android 框架，
             // 只需 org.json（JDK 自带的 JSON 实现来自 Android，单测环境不可用）。
             returnDefaultValues = true
         }
