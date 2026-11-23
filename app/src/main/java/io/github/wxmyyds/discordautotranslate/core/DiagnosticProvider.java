@@ -51,9 +51,22 @@ public final class DiagnosticProvider extends ContentProvider {
         Bundle result = new Bundle();
         if (METHOD_PING.equals(method)) {
             long now = System.currentTimeMillis();
+            String processName = extras.getString("process_name", "unknown");
+            String modulePackage = extras.getString("module_package", "");
+            String contextPackage = extras.getString("context_package", "");
             boolean stored = prefs.edit()
                     .putLong("transport_last_ping_at", now)
                     .putInt("transport_last_calling_uid", Binder.getCallingUid())
+                    .putInt("transport_last_process_pid", extras.getInt("process_pid", -1))
+                    .putInt("transport_last_process_uid", extras.getInt("process_uid", Binder.getCallingUid()))
+                    .putInt("transport_last_android_sdk", extras.getInt("android_sdk", -1))
+                    .putString("transport_last_process_name",
+                            processName.length() > 128 ? processName.substring(0, 128) : processName)
+                    .putString("transport_last_module_package",
+                            modulePackage.length() > 128 ? modulePackage.substring(0, 128) : modulePackage)
+                    .putString("transport_last_context_package",
+                            contextPackage.length() > 128 ? contextPackage.substring(0, 128) : contextPackage)
+                    .putInt("transport_last_schema_version", 2)
                     .putString("transport_last_method", METHOD_PING)
                     .commit();
             result.putBoolean("accepted", stored);
@@ -157,6 +170,7 @@ public final class DiagnosticProvider extends ContentProvider {
     static boolean isAllowedDiagnostic(String message) {
         if (message == null || message.isEmpty()) return false;
         return message.equals("module lifecycle entered")
+                || message.equals("diagnostic bootstrap context acquired before Application.attach")
                 || message.equals("Discord package lifecycle entered")
                 || message.equals("remote preferences acquired")
                 || message.equals("module logging configuration initialized")
