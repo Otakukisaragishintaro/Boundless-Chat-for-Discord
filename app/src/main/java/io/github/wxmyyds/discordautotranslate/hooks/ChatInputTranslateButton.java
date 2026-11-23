@@ -505,8 +505,10 @@ public final class ChatInputTranslateButton {
                                 return;
                             }
                             if (binding.sendView != currentCandidate.sendView) {
-                                binding.sendView.removeOnLayoutChangeListener(
-                                        binding.positionListener);
+                                if (binding.sendView != null) {
+                                    binding.sendView.removeOnLayoutChangeListener(
+                                            binding.positionListener);
+                                }
                                 binding.sendView = currentCandidate.sendView;
                                 binding.sendView.addOnLayoutChangeListener(
                                         binding.positionListener);
