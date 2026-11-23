@@ -41,7 +41,7 @@ public final class ApiTester {
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
                         (cause == null ? error : cause).getClass().getSimpleName(), body,
                         error.reason() == TranslationException.Reason.TRANSLATION_INVALID
-                                ? error.getMessage() : "");
+                                ? safeValidationDetail(error.getMessage()) : "");
             }
             return new Failure(TranslationException.Kind.UNKNOWN,
                     TranslationException.Reason.UNKNOWN_FAILURE, 0,
@@ -171,6 +171,11 @@ public final class ApiTester {
         }
         logResult(result);
         return result;
+    }
+
+    /** Keep the validation category visible without exposing source/response length counts. */
+    private static String safeValidationDetail(String message) {
+        return message == null ? "" : message.replaceAll("（[0-9]+/[0-9]+）", "");
     }
 
     private static long elapsed(long start) {
