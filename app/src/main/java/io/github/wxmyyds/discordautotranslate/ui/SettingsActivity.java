@@ -626,7 +626,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 markSpinnerDirty();
-                if (!loadingUi && hasUnsavedChanges) save();
+                if (!loadingUi && hasUnsavedChanges) saveOptionsOnly();
             }
         });
         apiBacking.addView(targetLanguageSpinner, matchWrap());
