@@ -33,6 +33,26 @@ public final class Segments {
     }
 
     /**
+     * Removes a single, exact pair of request-boundary tags when a model echoes the
+     * entire wrapper around its answer. Embedded, partial, or nested tags are left
+     * untouched so plainTextViolation() can reject them rather than corrupt content.
+     */
+    public static String stripOuterResponseWrapper(String translated) {
+        if (translated == null) return null;
+        String value = translated.trim();
+        if (!value.startsWith(Protocols.WRAPPER_OPEN)
+                || !value.endsWith(Protocols.WRAPPER_CLOSE)) {
+            return translated;
+        }
+        String inner = value.substring(Protocols.WRAPPER_OPEN.length(),
+                value.length() - Protocols.WRAPPER_CLOSE.length());
+        if (inner.contains(Protocols.WRAPPER_OPEN) || inner.contains(Protocols.WRAPPER_CLOSE)) {
+            return translated;
+        }
+        return inner.trim();
+    }
+
+    /**
      * 译文的防损坏校验：非空、无包装标签与旧分段标记、原样保留结构定位、长度比例合理。
      *
      * <p>单链路在引擎侧返回前调用：复读刷屏（长度
