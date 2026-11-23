@@ -94,6 +94,8 @@ public final class ChatInputTranslateButton {
 
     /** Called from Activity.onResume on the main thread. */
     public static void attach(Activity activity) {
+        // Capture the actual focused editor hierarchy before attempting button discovery.
+        ChatInputViewDiagnostics.attach(activity);
         if (activity == null || activity.getWindow() == null) return;
         View decor = activity.getWindow().getDecorView();
         ViewTreeObserver observer = decor.getViewTreeObserver();
@@ -145,6 +147,7 @@ public final class ChatInputTranslateButton {
 
     /** Called from Activity.onDestroy on the main thread. */
     public static void detach(Activity activity) {
+        ChatInputViewDiagnostics.detach(activity);
         if (activity == null) return;
         synchronized (REGISTRATIONS) {
             detachLocked(activity);
@@ -163,6 +166,7 @@ public final class ChatInputTranslateButton {
 
     /** Remove every listener and injected button before the runtime dispatcher is shut down. */
     public static void clear() {
+        ChatInputViewDiagnostics.clear();
         synchronized (REGISTRATIONS) {
             if (REGISTRATIONS.isEmpty()) return;
         }
