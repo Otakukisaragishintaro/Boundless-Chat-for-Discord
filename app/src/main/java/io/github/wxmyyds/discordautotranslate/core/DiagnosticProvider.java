@@ -171,6 +171,7 @@ public final class DiagnosticProvider extends ContentProvider {
         if (message == null || message.isEmpty()) return false;
         return message.equals("module lifecycle entered")
                 || message.equals("diagnostic bootstrap context acquired before Application.attach")
+                || message.startsWith("diagnostic bootstrap context unavailable errorClass=")
                 || message.equals("Discord package lifecycle entered")
                 || message.equals("remote preferences acquired")
                 || message.equals("module logging configuration initialized")
