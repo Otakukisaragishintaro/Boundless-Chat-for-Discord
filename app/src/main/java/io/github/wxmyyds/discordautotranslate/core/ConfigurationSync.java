@@ -13,7 +13,7 @@ public final class ConfigurationSync {
     public static final List<String> CONFIG_KEYS = Collections.unmodifiableList(Arrays.asList(
             Config.KEY_ENABLED, Config.KEY_LOGGING_ENABLED, Config.KEY_TRANSLATION_SCOPE, Config.KEY_API_URL,
             Config.KEY_API_KEY, Config.KEY_MODEL,
-            Config.KEY_TARGET_LANG, Config.KEY_SEND_TARGET_LANG,
+            Config.KEY_TARGET_LANG, Config.KEY_SEND_TARGET_LANG, Config.KEY_OUTBOUND_BUTTONS,
             Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT, Config.KEY_SEND_SYSTEM_PROMPT,
             Config.KEY_PROTOCOL, Config.KEY_STREAMING, Config.KEY_TIMEOUT_MS,
             Config.KEY_MAX_CONCURRENCY, Config.KEY_CHECK_WRAPPER,
@@ -232,6 +232,8 @@ public final class ConfigurationSync {
                     Config.DEF_SYSTEM_PROMPT);
             putUnlessDefault(raw, Config.KEY_SEND_SYSTEM_PROMPT, snapshot.sendSystemPrompt,
                     Config.DEF_SEND_SYSTEM_PROMPT);
+            raw.put(Config.KEY_OUTBOUND_BUTTONS,
+                    OutboundButtonConfig.toJson(snapshot.outboundButtons));
             putUnlessDefault(raw, Config.KEY_TIMEOUT_MS, snapshot.timeoutMs, Config.DEF_TIMEOUT_MS);
             putUnlessDefault(raw, Config.KEY_MAX_CONCURRENCY, snapshot.maxConcurrency,
                     Config.DEF_MAX_CONCURRENCY);
