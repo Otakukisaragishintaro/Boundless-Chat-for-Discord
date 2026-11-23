@@ -74,6 +74,7 @@ public class ModuleEntry extends XposedModule {
     @Override
     public void onModuleLoaded(@NonNull XposedModuleInterface.ModuleLoadedParam param) {
         ProjectLog.attach(this::log);
+        ProjectLog.connectBeforeApplicationAttach(getModuleApplicationInfo().packageName);
         ProjectLog.bootstrapInfo("module lifecycle entered");
         configureLogging();
         ProjectLog.info("onModuleLoaded lifecycle callback received");
@@ -89,6 +90,10 @@ public class ModuleEntry extends XposedModule {
         if (!TARGET_PACKAGE.equals(param.getPackageName())) {
             return;
         }
+        // Retry the same early transport acquisition at the package lifecycle boundary.
+        // This runs before Application.attach, so startup checkpoints can be persisted even
+        // when the attach hook itself is the component that later fails.
+        ProjectLog.connectBeforeApplicationAttach(getModuleApplicationInfo().packageName);
         // Remote preferences may not be ready during onModuleLoaded. Re-read them
         // at the target package lifecycle boundary before emitting any startup diagnostics.
         ProjectLog.bootstrapInfo("Discord package lifecycle entered");
