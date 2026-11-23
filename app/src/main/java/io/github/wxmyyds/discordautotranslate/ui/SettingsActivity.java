@@ -31,6 +31,7 @@ import androidx.annotation.Nullable;
 
 import io.github.wxmyyds.discordautotranslate.R;
 import io.github.wxmyyds.discordautotranslate.core.Config;
+import io.github.wxmyyds.discordautotranslate.core.OutboundButtonConfig;
 import io.github.wxmyyds.discordautotranslate.core.TranslationScope;
 import io.github.wxmyyds.discordautotranslate.core.ConfigurationSync;
 import io.github.wxmyyds.discordautotranslate.core.Protocols;
@@ -113,6 +114,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Spinner targetLanguageSpinner;
     private Spinner sendTargetLanguageSpinner;
     private ArrayAdapter<String> targetLanguageAdapter;
+    private final List<OutboundButtonConfig> outboundButtonsDraft = new ArrayList<>();
+    private Button manageOutboundButtonsButton;
+    private Button advancedSettingsButton;
+    private TextView outboundButtonsSummary;
+    @Nullable private Dialog outboundButtonsDialog;
+    @Nullable private Dialog advancedSettingsDialog;
     private final List<String> targetLanguageValues = new ArrayList<>();
     private boolean chineseUi;
     private boolean loadingUi;
@@ -252,6 +259,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putInt("protocol", protocolSpinner.getSelectedItemPosition());
         draft.putString("language", selectedTargetLanguage());
         draft.putString("send_language", selectedSendTargetLanguage());
+        draft.putString("outbound_buttons", OutboundButtonConfig.toJson(outboundButtonsDraft));
         draft.putString("baseline_protocol", baselineProtocol);
         draft.putString("baseline_language", baselineTargetLanguage);
         draft.putString("baseline_send_language", baselineSendTargetLanguage);
@@ -292,6 +300,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             String sendLanguage = draft.getString("send_language", Config.DEF_SEND_TARGET_LANG);
             ensureTargetLanguageAvailable(sendLanguage);
             sendTargetLanguageSpinner.setSelection(targetLanguagePosition(sendLanguage));
+            String buttonJson = draft.getString("outbound_buttons");
+            if (buttonJson != null) {
+                outboundButtonsDraft.clear();
+                outboundButtonsDraft.addAll(OutboundButtonConfig.parse(buttonJson,
+                        sendLanguage, sendSystemPromptInput.getText().toString()));
+            }
+            updateOutboundButtonsSummary();
             baselineProtocol = draft.getString("baseline_protocol");
             baselineTargetLanguage = draft.getString("baseline_language");
             baselineSendTargetLanguage = draft.getString("baseline_send_language",
@@ -537,83 +552,76 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             }
         });
         root.addView(targetLanguageSpinner, matchWrap());
-        TextView sendTargetLanguageLabel = new TextView(this);
-        sendTargetLanguageLabel.setText(R.string.label_send_target_language);
-        sendTargetLanguageLabel.setPadding(0, dp(8), 0, 0);
-        root.addView(sendTargetLanguageLabel, matchWrap());
+        // Legacy single-language spinner is retained only as a migration bridge; it is not shown.
         sendTargetLanguageSpinner = new Spinner(this);
         sendTargetLanguageSpinner.setAdapter(targetLanguageAdapter);
         sendTargetLanguageSpinner.setSelection(targetLanguagePosition(Config.DEF_SEND_TARGET_LANG));
-        sendTargetLanguageSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
-            @Override
-            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                markSpinnerDirty();
-            }
-
-            @Override
-            public void onNothingSelected(AdapterView<?> parent) {
-                markSpinnerDirty();
-            }
-        });
-        root.addView(sendTargetLanguageSpinner, matchWrap());
-        TextView sendTargetLanguageHint = new TextView(this);
-        sendTargetLanguageHint.setTextSize(12f);
-        sendTargetLanguageHint.setText(R.string.hint_send_target_language);
-        root.addView(sendTargetLanguageHint, matchWrap());
         headersInput = addField(root, getString(R.string.label_headers), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        systemPromptInput = addField(root,
+
+        TextView outboundTitle = new TextView(this);
+        outboundTitle.setText(chineseUi ? "发送语言按钮" : "Outbound language buttons");
+        outboundTitle.setPadding(0, dp(10), 0, 0);
+        root.addView(outboundTitle, matchWrap());
+        outboundButtonsSummary = new TextView(this);
+        outboundButtonsSummary.setTextSize(12f);
+        root.addView(outboundButtonsSummary, matchWrap());
+        manageOutboundButtonsButton = new Button(this);
+        manageOutboundButtonsButton.setText(chineseUi ? "管理发送按钮" : "Manage send buttons");
+        manageOutboundButtonsButton.setOnClickListener(v -> openOutboundButtonsEditor());
+        root.addView(manageOutboundButtonsButton, matchWrap());
+        advancedSettingsButton = new Button(this);
+        advancedSettingsButton.setText(chineseUi ? "提示词与译文过滤设置…" : "Prompts and translation filters…");
+        advancedSettingsButton.setOnClickListener(v -> openAdvancedSettings());
+        root.addView(advancedSettingsButton, matchWrap());
+
+        // Advanced controls stay in a hidden backing container so existing save/import
+        // transactions continue to use the same validated fields.
+        LinearLayout advancedBacking = new LinearLayout(this);
+        advancedBacking.setOrientation(LinearLayout.VERTICAL);
+        advancedBacking.setVisibility(View.GONE);
+        systemPromptInput = addField(advancedBacking,
                 chineseUi ? "接收翻译系统提示词" : "Incoming translation system prompt",
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        resetSystemPromptButton = addPromptResetButton(root, systemPromptInput,
+        resetSystemPromptButton = addPromptResetButton(advancedBacking, systemPromptInput,
                 Config.DEF_SYSTEM_PROMPT);
-        sendSystemPromptInput = addField(root,
-                chineseUi ? "发送翻译系统提示词" : "Outbound translation system prompt",
-                chineseUi ? "可使用 {{target_language}} 自动替换为发送目标语言。" :
-                        "Use {{target_language}} to insert the selected send target language.",
+        sendSystemPromptInput = addField(advancedBacking,
+                chineseUi ? "新建发送按钮的默认提示词" : "Default prompt for new outbound buttons",
+                chineseUi ? "新建按钮时作为初始提示词，可使用 {{target_language}}。" :
+                        "Used when creating a button; supports {{target_language}}.",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        resetSendSystemPromptButton = addPromptResetButton(root, sendSystemPromptInput,
+        resetSendSystemPromptButton = addPromptResetButton(advancedBacking, sendSystemPromptInput,
                 Config.DEF_SEND_SYSTEM_PROMPT);
+        checkWrapperInput = addValidationSwitch(advancedBacking,
+                chineseUi ? "检查包装标签" : "Check wrapper tags", Config.DEF_CHECK_WRAPPER);
+        stripOuterWrapperInput = addValidationSwitch(advancedBacking,
+                chineseUi ? "自动移除完整的外层包装标签" : "Strip one exact outer wrapper pair",
+                Config.DEF_STRIP_OUTER_WRAPPER);
+        checkSegmentMarkersInput = addValidationSwitch(advancedBacking,
+                chineseUi ? "检查残留分段标记" : "Check leftover segment markers",
+                Config.DEF_CHECK_SEGMENT_MARKERS);
+        checkPlaceholdersInput = addValidationSwitch(advancedBacking,
+                chineseUi ? "检查模板占位符" : "Check template placeholders",
+                Config.DEF_CHECK_PLACEHOLDERS);
+        checkRetainedMarkersInput = addValidationSwitch(advancedBacking,
+                chineseUi ? "检查保留节点定位标记" : "Check retained-node markers",
+                Config.DEF_CHECK_RETAINED_MARKERS);
+        checkLengthInput = addValidationSwitch(advancedBacking,
+                chineseUi ? "检查译文长度比例" : "Check translation length ratio",
+                Config.DEF_CHECK_LENGTH);
+        minLengthPercentInput = addField(advancedBacking,
+                chineseUi ? "译文最小长度（原文百分比）" : "Minimum translation length (% of source)",
+                String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
+        maxLengthPercentInput = addField(advancedBacking,
+                chineseUi ? "译文最大长度（原文百分比）" : "Maximum translation length (% of source)",
+                String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
+        root.addView(advancedBacking, matchWrap());
+
         timeoutInput = addField(root, getString(R.string.label_timeout),
                 String.valueOf(Config.DEF_TIMEOUT_MS), InputType.TYPE_CLASS_NUMBER);
         concurrencyInput = addField(root, getString(R.string.label_concurrency),
                 String.valueOf(Config.DEF_MAX_CONCURRENCY), InputType.TYPE_CLASS_NUMBER);
-
-        TextView validationTitle = new TextView(this);
-        validationTitle.setText(chineseUi ? "译文防损坏校验" : "Translation integrity checks");
-        validationTitle.setTextSize(16f);
-        validationTitle.setPadding(0, dp(12), 0, dp(4));
-        root.addView(validationTitle, matchWrap());
-        TextView validationDescription = new TextView(this);
-        validationDescription.setTextSize(12f);
-        validationDescription.setText(chineseUi
-                ? "每项可单独关闭。关闭检查可能放行格式损坏、漏译或重复内容；空响应始终视为无效。"
-                : "Each check can be disabled independently. Disabling checks may allow malformed, incomplete, or repeated output; empty API responses remain invalid.");
-        root.addView(validationDescription, matchWrap());
-        checkWrapperInput = addValidationSwitch(root,
-                chineseUi ? "检查包装标签" : "Check wrapper tags", Config.DEF_CHECK_WRAPPER);
-        stripOuterWrapperInput = addValidationSwitch(root,
-                chineseUi ? "自动移除完整的外层包装标签" : "Strip one exact outer wrapper pair",
-                Config.DEF_STRIP_OUTER_WRAPPER);
-        checkSegmentMarkersInput = addValidationSwitch(root,
-                chineseUi ? "检查残留分段标记" : "Check leftover segment markers",
-                Config.DEF_CHECK_SEGMENT_MARKERS);
-        checkPlaceholdersInput = addValidationSwitch(root,
-                chineseUi ? "检查模板占位符" : "Check template placeholders",
-                Config.DEF_CHECK_PLACEHOLDERS);
-        checkRetainedMarkersInput = addValidationSwitch(root,
-                chineseUi ? "检查保留节点定位标记" : "Check retained-node markers",
-                Config.DEF_CHECK_RETAINED_MARKERS);
-        checkLengthInput = addValidationSwitch(root,
-                chineseUi ? "检查译文长度比例" : "Check translation length ratio",
-                Config.DEF_CHECK_LENGTH);
-        minLengthPercentInput = addField(root,
-                chineseUi ? "译文最小长度（原文百分比）" : "Minimum translation length (% of source)",
-                String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
-        maxLengthPercentInput = addField(root,
-                chineseUi ? "译文最大长度（原文百分比）" : "Maximum translation length (% of source)",
-                String.valueOf(Config.DEF_MAX_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
 
         testTextInput = addField(root, getString(R.string.label_test_text),
                 getString(R.string.hint_test_text),
@@ -902,9 +910,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     }
 
     private String selectedSendTargetLanguage() {
-        int position = sendTargetLanguageSpinner.getSelectedItemPosition();
-        return position >= 0 && position < targetLanguageValues.size()
-                ? targetLanguageValues.get(position) : null;
+        return outboundButtonsDraft.isEmpty() ? Config.DEF_SEND_TARGET_LANG
+                : outboundButtonsDraft.get(0).targetLanguage;
     }
 
     private boolean isChineseSystemLanguage() {
@@ -948,6 +955,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             protocolSpinner.setSelection(AdapterView.INVALID_POSITION);
             targetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
             sendTargetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
+            outboundButtonsDraft.clear();
+            updateOutboundButtonsSummary();
             for (EditText field : configurationFields()) {
                 field.setText("");
                 field.setHint(null);
@@ -1027,8 +1036,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             setTextOrPlaceholder(modelInput, snapshot.model, Config.DEF_MODEL);
             ensureTargetLanguageAvailable(snapshot.targetLang);
             targetLanguageSpinner.setSelection(targetLanguagePosition(snapshot.targetLang));
-            ensureTargetLanguageAvailable(snapshot.sendTargetLang);
-            sendTargetLanguageSpinner.setSelection(targetLanguagePosition(snapshot.sendTargetLang));
+            outboundButtonsDraft.clear();
+            outboundButtonsDraft.addAll(snapshot.outboundButtons);
+            updateOutboundButtonsSummary();
+            String firstSendLanguage = snapshot.outboundButtons.isEmpty()
+                    ? snapshot.sendTargetLang : snapshot.outboundButtons.get(0).targetLanguage;
+            ensureTargetLanguageAvailable(firstSendLanguage);
+            sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstSendLanguage));
             setTextOrPlaceholder(headersInput, snapshot.extraHeaders, Config.DEF_EXTRA_HEADERS);
             systemPromptInput.setText(snapshot.systemPrompt);
             sendSystemPromptInput.setText(snapshot.sendSystemPrompt);
@@ -1048,7 +1062,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     String.valueOf(Config.DEF_MAX_LENGTH_PERCENT));
             baselineProtocol = snapshot.protocol;
             baselineTargetLanguage = snapshot.targetLang;
-            baselineSendTargetLanguage = snapshot.sendTargetLang;
+            baselineSendTargetLanguage = firstSendLanguage;
             hasUnsavedChanges = false;
         } finally {
             loadingUi = false;
@@ -1256,7 +1270,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         targetLanguageSpinner.setEnabled(formAvailable);
         targetLanguageSpinner.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
         sendTargetLanguageSpinner.setEnabled(formAvailable);
-        sendTargetLanguageSpinner.setVisibility(persistedConfigInvalid ? View.INVISIBLE : View.VISIBLE);
+        sendTargetLanguageSpinner.setVisibility(View.GONE);
+        if (manageOutboundButtonsButton != null) manageOutboundButtonsButton.setEnabled(formAvailable);
+        if (advancedSettingsButton != null) advancedSettingsButton.setEnabled(formAvailable);
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
         }
@@ -1310,6 +1326,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_MODEL, textOrDefault(modelInput, Config.DEF_MODEL));
         memoryPrefs.put(Config.KEY_TARGET_LANG, selectedTargetLanguage());
         memoryPrefs.put(Config.KEY_SEND_TARGET_LANG, selectedSendTargetLanguage());
+        memoryPrefs.put(Config.KEY_OUTBOUND_BUTTONS,
+                OutboundButtonConfig.toJson(outboundButtonsDraft));
         memoryPrefs.put(Config.KEY_EXTRA_HEADERS, headersInput.getText().toString());
         memoryPrefs.put(Config.KEY_SYSTEM_PROMPT,
                 promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
