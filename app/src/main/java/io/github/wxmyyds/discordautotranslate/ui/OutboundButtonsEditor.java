@@ -102,6 +102,7 @@ public final class OutboundButtonsEditor {
             }
         };
         refresh[0].run();
+        dialog.show();
         return dialog;
     }
 
