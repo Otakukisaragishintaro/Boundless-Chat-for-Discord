@@ -54,10 +54,10 @@ public class SegmentsTest {
     @Test
     public void plainTextViolationLengthBoundariesAreInclusive() {
         String source = repeat('a', 40);
-        assertNull(Segments.plainTextViolation(repeat('b', 10), source));
-        assertNotNull(Segments.plainTextViolation(repeat('b', 9), source));
-        assertNull(Segments.plainTextViolation(repeat('b', 120), source));
-        assertNotNull(Segments.plainTextViolation(repeat('b', 121), source));
+        assertNull(Segments.plainTextViolation(repeat('b', 4), source));
+        assertNotNull(Segments.plainTextViolation(repeat('b', 3), source));
+        assertNull(Segments.plainTextViolation(repeat('b', 200), source));
+        assertNotNull(Segments.plainTextViolation(repeat('b', 201), source));
         assertNull(Segments.plainTextViolation(repeat('b', 121), repeat('a', 39)));
     }
 
