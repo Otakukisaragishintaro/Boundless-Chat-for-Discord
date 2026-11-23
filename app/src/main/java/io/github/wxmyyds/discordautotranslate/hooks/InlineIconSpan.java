@@ -100,6 +100,9 @@ public final class InlineIconSpan extends ImageSpan {
     private final int iconPx;
     private final int leadingGapPx;
     private final int trailingGapPx;
+    @Nullable private final String languageLabel;
+    private final int languageTextSizePx;
+    private final int languageGapPx;
 
     /** 是否处于翻译中（决定要不要转动）。构造后不再变化：状态变化会重建 span。 */
     private final boolean spinning;
@@ -152,10 +155,15 @@ public final class InlineIconSpan extends ImageSpan {
                 }
             };
 
-    private InlineIconSpan(Drawable drawable, float density, StateStore.Status status) {
+    private InlineIconSpan(Drawable drawable, float density, StateStore.Status status,
+                           @Nullable String languageLabel) {
         super(drawable);
         this.iconPx = InlineIconGeometry.dpToPx(ICON_DP, density);
         this.leadingGapPx = InlineIconGeometry.dpToPxAllowZero(LEADING_GAP_DP, density);
+        this.languageLabel = languageLabel == null || languageLabel.trim().isEmpty()
+                ? null : languageLabel.trim().toUpperCase(java.util.Locale.ROOT);
+        this.languageTextSizePx = InlineIconGeometry.dpToPx(9, density);
+        this.languageGapPx = InlineIconGeometry.dpToPxAllowZero(3, density);
         // 尾部留白 = 让 span 总宽达到最小点击宽度；至少保留 1dp 避免紧贴。
         this.trailingGapPx = InlineIconGeometry.trailingGapForTapTarget(
                 leadingGapPx, iconPx,
@@ -173,11 +181,11 @@ public final class InlineIconSpan extends ImageSpan {
      */
     @Nullable
     static InlineIconSpan create(@Nullable Drawable icon, float density,
-                                StateStore.Status status) {
+                                StateStore.Status status, @Nullable String languageLabel) {
         if (icon == null || status == null) {
             return null;
         }
-        return new InlineIconSpan(icon, density, status);
+        return new InlineIconSpan(icon, density, status, languageLabel);
     }
 
     /** 按状态给 Drawable 着色，并返回独立副本（模块缓存的 Drawable 会被多处复用）。 */
@@ -492,7 +500,14 @@ public final class InlineIconSpan extends ImageSpan {
     public int getSize(Paint paint, CharSequence text, int start, int end,
                        Paint.FontMetricsInt fm) {
         // 刻意不写 fm：保持宿主原有行高，避免图标撑大行距。
-        return InlineIconGeometry.spanWidth(leadingGapPx, iconPx, trailingGapPx);
+        int width = InlineIconGeometry.spanWidth(leadingGapPx, iconPx, trailingGapPx);
+        if (languageLabel != null) {
+            Paint labelPaint = new Paint(paint);
+            labelPaint.setTextSize(languageTextSizePx);
+            labelPaint.setFakeBoldText(true);
+            width += languageGapPx + (int) Math.ceil(labelPaint.measureText(languageLabel));
+        }
+        return width;
     }
 
     @Override
@@ -516,6 +531,20 @@ public final class InlineIconSpan extends ImageSpan {
         d.draw(canvas);
         if (rotated) {
             canvas.restore();
+        }
+
+        // Keep the language tag inside the same ReplacementSpan and click target.
+        if (languageLabel != null) {
+            Paint labelPaint = new Paint(paint);
+            labelPaint.setAntiAlias(true);
+            labelPaint.setTextSize(languageTextSizePx);
+            labelPaint.setFakeBoldText(true);
+            labelPaint.setColor(paint.getColor());
+            Paint.FontMetrics labelMetrics = labelPaint.getFontMetrics();
+            float labelBaseline = centerY
+                    - (labelMetrics.ascent + labelMetrics.descent) / 2f;
+            float labelX = left + iconPx + languageGapPx;
+            canvas.drawText(languageLabel, labelX, labelBaseline, labelPaint);
         }
     }
 
