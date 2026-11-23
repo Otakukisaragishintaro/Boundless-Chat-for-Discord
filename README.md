@@ -1,5 +1,7 @@
 # Discord AutoTranslate
 
+[English](README_EN.md) · [中文安装教程](docs/INSTALLATION_ZH.md) · [English installation guide](docs/INSTALLATION_EN.md)
+
 Discord Android 的 LSPosed 自动翻译模块，基于 LibXposed API 102。消息发送到用户配置的翻译服务，默认目标语言为简体中文。
 
 [下载最新版](https://github.com/wxmyyds/DiscordAutoTranslate/releases/latest) · [LSPosed 模块仓库](https://github.com/Xposed-Modules-Repo/io.github.wxmyyds.discordautotranslate) · [GitHub Actions](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/actions)
@@ -59,3 +61,7 @@ API 基础地址示例：`https://api.openai.com/v1`，协议端点由模块追�
 - [项目协作规则](AGENTS.md)
 
 本项目与 Discord Inc. 无关联；Discord 为其商标。使用模块可能违反 Discord 服务条款，请自行评估。
+
+## 鸣谢
+
+本项目基于原作者 **WXM YYDS（[@wxmyyds](https://github.com/wxmyyds)）** 的 [DiscordAutoTranslate](https://github.com/wxmyyds/DiscordAutoTranslate) 开发。感谢原作者提供的基础实现、LibXposed 接入、Discord 版本适配配置和持续维护。本分支在其基础上扩展了多语言翻译发送按钮、独立发送提示词及相关设置体验。原项目与本衍生项目均采用 MIT License，详见 [LICENSE](LICENSE) 和 [NOTICE](NOTICE.md)。
