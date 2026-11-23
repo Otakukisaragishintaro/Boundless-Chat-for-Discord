@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.SharedPreferences;
+import android.content.Intent;
 import android.content.ClipboardManager;
 import android.content.ClipData;
 import android.os.Bundle;
@@ -429,6 +430,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         viewLogsButton.setText(chineseUi ? "查看诊断日志" : "View diagnostic logs");
         viewLogsButton.setOnClickListener(view -> showProjectLogs());
         root.addView(viewLogsButton, matchWrap());
+
+        Button exportDiagnosticsButton = new Button(this);
+        exportDiagnosticsButton.setText(chineseUi ? "分享完整诊断包" : "Share diagnostic package");
+        exportDiagnosticsButton.setOnClickListener(view -> exportProjectDiagnostics());
+        root.addView(exportDiagnosticsButton, matchWrap());
 
         // 供应商协议：请求体与译文解析按所选协议内置实现，
         // 不再让用户手写 JSON 请求模板与译文提取路径。
@@ -1322,6 +1328,51 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resultText.setText(ApiTestResultFormatter.format(result, this::getString));
         updateStatus(getString(result.ok
                 ? R.string.status_test_passed : R.string.status_test_failed));
+    }
+
+    /** Share the module-owned, content-free diagnostics without requiring LSPosed log access. */
+    private void exportProjectDiagnostics() {
+        SharedPreferences diagnostics = getSharedPreferences(
+                DiagnosticProvider.PREFS_NAME, MODE_PRIVATE);
+        StringBuilder report = new StringBuilder();
+        report.append("DiscordAutoTranslate diagnostic package\n")
+                .append("Generated: ").append(new java.text.SimpleDateFormat(
+                        "yyyy-MM-dd HH:mm:ss z", Locale.getDefault()).format(new java.util.Date()))
+                .append("\nModule package: ").append(getPackageName())
+                .append("\nAndroid SDK: ").append(android.os.Build.VERSION.SDK_INT)
+                .append("\nSettings logging: ")
+                .append(loggingInput != null && loggingInput.isChecked() ? "ON" : "OFF")
+                .append("\nProvider ping: ").append(diagnostics.getLong("transport_last_ping_at", 0L))
+                .append("\nLast append: ").append(diagnostics.getLong("transport_last_append_at", 0L))
+                .append("\nLast configure: ").append(diagnostics.getLong("transport_last_configure_at", 0L))
+                .append("\nLast rejected call: ").append(diagnostics.getLong("transport_last_reject_at", 0L))
+                .append("\nCalling UID: ").append(diagnostics.getInt("transport_last_calling_uid", -1))
+                .append("\nProcess UID: ").append(diagnostics.getInt("transport_last_process_uid", -1))
+                .append("\nProcess PID: ").append(diagnostics.getInt("transport_last_process_pid", -1))
+                .append("\nProcess name: ").append(diagnostics.getString("transport_last_process_name", "unknown"))
+                .append("\nContext package: ").append(diagnostics.getString("transport_last_context_package", "unknown"))
+                .append("\nAndroid SDK reported by Discord process: ")
+                .append(diagnostics.getInt("transport_last_android_sdk", -1))
+                .append("\nDiagnostic schema: ").append(diagnostics.getInt("transport_last_schema_version", 0))
+                .append("\nLast provider method: ").append(diagnostics.getString("transport_last_method", "none"))
+                .append("\nRejected method: ").append(diagnostics.getString("transport_last_reject_method", "none"))
+                .append("\nRejected UID: ").append(diagnostics.getInt("transport_last_reject_uid", -1))
+                .append("\n\n--- Content-free lifecycle log ---\n");
+        String logs = diagnostics.getString(DiagnosticProvider.KEY_BUFFER, "");
+        report.append(logs == null || logs.isEmpty() ? "No lifecycle events received.\n" : logs);
+
+        Intent share = new Intent(Intent.ACTION_SEND);
+        share.setType("text/plain");
+        share.putExtra(Intent.EXTRA_SUBJECT, "DiscordAutoTranslate diagnostic package");
+        share.putExtra(Intent.EXTRA_TEXT, report.toString());
+        try {
+            startActivity(Intent.createChooser(share,
+                    chineseUi ? "分享诊断包" : "Share diagnostic package"));
+        } catch (Throwable failure) {
+            Toast.makeText(this, chineseUi ? "无法打开分享界面：" + failure.getClass().getSimpleName()
+                    : "Unable to open share sheet: " + failure.getClass().getSimpleName(),
+                    Toast.LENGTH_LONG).show();
+        }
     }
 
     private void showProjectLogs() {
