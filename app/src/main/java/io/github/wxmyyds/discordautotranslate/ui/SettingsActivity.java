@@ -694,6 +694,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         });
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        SettingsUiStyle.apply(this, scroll, saveButton);
         return scroll;
     }
 
@@ -842,6 +843,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         advancedSettingsDialog = dialog;
         dialog.setOnDismissListener(ignored -> advancedSettingsDialog = null);
         dialog.show();
+        SettingsUiStyle.styleDialog(this, dialog);
     }
 
     private Switch addDialogSwitch(LinearLayout parent, String label, boolean checked) {
