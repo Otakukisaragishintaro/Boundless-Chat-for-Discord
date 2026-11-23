@@ -4,7 +4,7 @@
 
 **Boundless Chat for Discord** 是由 **Kuorshin** 独立维护的 Android Discord LSPosed 翻译模块，也是 **Boundless Chat** 系列的首个项目。它基于原作者 WXM YYDS 的 DiscordAutoTranslate 独立发展，使用 LibXposed API 102。消息会发送到用户自行配置的翻译服务。
 
-[下载最新版](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/releases/latest) · [GitHub Actions 构建](https://github.com/Otakukisaragishintaro/DiscordAutoTranslateX/actions) · [项目来源与授权](NOTICE.md)
+[下载最新版](https://github.com/Otakukisaragishintaro/Boundless-Chat-for-Discord/releases/latest) · [GitHub Actions 构建](https://github.com/Otakukisaragishintaro/Boundless-Chat-for-Discord/actions) · [项目来源与授权](NOTICE.md)
 
 ## 功能与支持版本
 
