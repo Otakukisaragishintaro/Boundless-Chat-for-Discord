@@ -489,8 +489,6 @@ public final class ChatInputTranslateButton {
                         && binding.editor.isAttachedToWindow()
                         && source.contentEquals(binding.editor.getText())
                         && base.version().equals(io.github.wxmyyds.discordautotranslate.hooks
-                                .HookBridge.get().configSnapshot().version())
-                        && base.version().equals(io.github.wxmyyds.discordautotranslate.hooks
                                 .HookBridge.get().configSnapshot().version()),
                 (identity, accepted, translated, error) -> {
                     try (HookRuntime.Lease lease = HookRuntime.enter()) {
