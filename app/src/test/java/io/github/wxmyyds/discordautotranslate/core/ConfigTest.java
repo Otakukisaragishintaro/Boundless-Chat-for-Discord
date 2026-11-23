@@ -100,6 +100,24 @@ public class ConfigTest {
     }
 
     @Test
+    public void outboundSnapshotUsesIndependentTargetAndPrompt() {
+        Config.Snapshot incoming = Config.read(new MemoryPrefs()
+                .put(Config.KEY_TARGET_LANG, "日本語")
+                .put(Config.KEY_SEND_TARGET_LANG, "English")
+                .put(Config.KEY_SYSTEM_PROMPT, "Incoming-only custom prompt"));
+
+        Config.Snapshot outbound = incoming.forSendTranslation();
+
+        assertEquals("日本語", incoming.targetLang);
+        assertEquals("Incoming-only custom prompt", incoming.systemPrompt);
+        assertEquals("English", outbound.targetLang);
+        assertEquals("English", outbound.sendTargetLang);
+        assertEquals(Config.DEF_SYSTEM_PROMPT, outbound.systemPrompt);
+        assertTrue(Config.defaultSystemPromptFor(outbound.targetLang).contains("into English"));
+        assertNotEquals(incoming.version(), outbound.version());
+    }
+
+    @Test
     public void defaultPromptUsesConfiguredTargetLanguage() {
         Config.Snapshot japanese = Config.read(new MemoryPrefs()
                 .put(Config.KEY_TARGET_LANG, "日本語"));
