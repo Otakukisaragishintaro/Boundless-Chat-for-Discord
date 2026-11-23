@@ -43,6 +43,8 @@ import io.github.wxmyyds.discordautotranslate.translate.ApiTester;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.IdentityHashMap;
+import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -102,6 +104,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private boolean started;
     private volatile boolean destroyed;
     private boolean configurationLoaded;
+    /** 各文本项最近一次已提交的值；用于选项即时保存时保留尚未点击应用的文本草稿。 */
+    private final Map<EditText, String> committedTextValues = new IdentityHashMap<>();
 
     private Spinner protocolSpinner;
     private Spinner targetLanguageSpinner;
@@ -506,7 +510,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         cacheEnabledInput.setOnCheckedChangeListener((button, checked) -> {
             updateCacheControls();
             markDirty();
-            if (!loadingUi) save();
+            if (!loadingUi) saveOptionsOnly();
         });
         TextView cacheHint = new TextView(this);
         cacheHint.setTextSize(12f);
@@ -531,7 +535,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 cacheLimitInput.setError(getString(R.string.error_cache_limit));
                 return;
             }
-            save();
+            saveSingleField(cacheLimitInput);
         });
         cacheBacking.addView(cacheApplyButton, matchWrap());
         clearCacheButton = new Button(this);
@@ -565,14 +569,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 updateStreamingAvailability();
                 markSpinnerDirty();
-                if (!loadingUi && hasUnsavedChanges) save();
+                if (!loadingUi && hasUnsavedChanges) saveOptionsOnly();
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 updateStreamingAvailability();
                 markSpinnerDirty();
-                if (!loadingUi && hasUnsavedChanges) save();
+                if (!loadingUi && hasUnsavedChanges) saveOptionsOnly();
             }
         });
         TextView protocolHint = new TextView(this);
@@ -591,13 +595,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         urlInput = addField(apiBacking, getString(R.string.label_api_url),
                 getString(R.string.hint_api_url),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_URI);
-        addFieldApplyButton(apiBacking);
+        addFieldApplyButton(apiBacking, urlInput);
         keyInput = addField(apiBacking, getString(R.string.label_api_key), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        addFieldApplyButton(apiBacking);
+        addFieldApplyButton(apiBacking, keyInput);
         modelInput = addField(apiBacking, getString(R.string.label_model), Config.DEF_MODEL,
                 InputType.TYPE_CLASS_TEXT);
-        addFieldApplyButton(apiBacking);
+        addFieldApplyButton(apiBacking, modelInput);
         TextView targetLanguageLabel = new TextView(this);
         targetLanguageLabel.setText(R.string.label_target_language);
         targetLanguageLabel.setPadding(0, dp(8), 0, 0);
@@ -632,7 +636,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         sendTargetLanguageSpinner.setSelection(targetLanguagePosition(Config.DEF_SEND_TARGET_LANG));
         headersInput = addField(apiBacking, getString(R.string.label_headers), "",
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        addFieldApplyButton(apiBacking);
+        addFieldApplyButton(apiBacking, headersInput);
 
         apiApplyButton = new Button(this);
         apiApplyButton.setText(R.string.button_apply_api_settings);
@@ -703,10 +707,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         timeoutInput = addField(apiBacking, getString(R.string.label_timeout),
                 String.valueOf(Config.DEF_TIMEOUT_MS), InputType.TYPE_CLASS_NUMBER);
-        addFieldApplyButton(apiBacking);
+        addFieldApplyButton(apiBacking, timeoutInput);
         concurrencyInput = addField(apiBacking, getString(R.string.label_concurrency),
                 String.valueOf(Config.DEF_MAX_CONCURRENCY), InputType.TYPE_CLASS_NUMBER);
-        addFieldApplyButton(apiBacking);
+        addFieldApplyButton(apiBacking, concurrencyInput);
 
         testTextInput = addField(root, getString(R.string.label_test_text),
                 getString(R.string.hint_test_text),
@@ -921,7 +925,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     minLengthPercentInput.setText(String.valueOf(min));
                     maxLengthPercentInput.setText(String.valueOf(max));
                     markDirty();
-                    save();
+                    saveSelectedTextFields(Arrays.asList(systemPromptInput, sendSystemPromptInput));
                     dialog.dismiss();
                 }));
         advancedSettingsDialog = dialog;
@@ -962,7 +966,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         input.setOnCheckedChangeListener((button, checked) -> {
             updateToggleText(input, hint, setting);
             markDirty();
-            if (!loadingUi) save();
+            if (!loadingUi) saveOptionsOnly();
         });
         updateToggleText(input, hint, setting);
         return hint;
@@ -999,7 +1003,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeDraft = updated;
             updateScopeSummary();
             markDirty();
-            save();
+            saveOptionsOnly();
         });
         if (restore != null) TranslationScopeEditor.restoreState(scopeDialog, restore);
         scopeDialog.setOnDismissListener(dialog -> {
@@ -1019,10 +1023,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     }
 
     /** 每个文本配置项都有独立应用入口；输入内容在点击前只作为草稿显示。 */
-    private void addFieldApplyButton(LinearLayout parent) {
+    private void addFieldApplyButton(LinearLayout parent, EditText field) {
         Button apply = new Button(this);
         apply.setText(R.string.button_apply_field);
-        apply.setOnClickListener(view -> save());
+        apply.setOnClickListener(view -> saveSingleField(field));
         parent.addView(apply, matchWrap());
     }
 
@@ -1182,6 +1186,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     /** 无效快照的占位值不是用户保存的设置；锁定页面直到用户明确重置。 */
     private void showInvalidSavedConfig() {
         persistedConfigInvalid = true;
+        committedTextValues.clear();
         pendingScopeEditor = null;
         if (scopeDialog != null) { scopeDialog.dismiss(); scopeDialog = null; }
         boolean wasLoading = loadingUi;
@@ -1257,6 +1262,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
         persistedConfigInvalid = false;
         ProjectLog.configure(state.snapshot);
+        setCommittedTextValues(state.snapshot);
         // Draft restoration precedes the asynchronous read. Neither it nor newer edits
         // can be replaced by the completion of an older load/import.
         if (replaceForm) {
@@ -1315,6 +1321,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             baselineTargetLanguage = snapshot.targetLang;
             baselineSendTargetLanguage = firstSendLanguage;
             hasUnsavedChanges = false;
+            setCommittedTextValues(snapshot);
         } finally {
             loadingUi = false;
             updateSaveButtonState();
@@ -1414,6 +1421,100 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 .show();
     }
 
+    /** 返回真正写入配置的文本项；测试输入框不属于持久化配置。 */
+    private List<EditText> persistedTextFields() {
+        return Arrays.asList(urlInput, keyInput, modelInput, headersInput,
+                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
+                minLengthPercentInput, maxLengthPercentInput, cacheLimitInput);
+    }
+
+    /** 将已提交快照转换为输入框实际显示的基线文本（默认值继续显示为提示文字）。 */
+    private void setCommittedTextValues(Config.Snapshot snapshot) {
+        if (snapshot == null || snapshot.configError != null) return;
+        committedTextValues.clear();
+        committedTextValues.put(urlInput, snapshot.apiUrl.equals(Config.DEF_API_URL) ? "" : snapshot.apiUrl);
+        committedTextValues.put(keyInput, snapshot.apiKey);
+        committedTextValues.put(modelInput, snapshot.model.equals(Config.DEF_MODEL) ? "" : snapshot.model);
+        committedTextValues.put(headersInput, snapshot.extraHeaders);
+        committedTextValues.put(systemPromptInput, snapshot.systemPrompt);
+        committedTextValues.put(sendSystemPromptInput, snapshot.sendSystemPrompt);
+        committedTextValues.put(timeoutInput, snapshot.timeoutMs == Config.DEF_TIMEOUT_MS
+                ? "" : String.valueOf(snapshot.timeoutMs));
+        committedTextValues.put(concurrencyInput, snapshot.maxConcurrency == Config.DEF_MAX_CONCURRENCY
+                ? "" : String.valueOf(snapshot.maxConcurrency));
+        committedTextValues.put(minLengthPercentInput,
+                snapshot.minLengthPercent == Config.DEF_MIN_LENGTH_PERCENT ? ""
+                        : String.valueOf(snapshot.minLengthPercent));
+        committedTextValues.put(maxLengthPercentInput,
+                snapshot.maxLengthPercent == Config.DEF_MAX_LENGTH_PERCENT ? ""
+                        : String.valueOf(snapshot.maxLengthPercent));
+        committedTextValues.put(cacheLimitInput, String.valueOf(snapshot.cacheLimit));
+    }
+
+    private Map<EditText, String> captureTextDrafts() {
+        Map<EditText, String> drafts = new IdentityHashMap<>();
+        for (EditText field : persistedTextFields()) drafts.put(field, field.getText().toString());
+        return drafts;
+    }
+
+    private void restoreTextDrafts(Map<EditText, String> drafts) {
+        boolean previous = loadingUi;
+        loadingUi = true;
+        try {
+            for (Map.Entry<EditText, String> entry : drafts.entrySet()) {
+                entry.getKey().setText(entry.getValue());
+            }
+        } finally {
+            loadingUi = previous;
+        }
+    }
+
+    private boolean hasUnappliedTextDraftsExcept(List<EditText> included) {
+        for (EditText field : persistedTextFields()) {
+            if (included.contains(field)) continue;
+            String committed = committedTextValues.get(field);
+            if (committed != null && !committed.equals(field.getText().toString())) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 只提交指定文本项；其他未点击“应用”的输入先恢复到已提交值，保存结束后再还原草稿。
+     * 这样开关/下拉选项即时保存时不会偷偷提交用户尚未应用的 API 文本。
+     */
+    private void saveSelectedTextFields(List<EditText> included) {
+        if (loadingUi || !configurationLoaded || committedTextValues.isEmpty()) {
+            save();
+            return;
+        }
+        Map<EditText, String> drafts = captureTextDrafts();
+        boolean otherDraftsRemain = hasUnappliedTextDraftsExcept(included);
+        boolean previous = loadingUi;
+        loadingUi = true;
+        try {
+            for (EditText field : persistedTextFields()) {
+                if (!included.contains(field)) {
+                    String committed = committedTextValues.get(field);
+                    if (committed != null) field.setText(committed);
+                }
+            }
+        } finally {
+            loadingUi = previous;
+        }
+        save();
+        restoreTextDrafts(drafts);
+        if (otherDraftsRemain) markDirty();
+    }
+
+    private void saveSingleField(EditText field) {
+        saveSelectedTextFields(Arrays.asList(field));
+    }
+
+    /** 开关和选择项立即保存，但保留所有尚未点击应用的文本草稿。 */
+    private void saveOptionsOnly() {
+        saveSelectedTextFields(new ArrayList<>());
+    }
+
     private void save() {
         if (persistedConfigInvalid) {
             updateStatus(getString(R.string.status_invalid_saved_config));
@@ -1496,6 +1597,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     }
                     saveInProgress = false;
                     updateSaveButtonState();
+                    if (localResult && !resetting) setCommittedTextValues(snapshot);
+                    if (resetting) committedTextValues.clear();
                     if (!localResult) {
                         if (localState.poisoned) {
                             showInvalidSavedConfig();
