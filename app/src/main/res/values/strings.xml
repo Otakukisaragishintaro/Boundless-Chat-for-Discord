@@ -47,6 +47,8 @@
     <string name="label_api_key">API key (stored locally)</string>
     <string name="label_model">Model</string>
     <string name="label_target_language">Target language</string>
+    <string name="label_send_target_language">Send translation target language</string>
+    <string name="hint_send_target_language">Used only by the Translate &amp; Send button. Incoming message translation keeps its own target language.</string>
     <string name="legacy_language">Saved custom language</string>
     <string name="label_headers">Extra headers (one Name: Value per line)</string>
     <string name="label_system_prompt">System prompt</string>
