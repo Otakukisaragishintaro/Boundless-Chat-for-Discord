@@ -341,6 +341,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         syncInProgress = false;
         try {
             remotePrefs = connectedService.getRemotePreferences(Config.GROUP);
+            updateCacheEntryCount();
         } catch (Throwable t) {
             remotePrefs = null;
             ProjectLog.warn("settings sync access status=FAILED exception="
@@ -596,11 +597,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
                 markSpinnerDirty();
+                if (!loadingUi && hasUnsavedChanges) save();
             }
 
             @Override
             public void onNothingSelected(AdapterView<?> parent) {
                 markSpinnerDirty();
+                if (!loadingUi && hasUnsavedChanges) save();
             }
         });
         apiBacking.addView(targetLanguageSpinner, matchWrap());
@@ -703,7 +706,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         saveButton = new Button(this);
         saveButton.setText(R.string.button_save);
-        // 总保存按钮已移除；各设置分区通过各自的应用操作提交。\n        saveButton.setVisibility(View.GONE);
+        // 总保存按钮已移除；各设置分区通过各自的应用操作提交。
+        saveButton.setVisibility(View.GONE);
 
         resetButton = new Button(this);
         resetButton.setText(R.string.button_reset_saved_settings);
@@ -789,6 +793,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstLanguage));
                     updateOutboundButtonsSummary();
                     markDirty();
+                    save();
                 });
         outboundButtonsDialog.setOnDismissListener(dialog -> outboundButtonsDialog = null);
     }
@@ -936,6 +941,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         input.setOnCheckedChangeListener((button, checked) -> {
             updateToggleText(input, hint, setting);
             markDirty();
+            if (!loadingUi) save();
         });
         updateToggleText(input, hint, setting);
         return hint;
@@ -972,6 +978,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeDraft = updated;
             updateScopeSummary();
             markDirty();
+            save();
         });
         if (restore != null) TranslationScopeEditor.restoreState(scopeDialog, restore);
         scopeDialog.setOnDismissListener(dialog -> {
@@ -1292,7 +1299,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         cacheSettingsDialog = new AlertDialog.Builder(this)
                 .setTitle(R.string.menu_translation_cache)
                 .setView(content)
-                .setPositiveButton(R.string.button_done, null)
+                .setPositiveButton(R.string.outbound_done, null)
                 .create();
         cacheSettingsDialog.setOnDismissListener(dialog -> {
             cacheSettingsDialog = null;
