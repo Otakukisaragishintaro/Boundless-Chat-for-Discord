@@ -530,7 +530,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         root.addView(cacheSettingsButton, matchWrap());
         updateCacheControls();
 
-        // API、服务协议与流式请求集中在独立二级菜单中。\n        apiBacking = new LinearLayout(this);\n        apiBacking.setOrientation(LinearLayout.VERTICAL);\n        // 供应商协议：请求体与译文解析按所选协议内置实现，
+        // API、服务协议与流式请求集中在独立二级菜单中。
+        apiBacking = new LinearLayout(this);
+        apiBacking.setOrientation(LinearLayout.VERTICAL);\n        // 供应商协议：请求体与译文解析按所选协议内置实现，
         // 不再让用户手写 JSON 请求模板与译文提取路径。
         TextView protocolLabel = new TextView(this);
         protocolLabel.setText(R.string.label_protocol);
