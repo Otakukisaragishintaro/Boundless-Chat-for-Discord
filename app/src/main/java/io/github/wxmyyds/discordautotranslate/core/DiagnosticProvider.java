@@ -172,6 +172,18 @@ public final class DiagnosticProvider extends ContentProvider {
                 || message.equals("waiting for Discord Application.attach")
                 || message.equals("chat input lifecycle hooks installed")
                 || message.startsWith("chat input lifecycle hook registration failed errorClass=")
+                || message.equals("Application.attach bootstrap hook installed")
+                || message.equals("Discord Application.attach hook triggered")
+                || message.equals("Discord hook profile selected")
+                || message.equals("Discord required hooks installed and runtime activated")
+                || message.equals("Discord Activity.onResume hook triggered")
+                || message.equals("Discord Activity window-focus hook triggered")
+                || message.equals("Discord chat input Activity attach entered")
+                || message.equals("Discord chat input editor focused")
+                || message.equals("Discord chat input send control found")
+                || message.equals("Discord chat input send control not found")
+                || message.equals("Discord translation button attached")
+                || message.equals("Discord translation button attach failed")
                 || message.startsWith("Discord hook profile installed");
     }
 
