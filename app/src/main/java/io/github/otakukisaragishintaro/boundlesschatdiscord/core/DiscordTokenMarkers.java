@@ -45,6 +45,44 @@ public final class DiscordTokenMarkers {
         }
     }
 
+    /**
+     * Protect blank-line separators inside a grouped request. This lets multiple whole
+     * paragraphs share context without allowing the provider to normalize their spacing.
+     */
+    public static Protection protectBlankLineSeparators(String source) {
+        if (source == null || source.isEmpty()) {
+            return new Protection(source, new ArrayList<>(), new ArrayList<>());
+        }
+        BlankLines.Split split = BlankLines.split(source);
+        if (split.separators.isEmpty()) {
+            return new Protection(source, new ArrayList<>(), new ArrayList<>());
+        }
+
+        int next = 1;
+        Matcher existing = KEEP.matcher(source);
+        while (existing.find()) {
+            try {
+                next = Math.max(next, Integer.parseInt(existing.group(1)) + 1);
+            } catch (NumberFormatException exhausted) {
+                return new Protection(source, new ArrayList<>(), new ArrayList<>());
+            }
+        }
+
+        StringBuilder protectedText = new StringBuilder(source.length());
+        List<String> markers = new ArrayList<>();
+        List<String> originals = new ArrayList<>();
+        for (int i = 0; i < split.chunks.size(); i++) {
+            protectedText.append(split.chunks.get(i));
+            if (i < split.separators.size()) {
+                String marker = "<keep" + next++ + "/>";
+                markers.add(marker);
+                originals.add(split.separators.get(i));
+                protectedText.append(marker);
+            }
+        }
+        return new Protection(protectedText.toString(), markers, originals);
+    }
+
     /** Replace selected literal Discord syntax with unique keep markers before translation. */
     public static Protection protect(String source) {
         return protect(source, true, true, true);
