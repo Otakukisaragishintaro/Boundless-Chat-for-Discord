@@ -83,6 +83,44 @@ public class JsonApiEngineTest {
     }
 
     @Test
+    public void longMessageChunkingRequiresExplicitOptIn() throws Exception {
+        String first = repeat("x", 250);
+        String second = repeat("y", 250);
+        String source = first + "\n\n" + second;
+
+        AtomicInteger normalOpens = new AtomicInteger();
+        FakeConnection normalConnection = new FakeConnection(chatJson(repeat("z", 502)));
+        JsonApiEngine normal = new JsonApiEngine(config(
+                Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
+                    normalOpens.incrementAndGet();
+                    return normalConnection;
+                }));
+        assertEquals(repeat("z", 502), normal.translate(source));
+        assertEquals(1, normalOpens.get());
+
+        AtomicInteger chunkedOpens = new AtomicInteger();
+        FakeConnection firstChunk = new FakeConnection(chatJson(repeat("a", 250)));
+        FakeConnection secondChunk = new FakeConnection(chatJson(repeat("b", 250)));
+        Config.Snapshot experimentalConfig = Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_PROTOCOL, Config.PROTOCOL_OPENAI_COMPATIBLE)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        JsonApiEngine chunked = new JsonApiEngine(experimentalConfig, http(url ->
+                chunkedOpens.getAndIncrement() == 0 ? firstChunk : secondChunk));
+        assertEquals(repeat("a", 250) + "\n\n" + repeat("b", 250),
+                chunked.translate(source));
+        assertEquals(2, chunkedOpens.get());
+    }
+
+    private static String repeat(String value, int count) {
+        StringBuilder result = new StringBuilder(value.length() * count);
+        for (int i = 0; i < count; i++) result.append(value);
+        return result.toString();
+    }
+
+    @Test
     public void completeBusinessPathUsesSelectedModeAndProtocolHeaders() throws Exception {
         String[] protocols = {Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_ANTHROPIC_MESSAGES, Config.PROTOCOL_OPENAI_RESPONSES};
