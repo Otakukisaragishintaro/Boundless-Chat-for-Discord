@@ -216,4 +216,9 @@
     <string name="status_cache_clear_requested">Cache clear request sent to Discord. It will be processed by the Discord module.</string>
     <string name="status_cache_clear_unavailable">Unable to contact the Discord module. Open Discord and reconnect LSPosed, then try again.</string>
 
+
+    <string name="menu_experimental_features">Experimental features…</string>
+    <string name="label_experimental_long_message_chunking">Chunk long-message API requests</string>
+    <string name="hint_experimental_long_message_chunking">When enabled, messages longer than 400 characters with blank-line paragraph breaks are sent as separate translation requests and then recombined. Off by default. This changes API request behavior only; it does not split writes back into Discord. Experimental: it may increase request count and token usage.</string>
+
 </resources>
