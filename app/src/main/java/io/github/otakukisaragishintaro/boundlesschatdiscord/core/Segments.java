@@ -37,7 +37,7 @@ public final class Segments {
      * entire wrapper around its answer. Embedded, partial, or nested tags are left
      * untouched so plainTextViolation() can reject them rather than corrupt content.
      */
-    public static String stripOuterResponseWrapper(String translated) {
+    public static String stripOuterResponseWrapper(String translated, String source) {
         if (translated == null) return null;
         String value = translated.trim();
         boolean hasOpen = value.startsWith(Protocols.WRAPPER_OPEN);
@@ -50,14 +50,17 @@ public final class Segments {
             }
             return inner.trim();
         }
-        // Some providers drop the opening wrapper when a retained-node marker is the
-        // first token, but echo the closing wrapper. Treat that one exact trailing
-        // protocol tag as framing noise; embedded or repeated tags remain untouched
-        // and are rejected by plainTextViolation().
-        if (!hasOpen && hasClose && !value.contains(Protocols.WRAPPER_OPEN)
-                && Pattern.compile("^<keep[1-9][0-9]*/>").matcher(value).find()) {
-            String inner = value.substring(0, value.length() - Protocols.WRAPPER_CLOSE.length());
-            if (!inner.contains(Protocols.WRAPPER_CLOSE)) return inner.trim();
+        // A provider may echo only the closing request boundary even when the answer
+        // starts with ordinary translated text rather than a retained-node marker.
+        // Strip that single unmatched terminal boundary only when the source itself
+        // did not contain the literal tag; embedded or repeated tags remain untouched.
+        boolean sourceContainsClose = source != null
+                && source.contains(Protocols.WRAPPER_CLOSE);
+        int closeIndex = value.indexOf(Protocols.WRAPPER_CLOSE);
+        if (!hasOpen && hasClose && !sourceContainsClose
+                && !value.contains(Protocols.WRAPPER_OPEN)
+                && closeIndex == value.length() - Protocols.WRAPPER_CLOSE.length()) {
+            return value.substring(0, closeIndex).trim();
         }
         return translated;
     }
