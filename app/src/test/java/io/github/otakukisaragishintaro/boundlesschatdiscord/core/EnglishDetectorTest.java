@@ -131,7 +131,7 @@ public class EnglishDetectorTest {
     public void asciiEmoticonsDoNotSkewNaturalLanguageDetection() {
         assertVerdict(Reason.TRANSLATABLE,
                 detect("not sure what is meant by \"serial into\" >.<", Config.DEF_TARGET_LANG));
-        assertVerdict(Reason.TOO_FEW_LETTERS, detect(">.<", Config.DEF_TARGET_LANG));
+        assertVerdict(Reason.NO_VISIBLE_CONTENT, detect(">.<", Config.DEF_TARGET_LANG));
         assertVerdict(Reason.TRANSLATABLE,
                 detect("That sounds good :) I can try it ^^", Config.DEF_TARGET_LANG));
     }
