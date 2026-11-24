@@ -128,6 +128,15 @@ public class EnglishDetectorTest {
     }
 
     @Test
+    public void asciiEmoticonsDoNotSkewNaturalLanguageDetection() {
+        assertVerdict(Reason.TRANSLATABLE,
+                detect("not sure what is meant by \"serial into\" >.<", Config.DEF_TARGET_LANG));
+        assertVerdict(Reason.NO_VISIBLE_CONTENT, detect(">.<", Config.DEF_TARGET_LANG));
+        assertVerdict(Reason.TRANSLATABLE,
+                detect("That sounds good :) I can try it ^^", Config.DEF_TARGET_LANG));
+    }
+
+    @Test
     public void specialTargetLanguageConfigurationCannotEnterReason() {
         String target = "Русский\nprivate=<keep1/><x1>secret</x1>\r\t\"\\";
         EnglishDetector.Verdict skipped = detect("Привет, как дела?", target);

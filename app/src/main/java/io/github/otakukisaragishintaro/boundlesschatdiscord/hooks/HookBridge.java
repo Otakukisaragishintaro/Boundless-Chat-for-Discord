@@ -7,6 +7,7 @@ import android.view.View;
 import androidx.annotation.Nullable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.EnglishDetector;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.StateStore;
@@ -460,8 +461,12 @@ public final class HookBridge {
             return;
         }
 
+        // Apply the same literal Discord-token shielding before language detection
+        // that the request engine applies before sending text to the provider.
+        String detectionText = DiscordTokenMarkers.protect(ex.text,
+                cfg.protectMentions, cfg.protectChannelsEmojis, cfg.protectUrls).text;
         EnglishDetector.Verdict v = EnglishDetector.evaluate(
-                ex.text, ex.textNodeCount, cfg.targetLang);
+                detectionText, ex.textNodeCount, cfg.targetLang);
         if (!v.shouldTranslate) {
             ProjectLog.infoOnce("translation.languageSkip." + v.reason.name(),
                     "translation skipped by language detector"

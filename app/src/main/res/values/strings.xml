@@ -56,7 +56,11 @@
     <string name="label_timeout">Timeout (ms)</string>
     <string name="label_concurrency">Maximum concurrent requests</string>
     <string name="label_test_text">Test text</string>
-    <string name="hint_test_text">Used by Test translation</string>
+    <string name="hint_test_text">Used by Test translation. This runs the Discord text detection, token protection, chunking, request, and response validation pipeline. Diagnostics include input and provider response previews; check for sensitive content before sharing.</string>
+    <string name="label_test_server_id">Test server ID (required by matching scope rules)</string>
+    <string name="hint_test_server_id">Enter the numeric Discord server ID when server rules are configured.</string>
+    <string name="label_test_channel_id">Test channel ID (required by matching scope rules)</string>
+    <string name="hint_test_channel_id">Enter the numeric Discord channel ID when channel rules are configured.</string>
     <string name="label_send_test_text">Outbound translation test text</string>
     <string name="hint_send_test_text">Uses the send target language and outbound prompt. No Discord message is sent.</string>
     <string name="privacy_notice">Message text is sent to your configured translation service. API keys stay on this device.</string>
@@ -64,6 +68,8 @@
     <string name="button_config_check">Check settings</string>
     <string name="button_test_connection">Test connection</string>
     <string name="button_test_translation">Test translation</string>
+    <string name="button_copy_test_result">Copy test diagnostics</string>
+    <string name="toast_test_result_copied">Test diagnostics copied.</string>
     <string name="button_test_send_translation">Test outbound translation</string>
     <string name="status_enter_test_text">Enter text to translate.</string>
     <string name="status_requesting">Requesting…</string>
@@ -82,6 +88,10 @@
     <string name="result_kind_translation">Incoming translation test</string>
     <string name="result_kind_send_translation">Outbound translation test</string>
     <string name="result_test_failure">%1$s failed (%2$d ms).</string>
+    <string name="result_failure_stage">\nFailure stage: %1$s</string>
+    <string name="result_failure_source">\nInput content:\n%1$s</string>
+    <string name="result_failure_request">\nActual request content (including protection markers):\n%1$s</string>
+    <string name="result_failure_translation">\nReturned translation preview:\n%1$s</string>
     <string name="result_failure_category">\nCategory: %1$s (%2$s)</string>
     <string name="result_failure_reason">\nReason code: %1$s</string>
     <string name="result_failure_http">\nHTTP status: %1$d</string>
@@ -110,6 +120,9 @@
     <string name="result_reason_response_incomplete">Response incomplete. Check the service or proxy.</string>
     <string name="result_reason_generation_stopped">Generation stopped unexpectedly. Check model limits or shorten the input.</string>
     <string name="result_reason_translation_invalid">Translation validation failed. Adjust the prompt or try another model.</string>
+    <string name="result_reason_not_translatable">The same language detector used by Discord decided this text does not need translation.</string>
+    <string name="result_reason_scope_context_required">The translation scope contains server/channel rules. Enter the corresponding test IDs and retry.</string>
+    <string name="result_reason_scope_denied">This test server/channel is excluded by the current translation scope. No API request was sent.</string>
     <string name="result_reason_empty_text">Text is empty. Check the input, model, and prompt.</string>
     <string name="result_reason_cancelled">Test cancelled. Start a new test.</string>
     <string name="result_reason_unknown_failure">Unexpected error. Enable logs and try again.</string>
