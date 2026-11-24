@@ -54,7 +54,8 @@ public final class Segments {
         // first token, but echo the closing wrapper. Treat that one exact trailing
         // protocol tag as framing noise; embedded or repeated tags remain untouched
         // and are rejected by plainTextViolation().
-        if (!hasOpen && hasClose && !value.contains(Protocols.WRAPPER_OPEN)) {
+        if (!hasOpen && hasClose && !value.contains(Protocols.WRAPPER_OPEN)
+                && Pattern.compile("^<keep[1-9][0-9]*/>").matcher(value).find()) {
             String inner = value.substring(0, value.length() - Protocols.WRAPPER_CLOSE.length());
             if (!inner.contains(Protocols.WRAPPER_CLOSE)) return inner.trim();
         }
