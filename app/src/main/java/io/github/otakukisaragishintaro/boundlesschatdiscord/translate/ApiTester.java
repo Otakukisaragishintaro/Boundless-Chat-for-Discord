@@ -63,9 +63,13 @@ public final class ApiTester {
                                 ? "scope_filter"
                         : error.reason() == TranslationException.Reason.NO_TRANSLATABLE_TEXT
                                 ? "language_detection" : "request_or_preflight";
+                boolean showDetail = error.reason() == TranslationException.Reason.TRANSLATION_INVALID
+                        || error.reason() == TranslationException.Reason.NO_TRANSLATABLE_TEXT
+                        || error.reason() == TranslationException.Reason.SCOPE_CONTEXT_REQUIRED
+                        || error.reason() == TranslationException.Reason.SCOPE_DENIED;
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
                         cause.getClass().getSimpleName(), body,
-                        safeValidationDetail(error.getMessage()), stage,
+                        showDetail ? safeValidationDetail(error.getMessage()) : "", stage,
                         null, diagnostic == null ? null : diagnostic.requestPreview,
                         diagnostic == null ? null : diagnostic.translatedPreview);
             }
@@ -174,7 +178,7 @@ public final class ApiTester {
             try {
                 if (testKind == TestKind.TRANSLATION) {
                     enforceTestScope(sourceConfig.translationScope, testGuildId, testChannelId);
-                    EnglishDetector.Verdict verdict = text.trim().isEmpty() ? null
+                    EnglishDetector.Verdict verdict = text == null || text.trim().isEmpty() ? null
                             : EnglishDetector.evaluate(text, 1, sourceConfig.targetLang);
                     if (verdict != null && !verdict.shouldTranslate) {
                         throw new TranslationException(TranslationException.Kind.EMPTY,
