@@ -240,9 +240,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
             int point = value.codePointAt(i);
             i += Character.charCount(point);
             count++;
-            if (point == '\\r') out.append("\\\\r");
-            else if (point == '\\n') out.append("\\\\n");
-            else if (point == '\\t') out.append("\\\\t");
+            if (point == '\r') out.append("\\r");
+            else if (point == '\n') out.append("\\n");
+            else if (point == '\t') out.append("\\t");
             else if (Character.isISOControl(point)) out.append('?');
             else out.appendCodePoint(point);
         }
