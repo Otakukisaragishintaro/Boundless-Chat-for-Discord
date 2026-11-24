@@ -64,7 +64,7 @@ public class ProtocolsTest {
         assertEquals(2, messages.length());
         assertEquals("system", messages.getJSONObject(0).getString("role"));
         // 系统提示词 = 用户配置 + 请求层追加的包装协议说明（WRAPPER_RULE）。
-        assertEquals(Config.DEF_SYSTEM_PROMPT + "\n\n" + Protocols.WRAPPER_RULE,
+        assertEquals(expectedPrompt(Config.DEF_SYSTEM_PROMPT),
                 messages.getJSONObject(0).getString("content"));
         assertEquals("user", messages.getJSONObject(1).getString("role"));
         // 待翻译正文整体包进 <translate> 标签。
@@ -138,8 +138,13 @@ public class ProtocolsTest {
     public void configuredPromptIsTrimmedAndWrapperRuleIsAppended() throws Exception {
         JSONObject body = new JSONObject(Protocols.requestBody(
                 Config.PROTOCOL_OPENAI_COMPATIBLE, "hello", "  prompt \n", "model", false));
-        assertEquals("prompt\n\n" + Protocols.WRAPPER_RULE,
+        assertEquals(expectedPrompt("prompt"),
                 body.getJSONArray("messages").getJSONObject(0).getString("content"));
+    }
+
+    private static String expectedPrompt(String prompt) {
+        return prompt + "\n\n" + Protocols.WRAPPER_RULE + "\n\n"
+                + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG);
     }
 
     // ------------------------------------------------------------ 流式响应提取
@@ -344,7 +349,7 @@ public class ProtocolsTest {
                 Config.PROTOCOL_OPENAI_COMPATIBLE, nasty, prompt, "m"));
         assertEquals(Protocols.WRAPPER_OPEN + nasty + Protocols.WRAPPER_CLOSE,
                 compat.getJSONArray("messages").getJSONObject(1).getString("content"));
-        assertEquals(prompt + "\n\n" + Protocols.WRAPPER_RULE,
+        assertEquals(expectedPrompt(prompt),
                 compat.getJSONArray("messages").getJSONObject(0).getString("content"));
 
         JSONObject responses = new JSONObject(requestBody(
