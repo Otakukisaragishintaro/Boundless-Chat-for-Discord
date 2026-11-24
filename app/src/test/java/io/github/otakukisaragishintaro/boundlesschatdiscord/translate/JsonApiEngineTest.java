@@ -219,7 +219,7 @@ public class JsonApiEngineTest {
     }
 
     @Test
-    public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() {
+    public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() throws Exception {
         Config.Snapshot defaults = Config.read(new MemoryPrefs());
         assertTrue(defaults.protectMentions);
         assertTrue(defaults.protectChannelsEmojis);

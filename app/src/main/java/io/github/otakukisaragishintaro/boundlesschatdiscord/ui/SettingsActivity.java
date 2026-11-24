@@ -2405,7 +2405,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private void persistTestDiagnostics(ApiTester.Result result) {
         final android.content.Context appContext = getApplicationContext();
-        final String processName = Application.getProcessName();
+        final String processName = currentProcessName();
         final int priority = result.ok ? android.util.Log.INFO : android.util.Log.WARN;
         try {
             saveExecutor.execute(() -> {
@@ -2433,11 +2433,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
     }
 
+    private static String currentProcessName() {
+        try {
+            String name = Application.getProcessName();
+            return name == null || name.isEmpty() ? "module" : name;
+        } catch (Throwable unavailable) {
+            return "module";
+        }
+    }
+
     private void persistTestFailure(String detail) {
         final android.content.Context appContext = getApplicationContext();
         try {
             saveExecutor.execute(() -> DiagnosticLogStore.append(appContext,
-                    System.currentTimeMillis(), "module_test", Application.getProcessName(),
+                    System.currentTimeMillis(), "module_test", currentProcessName(),
                     android.util.Log.ERROR, "ApiTester", detail, ""));
         } catch (RuntimeException ignored) { }
     }

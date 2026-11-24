@@ -82,6 +82,25 @@ public class SegmentsTest {
     }
 
     @Test
+    public void eachIntegritySwitchControlsOnlyItsOwnValidationRule() {
+        String segment = "<s1>translated</s1>";
+        assertNotNull(Segments.plainTextViolation(segment, "hello",
+                false, true, false, false, false, 0, 1000));
+        assertNull(Segments.plainTextViolation(segment, "hello",
+                false, false, false, false, false, 0, 1000));
+
+        assertNotNull(Segments.plainTextViolation("XXXX", "hello",
+                false, false, true, false, false, 0, 1000));
+        assertNull(Segments.plainTextViolation("XXXX", "hello",
+                false, false, false, false, false, 0, 1000));
+
+        assertNotNull(Segments.plainTextViolation("hello", "hello<keep1/>",
+                false, false, false, true, false, 0, 1000));
+        assertNull(Segments.plainTextViolation("hello", "hello<keep1/>",
+                false, false, false, false, false, 0, 1000));
+    }
+
+    @Test
     public void plainTextViolationChecksEmptyTextBeforeOtherValidation() {
         for (String text : new String[]{null, "", " \n\t "}) {
             assertEquals("译文为空", Segments.plainTextViolation(text, "hello<keep1/>"));
