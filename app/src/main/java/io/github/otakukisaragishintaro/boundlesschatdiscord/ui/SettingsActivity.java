@@ -2235,6 +2235,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private void showResult(ApiTester.Result result) {
         resultText.setText(ApiTestResultFormatter.format(result, this::getString));
+        if (copyTestResultButton != null) {
+            copyTestResultButton.setEnabled(resultText.length() > 0);
+        }
         updateStatus(getString(result.ok
                 ? R.string.status_test_passed : R.string.status_test_failed));
     }
