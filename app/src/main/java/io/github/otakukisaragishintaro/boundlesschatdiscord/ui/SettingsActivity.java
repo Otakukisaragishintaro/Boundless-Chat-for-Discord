@@ -1449,6 +1449,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             getActionBar().setDisplayHomeAsUpEnabled(true);
             getActionBar().setHomeButtonEnabled(true);
         }
+
+        // This page is attached after the Activity's first insets dispatch. Explicitly
+        // request a fresh dispatch after attachment so the submenu ScrollView receives
+        // the ActionBar/system-bar insets before its first visible frame. Without this,
+        // cold launches can lay out both submenus outside the viewport until the IME
+        // causes another window-insets pass.
+        page.post(() -> {
+            if (destroyed || navigationHost == null || page.getParent() != navigationHost) {
+                return;
+            }
+            navigationHost.requestApplyInsets();
+            page.requestApplyInsets();
+            page.requestLayout();
+        });
     }
 
     /** 关闭当前子页面并恢复主设置页；不重建主页面表单。 */
