@@ -65,7 +65,6 @@ public class LanguagePromptConfigTest {
         IncomingPromptStyles styles = IncomingPromptStyles.defaults().addStyle("Formal");
         String formal = styles.styles().get(1).id;
         styles = styles.withPrompt(formal, "English", "Formal English translation.");
-        styles = styles.setDefault("English", formal);
         TranslationScope scope = new TranslationScope(true,
                 java.util.Collections.singletonList(
                         new TranslationScope.Rule("10", "Server", true, "default")),
