@@ -197,6 +197,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Grant Discord narrowly scoped URI visibility for the cache-count provider.
+        CacheCountProvider.grantDiscordVisibility(this);
         setTitle(R.string.module_name);
         if (getActionBar() != null) {
             getActionBar().setDisplayHomeAsUpEnabled(false);
