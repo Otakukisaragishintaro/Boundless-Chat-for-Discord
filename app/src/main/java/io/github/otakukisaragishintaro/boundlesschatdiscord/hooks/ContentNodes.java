@@ -377,20 +377,19 @@ public final class ContentNodes {
     }
 
     // Recognize malformed reserved tags too; an exact-tag-only scan would let them reach Text.
-    private static final java.util.regex.Pattern STYLE_PREFIX =
-            java.util.regex.Pattern.compile("<\\s*/?\\s*x(?![A-Za-z_])",
-                    java.util.regex.Pattern.CASE_INSENSITIVE);
+    private static final java.util.regex.Pattern STYLE_MARKER =
+            java.util.regex.Pattern.compile("</?x[1-9][0-9]*>");
 
-    /** The captured flat sequence must occur exactly once, with no nesting or extra reserved tags. */
+    /** Validate only exact internal style tokens; malformed angle text is natural text. */
     private static void requireStyleMarkers(String plain, AlignmentPlan plan) {
-        java.util.regex.Matcher markers = STYLE_PREFIX.matcher(plain);
+        java.util.regex.Matcher markers = STYLE_MARKER.matcher(plain);
         int styleId = 1;
         boolean closing = false;
         while (markers.find()) {
             RejectionReason reason = closing ? RejectionReason.STYLE_CLOSE : RejectionReason.STYLE_OPEN;
             if (styleId > plan.styleMarkers) throw reject(reason);
             String expected = (closing ? "</x" : "<x") + styleId + ">";
-            if (!plain.startsWith(expected, markers.start())) throw reject(reason);
+            if (!expected.equals(markers.group())) throw reject(reason);
             if (closing) styleId++;
             closing = !closing;
         }

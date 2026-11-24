@@ -55,21 +55,10 @@ public final class Protocols {
 
     /** 与包装标签配套的系统提示词追加说明；两者必须成对修改。 */
     public static final String WRAPPER_RULE =
-            "The text between the <translate> and </translate> tags is the source content "
-            + "to translate. Translate it according to the rules above and output ONLY the "
-            + "translated text: never include the tags themselves and never output "
-            + "anything outside them. Preserve every retained-node marker such as "
-            + "<keep1/> exactly as written, exactly once, and in its original position and order. "
-            + "Each <keepN/> marker is an opaque, non-linguistic structural placeholder for native "
-            + "content omitted from the text (such as code, mentions, timestamps, or other nodes). "
-            + "Treat these markers as immutable literal tokens, NOT as HTML/XML tags or words: "
-            + "never translate, interpret, rename, remove, duplicate, split, add spaces inside, "
-            + "or move them into styled <xN>...</xN> spans. Copy each marker character-for-character. "
-            + "Preserve every styled "
-            + "marker and translate only natural-language text around the markers. "
-            + "The <xN>...</xN> spans also mark link display text; preserve their boundaries "
-            + "and translate the text inside. Preserve source paragraphs and line breaks "
-            + "exactly, including repeated lines; never merge, split, add, or drop lines.";
+            "Translate only the text between the <translate> and </translate> boundaries. "
+            + "Copy every protected placeholder token beginning with ⟦BCP and ending with ⟧ "
+            + "exactly once, unchanged, and in the same order. Never translate, remove, duplicate, "
+            + "reorder, or alter a placeholder. Output only the translated text.";
 
     private static final String SUFFIX_CHAT_COMPLETIONS = "/chat/completions";
     private static final String SUFFIX_RESPONSES = "/responses";

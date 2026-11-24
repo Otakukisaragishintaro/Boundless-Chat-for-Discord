@@ -19,7 +19,7 @@ public final class Http {
         public final int status;
         public final String body;
 
-        Response(int status, String body) {
+        public Response(int status, String body) {
             this.status = status;
             this.body = body;
         }

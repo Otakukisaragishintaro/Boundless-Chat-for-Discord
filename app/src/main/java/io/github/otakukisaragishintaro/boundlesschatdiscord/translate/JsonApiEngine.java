@@ -7,6 +7,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProviderMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments;
@@ -385,7 +386,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
         } else {
             systemPrompt = cfg.systemPrompt;
         }
-        String body = Protocols.requestBody(cfg.protocol, text, systemPrompt, cfg.model,
+        ProviderMarkers.Protection protection = ProviderMarkers.protect(text);
+        String body = Protocols.requestBody(cfg.protocol, protection.text, systemPrompt, cfg.model,
                 sse);
         buildHeaders(headers);
 
@@ -401,7 +403,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         }
 
         // Successful HTTP bodies have already passed the selected protocol decoder.
-        return resp;
+        return new Http.Response(resp.status, protection.restore(resp.body));
     }
 
     /**
