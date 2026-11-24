@@ -137,7 +137,7 @@ public class JsonApiEngineTest {
         assertEquals(repeat("t", 250), singleLineEngine.translate(singleLine));
         assertEquals(1, singleLineOpens.get());
 
-        String oneLineBreak = repeat("u", 125) + "\\n" + repeat("v", 125);
+        String oneLineBreak = repeat("u", 125) + "\n" + repeat("v", 125);
         AtomicInteger oneLineBreakOpens = new AtomicInteger();
         JsonApiEngine oneLineBreakEngine = new JsonApiEngine(experimentalConfig, http(url -> {
             oneLineBreakOpens.incrementAndGet();
@@ -149,21 +149,21 @@ public class JsonApiEngineTest {
         // A short final URL paragraph is folded into the preceding paragraph.
         java.util.List<String> tailParagraphs = java.util.Arrays.asList(
                 repeat("a", 250), "https://example.com/release");
-        java.util.List<String> tailSeparators = java.util.Collections.singletonList("\\n\\n");
+        java.util.List<String> tailSeparators = java.util.Collections.singletonList("\n\n");
         JsonApiEngine.ParagraphGroups tailGroups = JsonApiEngine.groupParagraphs(
                 tailParagraphs, tailSeparators, 200);
         assertEquals(1, tailGroups.chunks.size());
         assertEquals(2, tailGroups.paragraphCounts.get(0).intValue());
-        assertEquals(repeat("a", 250) + "\\n\\nhttps://example.com/release",
+        assertEquals(repeat("a", 250) + "\n\nhttps://example.com/release",
                 tailGroups.chunks.get(0));
 
         // Grouped requests protect their internal blank-line layout from model normalization.
         io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers.Protection
                 separatorProtection =
                 io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers
-                        .protectBlankLineSeparators("first\\n\\nsecond");
+                        .protectBlankLineSeparators("first\n\nsecond");
         assertTrue(separatorProtection.text.contains("<keep1/>"));
-        assertEquals("first\\n\\nsecond",
+        assertEquals("first\n\nsecond",
                 separatorProtection.restore(separatorProtection.text));
 
         AtomicInteger raisedThresholdOpens = new AtomicInteger();
