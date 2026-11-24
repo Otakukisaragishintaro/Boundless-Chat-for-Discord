@@ -108,7 +108,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         java.util.List<String> separators = new java.util.ArrayList<>();
         if (!cfg.experimentalLongMessageChunking || requestText == null
                 || requestText.length() <= cfg.experimentalLongMessageThreshold) {
-            return protection.restore(execute(requestText, true, logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics, !logFailureDiagnostics).translated);
         }
         splitParagraphs(requestText, paragraphs, separators);
 
@@ -140,7 +140,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     + " sourceChars=" + group.length()
                     + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
             try {
-                String translated = execute(separatorProtection.text, true, logFailureDiagnostics).translated;
+                String translated = execute(separatorProtection.text, true, logFailureDiagnostics, !logFailureDiagnostics).translated;
                 combined.append(separatorProtection.restore(translated));
             } catch (Exception failure) {
                 ProjectLog.warn("translation.chunking failed index=" + (i + 1)
@@ -244,12 +244,13 @@ public final class JsonApiEngine implements Scheduler.Engine {
 
     /** Connection probes share all request/decoder ownership, but do not judge translation safety. */
     Exchange execute(String text, boolean validateTranslation) throws Exception {
-        // Settings/API probes use the same engine but retain their deliberately redacted log contract.
-        return execute(text, validateTranslation, false);
+        // Connection probes keep the redacted diagnostic contract and do not capture message previews.
+        return execute(text, validateTranslation, false, false);
     }
 
     private Exchange execute(String text, boolean validateTranslation,
-                             boolean logFailureDiagnostics) throws Exception {
+                             boolean logFailureDiagnostics, boolean captureFailureDiagnostics)
+            throws Exception {
         Thread worker = Thread.currentThread();
         Http.Request request = new Http.Request();
         if (active.putIfAbsent(worker, request) != null) {
@@ -317,7 +318,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                         + " detail=" + detail);
             }
-            if (!(e instanceof DiagnosticException)) {
+            if (captureFailureDiagnostics && !(e instanceof DiagnosticException)) {
                 TranslationException classified = e instanceof TranslationException
                         ? (TranslationException) e
                         : new TranslationException(TranslationException.Kind.UNKNOWN,
