@@ -226,6 +226,8 @@ public final class ConfigurationSync {
             }
             raw.put(Config.KEY_PROTOCOL, snapshot.protocol);
             raw.put(Config.KEY_STREAMING, snapshot.streaming);
+            putUnlessDefault(raw, Config.KEY_PROTECTION_PROMPT_ENABLED,
+                    snapshot.protectionPromptEnabled, Config.DEF_PROTECTION_PROMPT_ENABLED);
             putUnlessDefault(raw, Config.KEY_API_URL, snapshot.apiUrl, Config.DEF_API_URL);
             putUnlessDefault(raw, Config.KEY_API_KEY, snapshot.apiKey, Config.DEF_API_KEY);
             putUnlessDefault(raw, Config.KEY_MODEL, snapshot.model, Config.DEF_MODEL);
