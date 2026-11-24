@@ -267,6 +267,9 @@ public class ModuleEntry extends XposedModule {
             ProjectLog.bootstrapInfo("Discord hook profile selected");
             // 将缓存保存在 Discord 私有目录中，使其跨重新登录和进程重启保留，其他应用无法直接访问。
             TranslationCache.initialize(context, getModuleApplicationInfo().packageName);
+            // Cache-count publication is independent of remote configuration preferences.
+            // Attach it before attempting to acquire the optional clear-command channel.
+            attachCacheCountPublisher();
             attachCacheCommandListener(context);
             install(cl, config);
             installed = true;
@@ -491,7 +494,6 @@ public class ModuleEntry extends XposedModule {
             cacheCommandPreferences = remote;
             remote.registerOnSharedPreferenceChangeListener(cacheCommandListener);
             // 同时处理 Discord 未运行期间由设置页发出的清空请求。
-            attachCacheCountPublisher();
             handleCacheClearCommand(remote);
         } catch (Throwable failure) {
             ProjectLog.warn("cache command listener unavailable errorClass="
