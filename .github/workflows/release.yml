@@ -307,7 +307,7 @@ jobs:
 
           git add app/build.gradle
           git commit -m "chore(release): $TAG"
-          echo "版本号提交：$(git rev-parse --short HEAD)（仅被 tag $TAG 引用，main 不变）"
+          echo "版本号提交：$(git rev-parse --short HEAD)（由 tag $TAG 引用；正式版随后通过 PR 同步到 main）"
 
           git tag -a "$TAG" -m "Release $TAG (versionCode $VERSION_CODE)"
           git push origin "refs/tags/$TAG"
