@@ -155,7 +155,7 @@ public final class CacheCountProvider extends ContentProvider {
     private static String safeMessage(@NonNull Throwable failure) {
         String message = failure.getMessage();
         if (message == null || message.isEmpty()) return "none";
-        message = message.replace('\\n', ' ').replace('\\r', ' ');
+        message = message.replace('\n', ' ').replace('\r', ' ');
         return message.length() > 160 ? message.substring(0, 160) : message;
     }
 
