@@ -75,9 +75,12 @@ public final class JsonApiEngine implements Scheduler.Engine {
     public String translate(String text) throws Exception {
         java.util.List<String> paragraphs = new java.util.ArrayList<>();
         java.util.List<String> separators = new java.util.ArrayList<>();
+        if (text == null || text.length() <= MAX_PARAGRAPH_CHARS) {
+            return execute(text, true).translated;
+        }
         splitParagraphs(text, paragraphs, separators);
 
-        if (paragraphs.size() <= 1 || text.length() <= MAX_PARAGRAPH_CHARS) {
+        if (paragraphs.size() <= 1) {
             return execute(text, true).translated;
         }
 
@@ -88,7 +91,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
             String paragraph = paragraphs.get(i);
             // Do not cut through a single paragraph: inline style/retained-node markers
             // may span arbitrary text positions. Such a paragraph remains one request.
-            String translated = execute(paragraph, true).translated;
+            // Preserve empty/whitespace-only paragraphs without making an invalid API request.
+            String translated = paragraph.trim().isEmpty()
+                    ? paragraph : execute(paragraph, true).translated;
             combined.append(translated);
             if (i < separators.size()) combined.append(separators.get(i));
         }
