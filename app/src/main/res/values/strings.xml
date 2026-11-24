@@ -56,11 +56,11 @@
     <string name="label_timeout">Timeout (ms)</string>
     <string name="label_concurrency">Maximum concurrent requests</string>
     <string name="label_test_text">Test text</string>
-    <string name="hint_test_text">Used by Test translation. This runs Discord's text detection, token protection, chunking, request, and response validation pipeline.</string>
+    <string name="hint_test_text">Used by Test translation. This runs the Discord text detection, token protection, chunking, request, and response validation pipeline.</string>
     <string name="label_test_server_id">Test server ID (required by matching scope rules)</string>
-    <string name="hint_test_server_id">Enter the Discord server's numeric ID when server rules are configured.</string>
+    <string name="hint_test_server_id">Enter the numeric Discord server ID when server rules are configured.</string>
     <string name="label_test_channel_id">Test channel ID (required by matching scope rules)</string>
-    <string name="hint_test_channel_id">Enter the Discord channel's numeric ID when channel rules are configured.</string>
+    <string name="hint_test_channel_id">Enter the numeric Discord channel ID when channel rules are configured.</string>
     <string name="label_send_test_text">Outbound translation test text</string>
     <string name="hint_send_test_text">Uses the send target language and outbound prompt. No Discord message is sent.</string>
     <string name="privacy_notice">Message text is sent to your configured translation service. API keys stay on this device.</string>
