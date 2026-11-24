@@ -12,7 +12,6 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ProviderInfo;
 import android.os.Process;
-import android.os.UserHandle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -55,7 +54,7 @@ public final class CacheCountProvider extends ContentProvider {
         // Capture what the Discord process itself can see before making the IPC call.
         // This is diagnostic only and does not change provider visibility or permissions.
         int processUid = Process.myUid();
-        int processUserId = UserHandle.getUserId(processUid);
+        int processUserId = processUid / 100000;
         String contextPackage = safeContextPackage(targetContext);
         String opPackage = safeContextOpPackage(targetContext);
         PackageManager packageManager = targetContext.getPackageManager();
