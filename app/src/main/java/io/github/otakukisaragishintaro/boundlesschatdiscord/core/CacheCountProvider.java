@@ -5,7 +5,6 @@ import android.content.ContentValues;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.database.Cursor;
-import android.net.Uri;
 import android.os.Bundle;
 import android.os.Binder;
 import android.content.pm.ApplicationInfo;
@@ -43,14 +42,13 @@ public final class CacheCountProvider extends ContentProvider {
         if (modulePackageName.isEmpty() || entryCount < 0 || entryCount > MAX_ENTRY_COUNT) {
             return false;
         }
-        Uri endpoint = new Uri.Builder()
-                .scheme("content")
-                .authority(modulePackageName + AUTHORITY_SUFFIX)
-                .build();
+        String authority = modulePackageName + AUTHORITY_SUFFIX;
         Bundle extras = new Bundle();
         extras.putInt(EXTRA_ENTRY_COUNT, entryCount);
+        ProjectLog.infoOnce("cache.count.publish.endpoint",
+                "local translation cache count provider endpoint authority=" + authority);
         Bundle response = targetContext.getContentResolver().call(
-                endpoint, METHOD_PUBLISH_COUNT, null, extras);
+                authority, METHOD_PUBLISH_COUNT, null, extras);
         return response != null && response.getBoolean(EXTRA_PUBLISHED, false);
     }
 
