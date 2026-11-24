@@ -53,7 +53,10 @@ public class SegmentsTest {
         assertEquals("<translate>hello", Segments.stripOuterResponseWrapper("<translate>hello"));
         assertEquals("<translate><translate>hello</translate></translate>",
                 Segments.stripOuterResponseWrapper("<translate><translate>hello</translate></translate>"));
-        assertEquals("hello</translate>", Segments.stripOuterResponseWrapper("hello</translate>"));
+        assertEquals("hello", Segments.stripOuterResponseWrapper("hello</translate>"));
+        assertEquals("<keep1/>你好", Segments.stripOuterResponseWrapper("<keep1/>你好</translate>"));
+        assertEquals("hello</translate></translate>",
+                Segments.stripOuterResponseWrapper("hello</translate></translate>"));
         assertNull(Segments.stripOuterResponseWrapper(null));
     }
 
