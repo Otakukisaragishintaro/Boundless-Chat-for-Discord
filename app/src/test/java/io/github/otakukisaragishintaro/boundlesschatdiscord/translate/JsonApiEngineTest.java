@@ -168,6 +168,30 @@ public class JsonApiEngineTest {
         assertTrue(active(engine).isEmpty());
     }
 
+    @Test
+    public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        assertTrue(defaults.protectMentions);
+        assertTrue(defaults.protectChannelsEmojis);
+        assertTrue(defaults.protectUrls);
+
+        String source = "<@403924274437685248> <#1570408648533082167> "
+                + "<:openhouse:123456789012345678> @everyone https://example.com/path";
+        DiscordTokenMarkers.Protection selected = DiscordTokenMarkers.protect(
+                source, false, true, false);
+        assertEquals("<@403924274437685248> <keep1/> <keep2/> @everyone https://example.com/path",
+                selected.text);
+        assertEquals(source, selected.restore(selected.text));
+
+        Config.Snapshot disabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_PROTECT_MENTIONS, false)
+                .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, true)
+                .put(Config.KEY_PROTECT_URLS, false));
+        assertFalse(disabled.protectMentions);
+        assertTrue(disabled.protectChannelsEmojis);
+        assertFalse(disabled.protectUrls);
+    }
+
     private static String repeat(String value, int count) {
         StringBuilder result = new StringBuilder(value.length() * count);
         for (int i = 0; i < count; i++) result.append(value);

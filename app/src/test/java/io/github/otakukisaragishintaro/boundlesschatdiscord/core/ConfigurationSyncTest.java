@@ -53,6 +53,9 @@ public class ConfigurationSyncTest {
     public void sendTargetLanguageUsesTheSameImportAndSaveTransactionChain() {
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_TARGET_LANG));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_SYSTEM_PROMPT));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_MENTIONS));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_CHANNELS_EMOJIS));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_URLS));
         FakePrefs local = localBeforeImport();
         FakePrefs remote = remoteValues();
         remote.memory.put(Config.KEY_SEND_TARGET_LANG, "日本語");
