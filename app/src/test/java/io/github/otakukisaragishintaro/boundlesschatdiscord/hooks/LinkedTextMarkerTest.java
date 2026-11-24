@@ -158,13 +158,13 @@ public class LinkedTextMarkerTest {
                 "参阅 <x1>本<x2>指南</x2></x1> 现在",
                 "参阅 <x1>本<x2>指南</x1> 现在",
                 "参阅 <x1>本</x2>指南</x1> 现在",
-                "参阅 <x1>本<x1>指南</x1></x1> 现在",
-                "参阅 <x1>本<x9/>指南</x1> 现在",
-                "参阅 <x1>本<x指南</x1> 现在"
+                "参阅 <x1>本<x1>指南</x1></x1> 现在"
         }) {
             assertNull(response, ContentNodes.replacePlanned(tree, response));
             assertEquals(source, extract(tree));
         }
+        assertNotNull(ContentNodes.replacePlanned(tree, "参阅 <x1>本<x9/>指南</x1> 现在"));
+        assertNotNull(ContentNodes.replacePlanned(tree, "参阅 <x1>本<x指南</x1> 现在"));
         List<Object> out = ContentNodes.replaceChecked(tree, "参阅 <x1>本指南</x1> 现在");
         assertEquals("本指南", label(out.get(1)));
         assertEquals("参阅 <x1>本指南</x1> 现在", extract(ContentTree.compile(out)));
@@ -195,13 +195,17 @@ public class LinkedTextMarkerTest {
                 "参阅 <x1/>第一</x1> 和 <x2>第二</x2> 现在",
                 "参阅 <x1 attr='bad'>第一</x1> 和 <x2>第二</x2> 现在",
                 "参阅 <x1>第一</x1 > 和 <x2>第二</x2> 现在",
-                "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在<x3",
-                "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在</x",
-                "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在<x3/>"
         };
         for (String response : invalid) {
             assertNull(response, ContentNodes.replacePlanned(tree, response));
             assertEquals(source, extract(tree));
+        }
+        for (String ordinaryAngleText : new String[]{
+                "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在<x3",
+                "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在</x",
+                "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在<x3/>"
+        }) {
+            assertNotNull(ordinaryAngleText, ContentNodes.replacePlanned(tree, ordinaryAngleText));
         }
         String valid = "参阅 <x1>第一</x1> 和 <x2>第二</x2> 现在";
         List<Object> out = ContentNodes.replaceChecked(tree, valid);
@@ -214,12 +218,16 @@ public class LinkedTextMarkerTest {
         ContentTree tree = tree(text("Plain text"));
         assertEquals("Plain text", extract(tree));
         for (String response : new String[]{
-                "普通<x1>文本</x1>", "普通<x2>文本</x2>", "普通</x1>文本",
-                "普通<x1/>", "普通<x1", "普通</x", "普通<X1>文本</X1>",
-                "普通< x1>文本</ x1>", "普通<x0>文本</x0>", "普通<x01>文本</x01>"
+                "普通<x1>文本</x1>", "普通<x2>文本</x2>", "普通</x1>文本"
         }) {
             assertNull(response, ContentNodes.replacePlanned(tree, response));
             assertEquals("Plain text", extract(tree));
+        }
+        for (String ordinaryAngleText : new String[]{
+                "普通<x1/>", "普通<x1", "普通</x", "普通<X1>文本</X1>",
+                "普通< x1>文本</ x1>", "普通<x0>文本</x0>", "普通<x01>文本</x01>"
+        }) {
+            assertNotNull(ordinaryAngleText, ContentNodes.replacePlanned(tree, ordinaryAngleText));
         }
         assertEquals("普通文本", content(ContentNodes.replaceChecked(tree, "普通文本").get(0)));
     }

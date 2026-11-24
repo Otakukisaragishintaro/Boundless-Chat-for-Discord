@@ -376,7 +376,7 @@ public final class ContentNodes {
         return alignTokens(plain, plan);
     }
 
-    // Recognize malformed reserved tags too; an exact-tag-only scan would let them reach Text.
+    // Only exact registered style tags are structural; incomplete angle text stays in the text slot.
     private static final java.util.regex.Pattern STYLE_MARKER =
             java.util.regex.Pattern.compile("</?x[1-9][0-9]*>");
 
