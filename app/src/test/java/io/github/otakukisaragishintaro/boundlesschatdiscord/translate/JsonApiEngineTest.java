@@ -145,25 +145,25 @@ public class JsonApiEngineTest {
     }
 
     @Test
-    public void literalDiscordMentionsAndChannelTokensAreShieldedAndRestored() throws Exception {
+    public void literalDiscordMentionsChannelTokensAndUrlsAreShieldedAndRestored() throws Exception {
         String source = "Please contact <@403924274437685248> and visit "
-                + "<#1570408648533082167> @everyone";
+                + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
         FakeConnection connection = new FakeConnection(chatJson(
-                "请联系 <keep1/> 并访问 <keep2/> <keep3/>"));
+                "请联系 <keep1/> 并访问 <keep2/> <keep3/> <keep4/>"));
         JsonApiEngine engine = new JsonApiEngine(
                 config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
 
-        assertEquals("请联系 <@403924274437685248> 并访问 <#1570408648533082167> @everyone",
+        assertEquals("请联系 <@403924274437685248> 并访问 <#1570408648533082167> @everyone "
+                        + "https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4",
                 engine.translate(source));
 
         JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
         String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
-        assertTrue(userContent.contains("<keep1/>"));
-        assertTrue(userContent.contains("<keep2/>"));
-        assertTrue(userContent.contains("<keep3/>"));
+        for (int i = 1; i <= 4; i++) assertTrue(userContent.contains("<keep" + i + "/>"));
         assertFalse(userContent.contains("403924274437685248"));
         assertFalse(userContent.contains("1570408648533082167"));
         assertFalse(userContent.contains("@everyone"));
+        assertFalse(userContent.contains("github.com/YusufOzmen01"));
         assertTrue(connection.disconnected);
         assertTrue(active(engine).isEmpty());
     }
