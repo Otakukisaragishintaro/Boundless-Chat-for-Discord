@@ -54,6 +54,7 @@ public class ConfigurationSyncTest {
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_TARGET_LANG));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_SYSTEM_PROMPT));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_INCOMING_STYLES));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_OUTBOUND_PROMPTS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_MENTIONS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_CHANNELS_EMOJIS));
