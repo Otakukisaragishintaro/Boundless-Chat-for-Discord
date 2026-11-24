@@ -2,6 +2,7 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.translate;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.BlankLines;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
@@ -80,6 +81,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
         splitParagraphs(text, paragraphs, separators);
 
         if (paragraphs.size() <= 1) {
+            ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
+                    + " sourceChars=" + text.length());
             return execute(text, true).translated;
         }
 
@@ -115,22 +118,12 @@ public final class JsonApiEngine implements Scheduler.Engine {
         return combined.toString();
     }
 
-    /** Split only at blank-line paragraph boundaries, preserving every separator byte-for-byte. */
+    /** Split using the same whitespace-aware blank-line rules as Discord node alignment. */
     static void splitParagraphs(String source, java.util.List<String> paragraphs,
                                 java.util.List<String> separators) {
-        if (source == null || source.isEmpty()) {
-            paragraphs.add(source == null ? "" : source);
-            return;
-        }
-        java.util.regex.Matcher matcher =
-                java.util.regex.Pattern.compile("\\n{2,}").matcher(source);
-        int start = 0;
-        while (matcher.find()) {
-            paragraphs.add(source.substring(start, matcher.start()));
-            separators.add(matcher.group());
-            start = matcher.end();
-        }
-        paragraphs.add(source.substring(start));
+        BlankLines.Split split = BlankLines.split(source);
+        paragraphs.addAll(split.chunks);
+        separators.addAll(split.separators);
     }
 
     /** Connection probes share all request/decoder ownership, but do not judge translation safety. */
