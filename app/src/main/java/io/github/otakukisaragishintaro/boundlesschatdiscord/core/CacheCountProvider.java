@@ -3,6 +3,7 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 import android.content.ContentProvider;
 import android.content.ContentValues;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.net.Uri;
 import android.database.Cursor;
@@ -34,6 +35,41 @@ public final class CacheCountProvider extends ContentProvider {
     private static final String EXTRA_PUBLISHED = "published";
     private static final String ALLOWED_CALLER_PACKAGE = "com.discord";
     private static final int MAX_ENTRY_COUNT = 1_000_000;
+
+    /**
+     * Make this provider visible to Discord without requiring changes to Discord's manifest.
+     *
+     * Android automatically exposes a provider's package to an app that has been granted
+     * URI access to that provider. The grant is restricted to Discord and to a URI that
+     * contains no readable data; the provider's call() method still validates the caller UID.
+     */
+    public static boolean grantDiscordVisibility(@NonNull Context moduleContext) {
+        String authority = moduleContext.getPackageName() + AUTHORITY_SUFFIX;
+        Uri visibilityUri = new Uri.Builder()
+                .scheme("content")
+                .authority(authority)
+                .appendPath("visibility")
+                .build();
+        try {
+            moduleContext.grantUriPermission(
+                    ALLOWED_CALLER_PACKAGE,
+                    visibilityUri,
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            ProjectLog.infoOnce("cache.count.provider.visibility.granted",
+                    "local translation cache provider visibility grant status=GRANTED"
+                            + " targetPackage=" + ALLOWED_CALLER_PACKAGE
+                            + " authority=" + authority);
+            return true;
+        } catch (Throwable failure) {
+            ProjectLog.warnOnce("cache.count.provider.visibility.grant_failed",
+                    "local translation cache provider visibility grant status=FAILED"
+                            + " targetPackage=" + ALLOWED_CALLER_PACKAGE
+                            + " authority=" + authority
+                            + " errorClass=" + failure.getClass().getSimpleName()
+                            + " errorMessage=" + safeMessage(failure));
+            return false;
+        }
+    }
 
     /**
      * Send the count from the hooked target process to the module app.
