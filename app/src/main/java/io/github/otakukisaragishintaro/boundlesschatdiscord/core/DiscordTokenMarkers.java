@@ -10,6 +10,10 @@ import java.util.regex.Pattern;
  * used by retained content nodes. Markers are restored after the shared integrity check.
  */
 public final class DiscordTokenMarkers {
+    private static final Pattern UNICODE_EMOJI = Pattern.compile(
+            "\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?"
+                    + "(?:\\u200D\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?)*"
+                    + "|[0-9#*]\\uFE0F?\\u20E3");
     private static final Pattern TOKEN = Pattern.compile(
             "(<(?:@!?[0-9]{15,22}|@&[0-9]{15,22})>|@(?:everyone|here)\\b)"
                     + "|(<#[0-9]{15,22}>|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>)"
@@ -17,10 +21,6 @@ public final class DiscordTokenMarkers {
                     + "|(" + UNICODE_EMOJI.pattern() + ")",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
-    private static final Pattern UNICODE_EMOJI = Pattern.compile(
-            "\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?"
-                    + "(?:\\u200D\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?)*"
-                    + "|[0-9#*]\\uFE0F?\\u20E3");
 
     private DiscordTokenMarkers() { }
 
