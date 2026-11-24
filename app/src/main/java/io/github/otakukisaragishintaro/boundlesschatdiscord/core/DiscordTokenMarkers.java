@@ -6,7 +6,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Shields literal Discord mention/channel/custom-emoji syntax while text is sent to a
+ * Shields literal Discord mention/channel/custom-emoji/URL syntax while text is sent to a
  * translation provider. Existing native-node keep markers are left untouched; new
  * markers use the same integrity-checked namespace and are restored only after validation.
  */
@@ -14,7 +14,8 @@ public final class DiscordTokenMarkers {
     private static final Pattern TOKEN = Pattern.compile(
             "<(?:@!?[0-9]{15,22}|@&[0-9]{15,22}|#[0-9]{15,22})>"
                     + "|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>"
-                    + "|@(?:everyone|here)\\b",
+                    + "|@(?:everyone|here)\\b"
+                    + "|(?:https?://|www\\.)[^\\s<>]+",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
 
