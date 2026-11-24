@@ -107,6 +107,7 @@ public final class Config {
     /** Independent system prompt for translating messages before they are sent. */
     public static final String KEY_SEND_SYSTEM_PROMPT = "send_system_prompt";
     public static final String KEY_INCOMING_PROMPTS = "incoming_prompts_by_language";
+    public static final String KEY_INCOMING_STYLES = "incoming_translation_styles";
     public static final String KEY_OUTBOUND_PROMPTS = "outbound_prompts_by_language";
     /** JSON array of independently configured outbound translation buttons. */
     public static final String KEY_OUTBOUND_BUTTONS = "outbound_translation_buttons";
@@ -200,6 +201,8 @@ public final class Config {
         public final String systemPrompt;
         public final String sendSystemPrompt;
         public final String incomingPromptsJson;
+        public final String incomingStylesJson;
+        public final IncomingPromptStyles incomingStyles;
         public final String outboundPromptsJson;
         public final java.util.Map<String, String> incomingPrompts;
         public final java.util.Map<String, String> outboundPrompts;
@@ -251,8 +254,14 @@ public final class Config {
                     p.contains(KEY_OUTBOUND_PROMPTS) ? str(p, KEY_OUTBOUND_PROMPTS, "") : "",
                     sendTargetLang, legacyOutboundPrompt, true);
             incomingPromptsJson = LanguagePromptConfig.toJson(incomingPrompts);
+            incomingStyles = IncomingPromptStyles.read(
+                    p.contains(KEY_INCOMING_STYLES) ? str(p, KEY_INCOMING_STYLES, "") : "",
+                    incomingPrompts);
+            incomingStylesJson = incomingStyles.toJson();
+            for (TranslationScope.Rule rule : translationScope.servers) incomingStyles.style(rule.promptStyleId);
+            for (TranslationScope.Rule rule : translationScope.channels) incomingStyles.style(rule.promptStyleId);
             outboundPromptsJson = LanguagePromptConfig.toJson(outboundPrompts);
-            systemPrompt = LanguagePromptConfig.resolve(incomingPrompts, targetLang);
+            systemPrompt = incomingStyles.resolve(targetLang, incomingStyles.defaultStyleId(targetLang));
             sendSystemPrompt = LanguagePromptConfig.resolve(outboundPrompts, sendTargetLang);
             outboundButtonsJson = p.contains(KEY_OUTBOUND_BUTTONS)
                     ? str(p, KEY_OUTBOUND_BUTTONS, "") : "";
@@ -301,8 +310,10 @@ public final class Config {
             incomingPrompts = LanguagePromptConfig.defaults();
             outboundPrompts = LanguagePromptConfig.defaults();
             incomingPromptsJson = LanguagePromptConfig.toJson(incomingPrompts);
+            incomingStyles = IncomingPromptStyles.defaults();
+            incomingStylesJson = incomingStyles.toJson();
             outboundPromptsJson = LanguagePromptConfig.toJson(outboundPrompts);
-            systemPrompt = LanguagePromptConfig.resolve(incomingPrompts, targetLang);
+            systemPrompt = incomingStyles.resolve(targetLang, incomingStyles.defaultStyleId(targetLang));
             sendSystemPrompt = LanguagePromptConfig.resolve(outboundPrompts, sendTargetLang);
             outboundButtonsJson = "";
             outboundButtons = OutboundButtonConfig.defaults(
@@ -419,6 +430,7 @@ public final class Config {
             return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
                     + encode(Boolean.toString(streaming))
                     + encode(Boolean.toString(protectionPromptEnabled)) + encode(incomingPromptsJson)
+                    + encode(incomingStylesJson) + encode(translationScope.toJson())
                     + encode(outboundPromptsJson) + encode(systemPrompt) + encode(sendSystemPrompt)
                     + encode(outboundButtonsJson)
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
@@ -461,14 +473,26 @@ public final class Config {
         }
 
         public Snapshot forSendTranslation(OutboundButtonConfig button) {
-            return new Snapshot(this, button);
+            return new Snapshot(this, button, null, false);
+        }
+
+        /** Resolve the receive style for one message using channel > server > global inheritance. */
+        public Snapshot forIncomingTranslation(String guildId, String channelId) {
+            String styleId = translationScope.promptStyleId(guildId, channelId);
+            String prompt = incomingStyles.resolve(targetLang, styleId);
+            return prompt.equals(systemPrompt) ? this : new Snapshot(this, null, prompt, true);
         }
 
         private Snapshot(Snapshot source) {
-            this(source, null);
+            this(source, null, null, false);
         }
 
         private Snapshot(Snapshot source, @Nullable OutboundButtonConfig outboundButton) {
+            this(source, outboundButton, null, false);
+        }
+
+        private Snapshot(Snapshot source, @Nullable OutboundButtonConfig outboundButton,
+                         @Nullable String incomingPrompt, boolean incoming) {
             enabled = source.enabled;
             loggingEnabled = source.loggingEnabled;
             cacheEnabled = source.cacheEnabled;
@@ -477,9 +501,9 @@ public final class Config {
             apiUrl = source.apiUrl;
             apiKey = source.apiKey;
             model = source.model;
-            targetLang = outboundButton == null ? source.sendTargetLang
+            targetLang = incoming ? source.targetLang : outboundButton == null ? source.sendTargetLang
                     : outboundButton.targetLanguage;
-            sendTargetLang = targetLang;
+            sendTargetLang = incoming ? source.sendTargetLang : targetLang;
             extraHeaders = source.extraHeaders;
             // A button's custom prompt remains an explicit override. Default prompts resolve
             // through the language-specific library so all supported languages stay independent.
@@ -489,9 +513,11 @@ public final class Config {
                             ? LanguagePromptConfig.resolve(source.outboundPrompts,
                                     outboundButton.targetLanguage)
                             : outboundButton.systemPrompt;
-            systemPrompt = outboundPrompt;
-            sendSystemPrompt = outboundPrompt;
+            systemPrompt = incoming ? incomingPrompt : outboundPrompt;
+            sendSystemPrompt = incoming ? source.sendSystemPrompt : outboundPrompt;
             incomingPromptsJson = source.incomingPromptsJson;
+            incomingStylesJson = source.incomingStylesJson;
+            incomingStyles = source.incomingStyles;
             outboundPromptsJson = source.outboundPromptsJson;
             incomingPrompts = source.incomingPrompts;
             outboundPrompts = source.outboundPrompts;
