@@ -37,6 +37,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.CacheCountProvider;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiagnosticLogStore;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.LanguagePromptConfig;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.IncomingPromptStyles;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.OutboundButtonConfig;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ConfigurationSync;
@@ -147,6 +148,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private EditText modelInput;
     private EditText headersInput;
     private EditText systemPromptInput;
+    private EditText incomingStylesInput;
     private EditText sendSystemPromptInput;
     private EditText timeoutInput;
     private EditText concurrencyInput;
@@ -819,6 +821,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         protectionPromptEnabledInput = addValidationSwitch(advancedBacking,
                 "启用必要保护提示词（默认开启）", Config.DEF_PROTECTION_PROMPT_ENABLED);
+        incomingStylesInput = new EditText(this);
+        advancedBacking.addView(incomingStylesInput, matchWrap());
         sendSystemPromptInput = addField(advancedBacking,
                 getString(R.string.label_new_outbound_prompt),
                 getString(R.string.hint_default_outbound_prompt),
@@ -1504,7 +1508,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private EditText[] configurationFields() {
         return new EditText[] {urlInput, keyInput, modelInput, headersInput,
-                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
+                systemPromptInput, incomingStylesInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
                 minLengthPercentInput, maxLengthPercentInput, testTextInput};
     }
 
@@ -1634,6 +1638,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstSendLanguage));
             setTextOrPlaceholder(headersInput, snapshot.extraHeaders, Config.DEF_EXTRA_HEADERS);
             systemPromptInput.setText(snapshot.incomingPromptsJson);
+            incomingStylesInput.setText(snapshot.incomingStylesJson);
             sendSystemPromptInput.setText(snapshot.outboundPromptsJson);
             setTextOrPlaceholder(timeoutInput, String.valueOf(snapshot.timeoutMs),
                     String.valueOf(Config.DEF_TIMEOUT_MS));
@@ -1827,7 +1832,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     /** 返回真正写入配置的文本项；测试输入框不属于持久化配置。 */
     private List<EditText> persistedTextFields() {
         return Arrays.asList(urlInput, keyInput, modelInput, headersInput,
-                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
+                systemPromptInput, incomingStylesInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
                 minLengthPercentInput, maxLengthPercentInput, cacheLimitInput,
                 experimentalChunkThresholdInput);
     }
@@ -1841,6 +1846,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         committedTextValues.put(modelInput, snapshot.model.equals(Config.DEF_MODEL) ? "" : snapshot.model);
         committedTextValues.put(headersInput, snapshot.extraHeaders);
         committedTextValues.put(systemPromptInput, snapshot.incomingPromptsJson);
+        committedTextValues.put(incomingStylesInput, snapshot.incomingStylesJson);
         committedTextValues.put(sendSystemPromptInput, snapshot.outboundPromptsJson);
         committedTextValues.put(timeoutInput, snapshot.timeoutMs == Config.DEF_TIMEOUT_MS
                 ? "" : String.valueOf(snapshot.timeoutMs));
@@ -2200,6 +2206,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 OutboundButtonConfig.toJson(outboundButtonsDraft));
         memoryPrefs.put(Config.KEY_EXTRA_HEADERS, headersInput.getText().toString());
         memoryPrefs.put(Config.KEY_INCOMING_PROMPTS, systemPromptInput.getText().toString());
+        memoryPrefs.put(Config.KEY_INCOMING_STYLES, incomingStylesInput.getText().toString());
         memoryPrefs.put(Config.KEY_OUTBOUND_PROMPTS, sendSystemPromptInput.getText().toString());
         memoryPrefs.put(Config.KEY_TIMEOUT_MS, parseIntInput(timeoutInput, Config.DEF_TIMEOUT_MS));
         memoryPrefs.put(Config.KEY_MAX_CONCURRENCY,
