@@ -29,7 +29,7 @@ public final class EnglishDetector {
     private static final float MIN_TARGET_SCRIPT_RATIO = 0.2f;
     /** ASCII emoticons are presentation tokens, not prose or evidence of another script. */
     private static final java.util.regex.Pattern EMOTICON = java.util.regex.Pattern.compile(
-            "(?i)(?:" + java.util.regex.Pattern.quote(">.<") + "|"
+            "(?i)(?<![A-Za-z0-9])(?:" + java.util.regex.Pattern.quote(">.<") + "|"
                     + java.util.regex.Pattern.quote("<.<") + "|"
                     + java.util.regex.Pattern.quote(">_<") + "|"
                     + java.util.regex.Pattern.quote("<_<") + "|"
@@ -52,7 +52,7 @@ public final class EnglishDetector {
                     + java.util.regex.Pattern.quote("._.") + "|"
                     + java.util.regex.Pattern.quote("-_-") + "|"
                     + java.util.regex.Pattern.quote("O_O") + "|"
-                    + java.util.regex.Pattern.quote("<3") + ")");
+                    + java.util.regex.Pattern.quote("<3") + ")(?![A-Za-z0-9])");
 
 
     private EnglishDetector() {
