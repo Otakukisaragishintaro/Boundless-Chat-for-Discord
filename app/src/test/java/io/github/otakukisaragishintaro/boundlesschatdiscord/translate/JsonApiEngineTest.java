@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.MemoryPrefs;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
@@ -141,6 +142,30 @@ public class JsonApiEngineTest {
         }));
         assertEquals(repeat("q", 502), raisedThreshold.translate(source));
         assertEquals(1, raisedThresholdOpens.get());
+    }
+
+    @Test
+    public void literalDiscordMentionsAndChannelTokensAreShieldedAndRestored() throws Exception {
+        String source = "Please contact <@403924274437685248> and visit "
+                + "<#1570408648533082167> @everyone";
+        FakeConnection connection = new FakeConnection(chatJson(
+                "请联系 <keep1/> 并访问 <keep2/> <keep3/>"));
+        JsonApiEngine engine = new JsonApiEngine(
+                config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
+
+        assertEquals("请联系 <@403924274437685248> 并访问 <#1570408648533082167> @everyone",
+                engine.translate(source));
+
+        JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
+        String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
+        assertTrue(userContent.contains("<keep1/>"));
+        assertTrue(userContent.contains("<keep2/>"));
+        assertTrue(userContent.contains("<keep3/>"));
+        assertFalse(userContent.contains("403924274437685248"));
+        assertFalse(userContent.contains("1570408648533082167"));
+        assertFalse(userContent.contains("@everyone"));
+        assertTrue(connection.disconnected);
+        assertTrue(active(engine).isEmpty());
     }
 
     private static String repeat(String value, int count) {
