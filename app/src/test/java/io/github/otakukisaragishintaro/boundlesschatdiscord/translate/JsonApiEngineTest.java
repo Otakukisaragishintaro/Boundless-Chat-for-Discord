@@ -278,6 +278,34 @@ public class JsonApiEngineTest {
         assertFalse(disabled.protectUrls);
     }
 
+    @Test
+    public void productionProtectionOptionsIndependentlyControlMentionChannelEmojiAndUrlTokens()
+            throws Exception {
+        String source = "@everyone <#1570408648533082167> 😀 https://example.com/path";
+        boolean[][] options = {
+                {false, true, true},
+                {true, false, true},
+                {true, true, false}
+        };
+        for (boolean[] option : options) {
+            Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                    .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                    .put(Config.KEY_API_KEY, "key")
+                    .put(Config.KEY_STREAMING, false)
+                    .put(Config.KEY_PROTECT_MENTIONS, option[0])
+                    .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, option[1])
+                    .put(Config.KEY_PROTECT_URLS, option[2]));
+            DiscordTokenMarkers.Protection expected = DiscordTokenMarkers.protect(
+                    source, option[0], option[1], option[2]);
+            FakeConnection connection = new FakeConnection(chatJson(expected.text));
+            JsonApiEngine engine = new JsonApiEngine(snapshot, http(url -> connection));
+            assertEquals(source, engine.translate(source));
+            JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
+            String user = request.getJSONArray("messages").getJSONObject(1).getString("content");
+            assertEquals(Protocols.WRAPPER_OPEN + expected.text + Protocols.WRAPPER_CLOSE, user);
+        }
+    }
+
     private static String repeat(String value, int count) {
         StringBuilder result = new StringBuilder(value.length() * count);
         for (int i = 0; i < count; i++) result.append(value);
