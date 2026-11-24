@@ -9,7 +9,6 @@
 
     <application
         android:allowBackup="false"
-        android:forceQueryable="true"
         android:hasCode="true"
         android:label="@string/module_name"
         android:icon="@mipmap/ic_launcher"
@@ -33,7 +32,7 @@
             android:authorities="${applicationId}.cache-count"
             android:enabled="true"
             android:exported="true"
-            android:grantUriPermissions="false" />
+            android:grantUriPermissions="true" />
 
         <!-- 注意：io.github.libxposed.service.XposedProvider 由
              io.github.libxposed:service 这个 AAR 自带的 manifest 声明并合并进来，
