@@ -59,6 +59,7 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 | `target_lang` | `简体中文` | 目标语言；旧列表外值继续保留 |
 | `provider_protocol` | `openai-compatible` | 上表三种协议之一 |
 | `streaming_enabled` | true | 三种协议共用的流式请求开关 |
+| `protection_prompt_enabled` | true | 单独发送按目标语言生成的 `<keepN/>` 必要保护提示词；关闭不影响程序强制完整性检查 |
 | `system_prompt` | `Config.DEF_SYSTEM_PROMPT` | 规则式翻译提示词 |
 | `timeout_ms` | 30000 | 正整数；HTTP 实际至少 1000 ms |
 | `max_concurrency` | 4 | 正整数；调度器实际限制为 1–8 |
