@@ -4,7 +4,24 @@ import static org.junit.Assert.*;
 
 import org.junit.Test;
 
+import java.lang.reflect.Field;
+
 public class TranslationCacheTest {
+    @Test
+    public void changingCapacityWhileDisabledDoesNotOpenDatabaseOrTouchStoredRows()
+            throws Exception {
+        TranslationCache cache = new TranslationCache(4);
+        cache.setMaxDiskEntries(123456, false);
+
+        Field limit = TranslationCache.class.getDeclaredField("maxDiskEntries");
+        limit.setAccessible(true);
+        assertEquals(123456, limit.getInt(cache));
+
+        Field database = TranslationCache.class.getDeclaredField("database");
+        database.setAccessible(true);
+        assertNull(database.get(cache));
+    }
+
     @Test
     public void returnsStoredTranslationWithoutChangingItsValue() {
         TranslationCache cache = new TranslationCache(4);
