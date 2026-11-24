@@ -219,7 +219,7 @@
 
     <string name="menu_experimental_features">试验功能…</string>
     <string name="label_experimental_long_message_chunking">长消息分段请求</string>
-    <string name="hint_experimental_long_message_chunking">开启后，超过 400 个字符且包含空行分段的消息会按段分别请求翻译服务，再合并译文。默认关闭；这只改变 API 请求方式，不会分段写入 Discord。属于实验性功能，可能增加请求次数和 Token 消耗。</string>
+    <string name="hint_experimental_long_message_chunking">开启后，整条消息超过上方设定字数且包含空行分段时，会按段分别请求翻译服务，再合并译文。默认关闭；这只改变 API 请求方式，不会分段写入 Discord。属于实验性功能，可能增加请求次数和 Token 消耗。</string>
 
 
     <string name="label_experimental_long_message_threshold">分段触发字数</string>
