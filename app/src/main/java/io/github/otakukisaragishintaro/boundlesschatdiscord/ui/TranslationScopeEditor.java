@@ -320,6 +320,11 @@ final class TranslationScopeEditor {
                 card.addView(heading);
                 card.addView(text(activity.getString(R.string.scope_rule_id, rule.id), true));
                 card.addView(text(action, false));
+                if (rule.promptStyleId != null) {
+                    card.addView(text("接收风格覆盖：" + promptStyles.style(rule.promptStyleId).name, true));
+                } else {
+                    card.addView(text("接收风格：继承上级 / 全局默认", true));
+                }
                 card.addView(text(R.string.scope_edit_hint, true));
                 card.setFocusable(true);
                 card.setContentDescription(activity.getString(R.string.scope_rule_summary,
