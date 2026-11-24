@@ -285,6 +285,24 @@ public class JsonApiEngineTest {
     }
 
     @Test
+    public void productionRequestIncludesOrOmitsSeparateProtectionPromptBySetting() throws Exception {
+        for (boolean enabled : new boolean[]{true, false}) {
+            FakeConnection connection = new FakeConnection(chatJson("你好"));
+            Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                    .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                    .put(Config.KEY_API_KEY, "key")
+                    .put(Config.KEY_STREAMING, false)
+                    .put(Config.KEY_PROTECTION_PROMPT_ENABLED, enabled));
+            JsonApiEngine engine = new JsonApiEngine(snapshot, http(url -> connection));
+            assertEquals("你好", engine.translate("hello"));
+            JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
+            String system = request.getJSONArray("messages").getJSONObject(0).getString("content");
+            assertTrue(system.contains("Translate only the text between"));
+            assertEquals(enabled, system.contains("<keepN/>"));
+        }
+    }
+
+    @Test
     public void completeBusinessPathUsesSelectedModeAndProtocolHeaders() throws Exception {
         String[] protocols = {Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_ANTHROPIC_MESSAGES, Config.PROTOCOL_OPENAI_RESPONSES};
