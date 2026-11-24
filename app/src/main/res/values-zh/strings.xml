@@ -56,7 +56,7 @@
     <string name="label_timeout">超时（毫秒）</string>
     <string name="label_concurrency">最大并发请求数</string>
     <string name="label_test_text">测试文本</string>
-    <string name="hint_test_text">用于“测试翻译”。此按钮会模拟 Discord 文本翻译的语言检测、内容保护、分段、请求和译文校验。</string>
+    <string name="hint_test_text">用于“测试翻译”。此按钮会模拟 Discord 文本翻译的语言检测、内容保护、分段、请求和译文校验。诊断结果包含输入及服务返回内容预览，分享前请检查敏感信息。</string>
     <string name="label_test_server_id">测试服务器 ID（范围规则需要时填写）</string>
     <string name="hint_test_server_id">服务器规则存在时，输入对应的 Discord 服务器数字 ID。</string>
     <string name="label_test_channel_id">测试频道 ID（范围规则需要时填写）</string>
