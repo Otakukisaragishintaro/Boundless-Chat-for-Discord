@@ -2312,38 +2312,58 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     }
 
     private void showDiagnosticLogs() {
-        List<DiagnosticLogStore.Entry> entries = DiagnosticLogStore.read(this,
-                DiagnosticLogStore.DEFAULT_READ_LIMIT);
-        StringBuilder output = new StringBuilder();
-        for (DiagnosticLogStore.Entry entry : entries) {
-            output.append(new Date(entry.timestamp)).append(" [")
-                    .append(entry.source).append("] ")
-                    .append(entry.tag).append(" priority=").append(entry.priority);
-            if (!entry.processName.isEmpty()) output.append(" process=").append(entry.processName);
-            if (!entry.requestId.isEmpty()) output.append(" request=").append(entry.requestId);
-            output.append("\n").append(entry.message).append("\n\n");
+        final android.content.Context appContext = getApplicationContext();
+        Toast.makeText(this, "正在读取诊断日志…", Toast.LENGTH_SHORT).show();
+        try {
+            saveExecutor.execute(() -> {
+                List<DiagnosticLogStore.Entry> entries = DiagnosticLogStore.read(appContext,
+                        DiagnosticLogStore.DEFAULT_READ_LIMIT);
+                StringBuilder output = new StringBuilder();
+                for (DiagnosticLogStore.Entry entry : entries) {
+                    output.append(new Date(entry.timestamp)).append(" [")
+                            .append(entry.source).append("] ")
+                            .append(entry.tag).append(" priority=").append(entry.priority);
+                    if (!entry.processName.isEmpty()) output.append(" process=").append(entry.processName);
+                    if (!entry.requestId.isEmpty()) output.append(" request=").append(entry.requestId);
+                    output.append("\\n").append(entry.message).append("\\n\\n");
+                }
+                if (output.length() == 0) {
+                    output.append("暂无诊断日志。请运行一次测试，或开启项目日志后触发 Discord 翻译。");
+                }
+                String logText = output.toString();
+                mainHandler.post(() -> {
+                    if (destroyed || isFinishing()) return;
+                    AlertDialog dialog = new AlertDialog.Builder(this)
+                            .setTitle("诊断日志（最近 " + entries.size() + " 条）")
+                            .setMessage(logText)
+                            .setPositiveButton("复制全部", (ignored, which) -> {
+                                ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                                if (clipboard != null) {
+                                    clipboard.setPrimaryClip(ClipData.newPlainText(
+                                            "Boundless Chat diagnostic logs", logText));
+                                    Toast.makeText(this, "诊断日志已复制", Toast.LENGTH_SHORT).show();
+                                }
+                            })
+                            .setNeutralButton("清空诊断日志", (ignored, which) -> {
+                                try {
+                                    saveExecutor.execute(() -> {
+                                        boolean cleared = DiagnosticLogStore.clear(appContext);
+                                        mainHandler.post(() -> Toast.makeText(this,
+                                                cleared ? "诊断日志已清空" : "清空诊断日志失败",
+                                                Toast.LENGTH_SHORT).show());
+                                    });
+                                } catch (RuntimeException rejected) {
+                                    Toast.makeText(this, "清空诊断日志失败", Toast.LENGTH_SHORT).show();
+                                }
+                            })
+                            .setNegativeButton("关闭", null)
+                            .create();
+                    dialog.show();
+                });
+            });
+        } catch (RuntimeException rejected) {
+            Toast.makeText(this, "诊断日志读取任务未能启动", Toast.LENGTH_SHORT).show();
         }
-        if (output.length() == 0) output.append("暂无诊断日志。请确认项目日志开关已开启，并在 Discord 中触发一次翻译。");
-
-        AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("跨进程诊断日志（最近 " + entries.size() + " 条）")
-                .setMessage(output.toString())
-                .setPositiveButton("复制全部", (ignored, which) -> {
-                    ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                    if (clipboard != null) {
-                        clipboard.setPrimaryClip(ClipData.newPlainText(
-                                "Boundless Chat diagnostic logs", output.toString()));
-                        Toast.makeText(this, "诊断日志已复制", Toast.LENGTH_SHORT).show();
-                    }
-                })
-                .setNeutralButton("清空日志", (ignored, which) -> {
-                    boolean cleared = DiagnosticLogStore.clear(this);
-                    Toast.makeText(this, cleared ? "诊断日志已清空" : "清空诊断日志失败",
-                            Toast.LENGTH_SHORT).show();
-                })
-                .setNegativeButton("关闭", null)
-                .create();
-        dialog.show();
     }
 
     private static void recordUnexpectedTestFailure(Throwable failure) {
