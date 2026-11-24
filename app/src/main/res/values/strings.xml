@@ -219,7 +219,7 @@
 
     <string name="menu_experimental_features">Experimental features…</string>
     <string name="label_experimental_long_message_chunking">Chunk long-message API requests</string>
-    <string name="hint_experimental_long_message_chunking">When enabled, messages longer than 400 characters with blank-line paragraph breaks are sent as separate translation requests and then recombined. Off by default. This changes API request behavior only; it does not split writes back into Discord. Experimental: it may increase request count and token usage.</string>
+    <string name="hint_experimental_long_message_chunking">When enabled, messages longer than the threshold above with blank-line paragraph breaks are sent as separate translation requests and then recombined. Off by default. This changes API request behavior only; it does not split writes back into Discord. Experimental: it may increase request count and token usage.</string>
 
 
     <string name="label_experimental_long_message_threshold">Chunking trigger length</string>
