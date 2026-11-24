@@ -17,6 +17,10 @@ public final class DiscordTokenMarkers {
                     + "|((?:https?://|www\\.)[^\\s<>]+)",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
+    private static final Pattern UNICODE_EMOJI = Pattern.compile(
+            "\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?"
+                    + "(?:\\u200D\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?)*"
+                    + "|[0-9#*]\\uFE0F?\\u20E3");
 
     private DiscordTokenMarkers() { }
 
@@ -111,7 +115,8 @@ public final class DiscordTokenMarkers {
         List<String> originals = new ArrayList<>();
         while (matcher.find()) {
             boolean selected = matcher.group(1) != null ? protectMentions
-                    : matcher.group(2) != null ? protectChannelsAndEmojis : protectUrls;
+                    : matcher.group(2) != null ? protectChannelsAndEmojis
+                    : matcher.group(3) != null ? protectUrls : protectChannelsAndEmojis;
             if (selected) {
                 String marker = "<keep" + next++ + "/>";
                 markers.add(marker);
