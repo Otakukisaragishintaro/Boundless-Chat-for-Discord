@@ -190,7 +190,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private TextView statusText;
     private TextView resultText;
     private EditText testTextInput;
+    private EditText testGuildIdInput;
+    private EditText testChannelIdInput;
     private EditText sendTestTextInput;
+    private Button copyTestResultButton;
     private Button saveButton;
     private Button resetButton;
     private Button configCheckButton;
@@ -852,6 +855,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         testTextInput = addField(root, getString(R.string.label_test_text),
                 getString(R.string.hint_test_text),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        testGuildIdInput = addField(root, getString(R.string.label_test_server_id),
+                getString(R.string.hint_test_server_id), InputType.TYPE_CLASS_NUMBER);
+        testChannelIdInput = addField(root, getString(R.string.label_test_channel_id),
+                getString(R.string.hint_test_channel_id), InputType.TYPE_CLASS_NUMBER);
         sendTestTextInput = addField(root, getString(R.string.label_send_test_text),
                 getString(R.string.hint_send_test_text),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
@@ -909,6 +916,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resultText.setTextSize(12f);
         resultText.setPadding(0, dp(8), 0, 0);
         root.addView(resultText, matchWrap());
+        copyTestResultButton = new Button(this);
+        copyTestResultButton.setText(R.string.button_copy_test_result);
+        copyTestResultButton.setEnabled(false);
+        copyTestResultButton.setOnClickListener(v -> copyTestResult());
+        root.addView(copyTestResultButton, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root, new ViewGroup.LayoutParams(
@@ -2091,6 +2103,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Config.Snapshot snapshot = snapshotFromUi();
         final String text = testKind == ApiTester.TestKind.SEND_TRANSLATION
                 ? sendTestTextInput.getText().toString() : testTextInput.getText().toString();
+        final String testGuildId = testGuildIdInput.getText().toString().trim();
+        final String testChannelId = testChannelIdInput.getText().toString().trim();
         if (testKind != ApiTester.TestKind.CONNECTION && text.trim().isEmpty()) {
             resultText.setText(R.string.status_enter_test_text);
             return;
@@ -2098,9 +2112,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         final long generation = ++testGeneration;
         resultText.setText(R.string.status_requesting);
+        if (copyTestResultButton != null) copyTestResultButton.setEnabled(false);
         setTestButtonsEnabled(false);
 
-        final ApiTester.Call call = ApiTester.newCall(snapshot, testKind, text);
+        final ApiTester.Call call = ApiTester.newCall(
+                snapshot, testKind, text, testGuildId, testChannelId);
         testCall = call;
         FutureTask<ApiTester.Result> task = new FutureTask<ApiTester.Result>(call) {
             @Override
@@ -2156,11 +2172,23 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             resultText.setText(getString(R.string.status_test_failed_detail,
                     failure == null ? getString(R.string.unknown_error)
                             : failure.getClass().getSimpleName()));
+            if (copyTestResultButton != null) {
+                copyTestResultButton.setEnabled(resultText.length() > 0);
+            }
             updateStatus(getString(R.string.status_test_failed));
         }
     }
 
     /** Future boundary diagnostics remain available even when UI delivery is no longer owned. */
+    private void copyTestResult() {
+        if (resultText == null || resultText.length() == 0) return;
+        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+        if (clipboard == null) return;
+        clipboard.setPrimaryClip(ClipData.newPlainText(
+                getString(R.string.button_copy_test_result), resultText.getText()));
+        Toast.makeText(this, R.string.toast_test_result_copied, Toast.LENGTH_SHORT).show();
+    }
+
     private static void recordUnexpectedTestFailure(Throwable failure) {
         ProjectLog.warn("settings test future end status=UNKNOWN_FAILURE exception="
                 + failure.getClass().getSimpleName());
@@ -2199,6 +2227,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         }
         if (sendTestTranslationButton != null) {
             sendTestTranslationButton.setEnabled(enabled);
+        }
+        if (copyTestResultButton != null && (resultText == null || resultText.length() == 0)) {
+            copyTestResultButton.setEnabled(false);
         }
     }
 
