@@ -89,7 +89,7 @@ public class ProtocolsTest {
                 "hii everyone", Config.DEF_SYSTEM_PROMPT, Config.DEF_MODEL);
         JSONObject json = new JSONObject(body);
         assertEquals(Config.DEF_MODEL, json.getString("model"));
-        assertEquals(Config.DEF_SYSTEM_PROMPT + "\n\n" + Protocols.WRAPPER_RULE,
+        assertEquals(expectedPrompt(Config.DEF_SYSTEM_PROMPT),
                 json.getString("instructions"));
         assertEquals(Protocols.WRAPPER_OPEN + "hii everyone" + Protocols.WRAPPER_CLOSE,
                 json.getString("input"));
@@ -106,7 +106,7 @@ public class ProtocolsTest {
                 "hii everyone", Config.DEF_SYSTEM_PROMPT, Config.DEF_MODEL);
         JSONObject json = new JSONObject(body);
         assertEquals(Config.DEF_MODEL, json.getString("model"));
-        assertEquals(Config.DEF_SYSTEM_PROMPT + "\n\n" + Protocols.WRAPPER_RULE,
+        assertEquals(expectedPrompt(Config.DEF_SYSTEM_PROMPT),
                 json.getString("system"));
         JSONArray messages = json.getJSONArray("messages");
         assertEquals(1, messages.length());
@@ -143,7 +143,7 @@ public class ProtocolsTest {
     }
 
     private static String expectedPrompt(String prompt) {
-        return prompt + "\n\n" + Protocols.WRAPPER_RULE + "\n\n"
+        return expectedPrompt(prompt) + "\n\n"
                 + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG);
     }
 
@@ -356,7 +356,7 @@ public class ProtocolsTest {
                 Config.PROTOCOL_OPENAI_RESPONSES, nasty, prompt, "m"));
         assertEquals(Protocols.WRAPPER_OPEN + nasty + Protocols.WRAPPER_CLOSE,
                 responses.getString("input"));
-        assertEquals(prompt + "\n\n" + Protocols.WRAPPER_RULE,
+        assertEquals(expectedPrompt(prompt),
                 responses.getString("instructions"));
     }
 
