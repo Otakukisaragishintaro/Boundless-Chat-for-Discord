@@ -19,7 +19,9 @@ public final class ConfigurationSync {
             Config.KEY_MAX_CONCURRENCY, Config.KEY_CHECK_WRAPPER,
             Config.KEY_STRIP_OUTER_WRAPPER, Config.KEY_CHECK_SEGMENT_MARKERS,
             Config.KEY_CHECK_PLACEHOLDERS, Config.KEY_CHECK_RETAINED_MARKERS,
-            Config.KEY_CHECK_LENGTH, Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+            Config.KEY_CHECK_LENGTH, Config.KEY_PROTECT_MENTIONS,
+            Config.KEY_PROTECT_CHANNELS_EMOJIS, Config.KEY_PROTECT_URLS,
+            Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
             Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD,
             Config.KEY_MIN_LENGTH_PERCENT,
             Config.KEY_MAX_LENGTH_PERCENT));
@@ -253,6 +255,12 @@ public final class ConfigurationSync {
                     Config.DEF_CHECK_RETAINED_MARKERS);
             putUnlessDefault(raw, Config.KEY_CHECK_LENGTH, snapshot.checkLength,
                     Config.DEF_CHECK_LENGTH);
+            putUnlessDefault(raw, Config.KEY_PROTECT_MENTIONS, snapshot.protectMentions,
+                    Config.DEF_PROTECT_MENTIONS);
+            putUnlessDefault(raw, Config.KEY_PROTECT_CHANNELS_EMOJIS, snapshot.protectChannelsEmojis,
+                    Config.DEF_PROTECT_CHANNELS_EMOJIS);
+            putUnlessDefault(raw, Config.KEY_PROTECT_URLS, snapshot.protectUrls,
+                    Config.DEF_PROTECT_URLS);
             putUnlessDefault(raw, Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
                     snapshot.experimentalLongMessageChunking,
                     Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);

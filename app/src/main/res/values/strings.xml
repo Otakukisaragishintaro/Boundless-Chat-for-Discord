@@ -167,6 +167,9 @@
     <string name="validation_check_placeholders">Check template placeholders</string>
     <string name="validation_check_retained">Check retained-node markers</string>
     <string name="validation_check_length">Check translation length ratio</string>
+    <string name="protection_discord_mentions">Protect Discord user/role mentions and @everyone / @here</string>
+    <string name="protection_discord_channels_emojis">Protect channel mentions and custom emoji</string>
+    <string name="protection_urls">Protect website links (http, https, www)</string>
     <string name="label_min_translation_length">Minimum translation length (%% of source)</string>
     <string name="label_max_translation_length">Maximum translation length (%% of source)</string>
     <string name="button_apply_to_draft">Apply to draft</string>

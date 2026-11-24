@@ -76,7 +76,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
         // Literal Discord syntax can also arrive inside ordinary text nodes or primitive
         // StructurableText. Shield it before every provider request and restore it only
         // after the same retained-marker integrity check used for native opaque nodes.
-        DiscordTokenMarkers.Protection protection = DiscordTokenMarkers.protect(text);
+        DiscordTokenMarkers.Protection protection = DiscordTokenMarkers.protect(text,
+                cfg.protectMentions, cfg.protectChannelsEmojis, cfg.protectUrls);
         String requestText = protection.text;
         java.util.List<String> paragraphs = new java.util.ArrayList<>();
         java.util.List<String> separators = new java.util.ArrayList<>();

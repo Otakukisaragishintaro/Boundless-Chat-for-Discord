@@ -155,6 +155,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Switch checkPlaceholdersInput;
     private Switch checkRetainedMarkersInput;
     private Switch checkLengthInput;
+    private Switch protectMentionsInput;
+    private Switch protectChannelsEmojisInput;
+    private Switch protectUrlsInput;
     private Switch enabledInput;
     private Switch loggingInput;
     private Switch cacheEnabledInput;
@@ -316,6 +319,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("check_placeholders", checkPlaceholdersInput.isChecked());
         draft.putBoolean("check_retained", checkRetainedMarkersInput.isChecked());
         draft.putBoolean("check_length", checkLengthInput.isChecked());
+        draft.putBoolean("protect_mentions", protectMentionsInput.isChecked());
+        draft.putBoolean("protect_channels_emojis", protectChannelsEmojisInput.isChecked());
+        draft.putBoolean("protect_urls", protectUrlsInput.isChecked());
         draft.putBoolean("experimental_long_message_chunking",
                 experimentalChunkingInput.isChecked());
         draft.putString("experimental_long_message_threshold",
@@ -360,6 +366,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkRetainedMarkersInput.setChecked(draft.getBoolean("check_retained",
                     Config.DEF_CHECK_RETAINED_MARKERS));
             checkLengthInput.setChecked(draft.getBoolean("check_length", Config.DEF_CHECK_LENGTH));
+            protectMentionsInput.setChecked(draft.getBoolean("protect_mentions",
+                    Config.DEF_PROTECT_MENTIONS));
+            protectChannelsEmojisInput.setChecked(draft.getBoolean("protect_channels_emojis",
+                    Config.DEF_PROTECT_CHANNELS_EMOJIS));
+            protectUrlsInput.setChecked(draft.getBoolean("protect_urls", Config.DEF_PROTECT_URLS));
             experimentalChunkingInput.setChecked(draft.getBoolean("experimental_long_message_chunking",
                     Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING));
             experimentalChunkThresholdInput.setText(draft.getString(
@@ -816,6 +827,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         checkLengthInput = addValidationSwitch(advancedBacking,
                 getString(R.string.validation_check_length),
                 Config.DEF_CHECK_LENGTH);
+        protectMentionsInput = addValidationSwitch(advancedBacking,
+                getString(R.string.protection_discord_mentions), Config.DEF_PROTECT_MENTIONS);
+        protectChannelsEmojisInput = addValidationSwitch(advancedBacking,
+                getString(R.string.protection_discord_channels_emojis),
+                Config.DEF_PROTECT_CHANNELS_EMOJIS);
+        protectUrlsInput = addValidationSwitch(advancedBacking,
+                getString(R.string.protection_urls), Config.DEF_PROTECT_URLS);
         minLengthPercentInput = addField(advancedBacking,
                 getString(R.string.label_min_translation_length),
                 String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
@@ -1011,6 +1029,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Switch length = addDialogSwitch(form,
                 getString(R.string.validation_check_length),
                 checkLengthInput.isChecked());
+        Switch mentions = addDialogSwitch(form,
+                getString(R.string.protection_discord_mentions), protectMentionsInput.isChecked());
+        Switch channelsEmojis = addDialogSwitch(form,
+                getString(R.string.protection_discord_channels_emojis),
+                protectChannelsEmojisInput.isChecked());
+        Switch urls = addDialogSwitch(form,
+                getString(R.string.protection_urls), protectUrlsInput.isChecked());
         EditText minPercent = addField(form,
                 getString(R.string.label_min_translation_length),
                 String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
@@ -1049,6 +1074,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     checkPlaceholdersInput.setChecked(placeholders.isChecked());
                     checkRetainedMarkersInput.setChecked(retained.isChecked());
                     checkLengthInput.setChecked(length.isChecked());
+                    protectMentionsInput.setChecked(mentions.isChecked());
+                    protectChannelsEmojisInput.setChecked(channelsEmojis.isChecked());
+                    protectUrlsInput.setChecked(urls.isChecked());
                     minLengthPercentInput.setText(String.valueOf(min));
                     maxLengthPercentInput.setText(String.valueOf(max));
                     markDirty();
@@ -1332,6 +1360,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkPlaceholdersInput.setChecked(Config.DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkersInput.setChecked(Config.DEF_CHECK_RETAINED_MARKERS);
             checkLengthInput.setChecked(Config.DEF_CHECK_LENGTH);
+            protectMentionsInput.setChecked(Config.DEF_PROTECT_MENTIONS);
+            protectChannelsEmojisInput.setChecked(Config.DEF_PROTECT_CHANNELS_EMOJIS);
+            protectUrlsInput.setChecked(Config.DEF_PROTECT_URLS);
             experimentalChunkingInput.setChecked(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
             experimentalChunkThresholdInput.setText("");
             protocolSpinner.setSelection(AdapterView.INVALID_POSITION);
@@ -1442,6 +1473,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkPlaceholdersInput.setChecked(snapshot.checkPlaceholders);
             checkRetainedMarkersInput.setChecked(snapshot.checkRetainedMarkers);
             checkLengthInput.setChecked(snapshot.checkLength);
+            protectMentionsInput.setChecked(snapshot.protectMentions);
+            protectChannelsEmojisInput.setChecked(snapshot.protectChannelsEmojis);
+            protectUrlsInput.setChecked(snapshot.protectUrls);
             experimentalChunkingInput.setChecked(snapshot.experimentalLongMessageChunking);
             setTextOrPlaceholder(experimentalChunkThresholdInput,
                     String.valueOf(snapshot.experimentalLongMessageThreshold),
@@ -1920,6 +1954,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         checkPlaceholdersInput.setEnabled(formAvailable);
         checkRetainedMarkersInput.setEnabled(formAvailable);
         checkLengthInput.setEnabled(formAvailable);
+        protectMentionsInput.setEnabled(formAvailable);
+        protectChannelsEmojisInput.setEnabled(formAvailable);
+        protectUrlsInput.setEnabled(formAvailable);
         updateToggleText(enabledInput, enabledHint, SettingsToggleText.Setting.TRANSLATION);
         updateToggleText(loggingInput, loggingHint, SettingsToggleText.Setting.LOGGING);
         protocolSpinner.setEnabled(formAvailable);
@@ -2007,6 +2044,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_CHECK_PLACEHOLDERS, checkPlaceholdersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_RETAINED_MARKERS, checkRetainedMarkersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_LENGTH, checkLengthInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECT_MENTIONS, protectMentionsInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECT_CHANNELS_EMOJIS, protectChannelsEmojisInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECT_URLS, protectUrlsInput.isChecked());
         memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
                 experimentalChunkingInput.isChecked());
         memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD,

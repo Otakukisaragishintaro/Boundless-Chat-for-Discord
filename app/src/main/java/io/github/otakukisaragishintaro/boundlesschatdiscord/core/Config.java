@@ -157,6 +157,14 @@ public final class Config {
     public static final boolean DEF_CHECK_RETAINED_MARKERS = true;
     public static final String KEY_CHECK_LENGTH = "check_translation_length";
     public static final boolean DEF_CHECK_LENGTH = true;
+
+    // ---- Literal Discord token protection (independently configurable) ----
+    public static final String KEY_PROTECT_MENTIONS = "protect_discord_mentions";
+    public static final boolean DEF_PROTECT_MENTIONS = true;
+    public static final String KEY_PROTECT_CHANNELS_EMOJIS = "protect_discord_channels_emojis";
+    public static final boolean DEF_PROTECT_CHANNELS_EMOJIS = true;
+    public static final String KEY_PROTECT_URLS = "protect_urls";
+    public static final boolean DEF_PROTECT_URLS = true;
     public static final String KEY_MIN_LENGTH_PERCENT = "min_translation_length_percent";
     public static final int DEF_MIN_LENGTH_PERCENT = 10;
     public static final String KEY_MAX_LENGTH_PERCENT = "max_translation_length_percent";
@@ -212,6 +220,9 @@ public final class Config {
         public final boolean checkPlaceholders;
         public final boolean checkRetainedMarkers;
         public final boolean checkLength;
+        public final boolean protectMentions;
+        public final boolean protectChannelsEmojis;
+        public final boolean protectUrls;
         public final boolean experimentalLongMessageChunking;
         public final int experimentalLongMessageThreshold;
         public final int minLengthPercent;
@@ -246,6 +257,10 @@ public final class Config {
             checkPlaceholders = readBoolean(p, KEY_CHECK_PLACEHOLDERS, DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkers = readBoolean(p, KEY_CHECK_RETAINED_MARKERS, DEF_CHECK_RETAINED_MARKERS);
             checkLength = readBoolean(p, KEY_CHECK_LENGTH, DEF_CHECK_LENGTH);
+            protectMentions = readBoolean(p, KEY_PROTECT_MENTIONS, DEF_PROTECT_MENTIONS);
+            protectChannelsEmojis = readBoolean(p, KEY_PROTECT_CHANNELS_EMOJIS,
+                    DEF_PROTECT_CHANNELS_EMOJIS);
+            protectUrls = readBoolean(p, KEY_PROTECT_URLS, DEF_PROTECT_URLS);
             experimentalLongMessageChunking = readBoolean(p, KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
                     DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
             experimentalLongMessageThreshold = boundedExperimentalThreshold(p);
@@ -285,6 +300,9 @@ public final class Config {
             checkPlaceholders = DEF_CHECK_PLACEHOLDERS;
             checkRetainedMarkers = DEF_CHECK_RETAINED_MARKERS;
             checkLength = DEF_CHECK_LENGTH;
+            protectMentions = DEF_PROTECT_MENTIONS;
+            protectChannelsEmojis = DEF_PROTECT_CHANNELS_EMOJIS;
+            protectUrls = DEF_PROTECT_URLS;
             experimentalLongMessageChunking = DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING;
             experimentalLongMessageThreshold = DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD;
             minLengthPercent = DEF_MIN_LENGTH_PERCENT;
@@ -386,6 +404,9 @@ public final class Config {
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
                     + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
                     + encode(Boolean.toString(checkRetainedMarkers)) + encode(Boolean.toString(checkLength))
+                    + encode(Boolean.toString(protectMentions))
+                    + encode(Boolean.toString(protectChannelsEmojis))
+                    + encode(Boolean.toString(protectUrls))
                     + encode(Boolean.toString(experimentalLongMessageChunking))
                     + encode(Integer.toString(experimentalLongMessageThreshold))
                     + encode(Integer.toString(minLengthPercent)) + encode(Integer.toString(maxLengthPercent))
@@ -451,6 +472,9 @@ public final class Config {
             checkPlaceholders = source.checkPlaceholders;
             checkRetainedMarkers = source.checkRetainedMarkers;
             checkLength = source.checkLength;
+            protectMentions = source.protectMentions;
+            protectChannelsEmojis = source.protectChannelsEmojis;
+            protectUrls = source.protectUrls;
             experimentalLongMessageChunking = source.experimentalLongMessageChunking;
             experimentalLongMessageThreshold = source.experimentalLongMessageThreshold;
             minLengthPercent = source.minLengthPercent;

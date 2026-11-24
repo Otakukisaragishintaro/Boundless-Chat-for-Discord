@@ -167,6 +167,9 @@
     <string name="validation_check_placeholders">检查模板占位符</string>
     <string name="validation_check_retained">检查保留节点定位标记</string>
     <string name="validation_check_length">检查译文长度比例</string>
+    <string name="protection_discord_mentions">保护 Discord 用户/身份组提及及 @everyone / @here</string>
+    <string name="protection_discord_channels_emojis">保护频道引用和自定义表情</string>
+    <string name="protection_urls">保护网站链接（http、https、www）</string>
     <string name="label_min_translation_length">译文最小长度（原文百分比）</string>
     <string name="label_max_translation_length">译文最大长度（原文百分比）</string>
     <string name="button_apply_to_draft">应用到待保存设置</string>
