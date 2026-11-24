@@ -41,6 +41,18 @@ final class ApiTestResultFormatter {
         if (!failure.detail.isEmpty()) {
             message.append("\n").append(failure.detail);
         }
+        if (!failure.stage.isEmpty()) {
+            message.append(strings.get(R.string.result_failure_stage, failure.stage));
+        }
+        if (failure.sourcePreview != null && !failure.sourcePreview.isEmpty()) {
+            message.append(strings.get(R.string.result_failure_source, failure.sourcePreview));
+        }
+        if (failure.requestPreview != null && !failure.requestPreview.isEmpty()) {
+            message.append(strings.get(R.string.result_failure_request, failure.requestPreview));
+        }
+        if (failure.translatedPreview != null && !failure.translatedPreview.isEmpty()) {
+            message.append(strings.get(R.string.result_failure_translation, failure.translatedPreview));
+        }
         message.append(strings.get(R.string.result_failure_category,
                 strings.get(categoryResource(failure.kind)), failure.kind.name()));
         message.append(strings.get(R.string.result_failure_reason, failure.reason.name()));
@@ -103,6 +115,9 @@ final class ApiTestResultFormatter {
             case RESPONSE_INCOMPLETE: return R.string.result_reason_response_incomplete;
             case GENERATION_STOPPED: return R.string.result_reason_generation_stopped;
             case TRANSLATION_INVALID: return R.string.result_reason_translation_invalid;
+            case NO_TRANSLATABLE_TEXT: return R.string.result_reason_not_translatable;
+            case SCOPE_CONTEXT_REQUIRED: return R.string.result_reason_scope_context_required;
+            case SCOPE_DENIED: return R.string.result_reason_scope_denied;
             case EMPTY_TEXT: return R.string.result_reason_empty_text;
             case CANCELLED: return R.string.result_reason_cancelled;
             case UNKNOWN_FAILURE: return R.string.result_reason_unknown_failure;
