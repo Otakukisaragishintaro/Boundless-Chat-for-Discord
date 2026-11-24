@@ -2,9 +2,13 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.translate;
 
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.concurrent.Callable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiagnosticLogStore;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.EnglishDetector;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
@@ -100,9 +104,15 @@ public final class ApiTester {
         public final long elapsedMs;
         public final TestKind testKind;
         @Nullable public final Failure failure;
+        public final List<String> diagnostics;
 
         private Result(TestKind testKind, @Nullable String translated, long elapsedMs,
                        @Nullable Failure failure) {
+            this(testKind, translated, elapsedMs, failure, Collections.emptyList());
+        }
+
+        private Result(TestKind testKind, @Nullable String translated, long elapsedMs,
+                       @Nullable Failure failure, List<String> diagnostics) {
             this.ok = failure == null;
             this.translated = failure == null
                     && (testKind == TestKind.TRANSLATION || testKind == TestKind.SEND_TRANSLATION)
@@ -110,6 +120,7 @@ public final class ApiTester {
             this.elapsedMs = elapsedMs;
             this.testKind = testKind;
             this.failure = failure;
+            this.diagnostics = Collections.unmodifiableList(new ArrayList<>(diagnostics));
         }
     }
 
@@ -168,44 +179,67 @@ public final class ApiTester {
         @Override
         public Result call() {
             long start = System.nanoTime();
+            List<String> diagnostics = new ArrayList<>();
             synchronized (this) {
                 if (used) throw new IllegalStateException("API test calls cannot be reused");
                 used = true;
                 if (cancelled) {
-                    Result result = new Result(testKind, null, elapsed(start), Failure.cancelled(0));
+                    diagnostics.add("stage=queue status=CANCELLED reason=cancelled_before_execution");
+                    Result result = new Result(testKind, null, elapsed(start),
+                            Failure.cancelled(0), diagnostics);
                     logResult(result);
                     return result;
                 }
                 // Publish before registration; cancel interrupts the pre-attach gap.
                 worker = Thread.currentThread();
             }
+            diagnostics.add("stage=start status=RUNNING test=" + testKind
+                    + " protocol=" + protocol + " streaming=" + streaming);
             ProjectLog.info("api.test.start test=" + testKind + " protocol=" + protocol
                     + " streaming=" + streaming);
             Result result;
             int responseStatus = 0;
             try {
                 if (testKind == TestKind.TRANSLATION) {
+                    diagnostics.add("stage=scope_filter status=STARTED");
                     enforceTestScope(sourceConfig.translationScope, testGuildId, testChannelId);
-                    String detectionText = DiscordTokenMarkers.protect(text,
+                    diagnostics.add("stage=scope_filter status=PASSED");
+                    DiscordTokenMarkers.Protection protection = DiscordTokenMarkers.protect(text,
                             sourceConfig.protectMentions, sourceConfig.protectChannelsEmojis,
-                            sourceConfig.protectUrls).text;
+                            sourceConfig.protectUrls);
+                    diagnostics.add("stage=discord_protection status=COMPLETE protectedTokens="
+                            + protection.tokenCount());
                     EnglishDetector.Verdict verdict = text == null || text.trim().isEmpty() ? null
-                            : EnglishDetector.evaluate(detectionText, 1, sourceConfig.targetLang);
+                            : EnglishDetector.evaluate(protection.text, 1, sourceConfig.targetLang);
+                    if (verdict != null) {
+                        diagnostics.add("stage=language_detection status="
+                                + (verdict.shouldTranslate ? "PASSED" : "SKIPPED")
+                                + " reason=" + verdict.reason.name());
+                    }
                     if (verdict != null && !verdict.shouldTranslate) {
                         throw new TranslationException(TranslationException.Kind.EMPTY,
                                 TranslationException.Reason.NO_TRANSLATABLE_TEXT,
                                 "语言检测跳过：" + verdict.reason.name());
                     }
-                    // Same production entry point used by Scheduler.Engine: Discord token
-                    // protection, paragraph chunking, request/decoder handling, integrity
-                    // validation, and protected-token restoration all run here.
-                    result = new Result(testKind, engine.translateForTest(text), elapsed(start), null);
+                    // This is the same engine entry point used by production translation.
+                    diagnostics.add("stage=production_translation_pipeline status=STARTED");
+                    String translated = engine.translateForTest(text);
+                    diagnostics.add("stage=production_translation_pipeline status=SUCCESS"
+                            + " translatedChars=" + (translated == null ? 0 : translated.length()));
+                    result = new Result(testKind, translated, elapsed(start), null, diagnostics);
                 } else if (testKind == TestKind.SEND_TRANSLATION) {
-                    result = new Result(testKind, engine.translateForTest(text), elapsed(start), null);
+                    diagnostics.add("stage=outbound_prompt_pipeline status=STARTED");
+                    String translated = engine.translateForTest(text);
+                    diagnostics.add("stage=outbound_prompt_pipeline status=SUCCESS"
+                            + " translatedChars=" + (translated == null ? 0 : translated.length()));
+                    result = new Result(testKind, translated, elapsed(start), null, diagnostics);
                 } else {
+                    diagnostics.add("stage=connection_request status=STARTED");
                     JsonApiEngine.Exchange exchange = engine.execute(text, false);
                     responseStatus = exchange.httpStatus;
-                    result = new Result(testKind, exchange.translated, elapsed(start), null);
+                    diagnostics.add("stage=connection_request status=SUCCESS httpStatus="
+                            + responseStatus);
+                    result = new Result(testKind, exchange.translated, elapsed(start), null, diagnostics);
                 }
             } catch (Exception failure) {
                 Failure diagnostic = Failure.from(failure);
@@ -216,7 +250,21 @@ public final class ApiTester {
                             preview(text, 1000), diagnostic.requestPreview,
                             diagnostic.translatedPreview);
                 }
-                result = new Result(testKind, null, elapsed(start), diagnostic);
+                diagnostics.add("stage=" + (diagnostic.stage.isEmpty()
+                        ? "preflight_or_request" : diagnostic.stage)
+                        + " status=FAILED category=" + diagnostic.kind
+                        + " reason=" + diagnostic.reason
+                        + " httpStatus=" + diagnostic.httpStatus
+                        + " exception=" + diagnostic.exceptionType);
+                if (diagnostic.requestPreview != null) {
+                    diagnostics.add("request_preview=" + DiagnosticLogStore.sanitizeMessage(
+                            diagnostic.requestPreview));
+                }
+                if (diagnostic.translatedPreview != null) {
+                    diagnostics.add("response_preview=" + DiagnosticLogStore.sanitizeMessage(
+                            diagnostic.translatedPreview));
+                }
+                result = new Result(testKind, null, elapsed(start), diagnostic, diagnostics);
             } finally {
                 synchronized (this) {
                     // Always release ownership, including Errors handled by the Future boundary.
@@ -226,9 +274,10 @@ public final class ApiTester {
             synchronized (this) {
                 if (cancelled && (result.failure == null
                         || result.failure.kind != TranslationException.Kind.CANCELLED)) {
-                    // Preserve known status even if cancellation wins after successful decoding.
                     int status = result.failure == null ? responseStatus : result.failure.httpStatus;
-                    result = new Result(testKind, null, elapsed(start), Failure.cancelled(status));
+                    diagnostics.add("stage=cancellation status=CANCELLED httpStatus=" + status);
+                    result = new Result(testKind, null, elapsed(start),
+                            Failure.cancelled(status), diagnostics);
                 }
             }
             logResult(result);
@@ -299,6 +348,35 @@ public final class ApiTester {
                 || Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol)
                 || Config.PROTOCOL_ANTHROPIC_MESSAGES.equals(protocol)) return protocol;
         return "INVALID";
+    }
+
+    /** Stable, copyable stage log shown directly below the settings test result. */
+    public static String formatDiagnostics(Result result) {
+        StringBuilder output = new StringBuilder();
+        for (String line : result.diagnostics) {
+            if (output.length() > 0) output.append('\n');
+            output.append(line);
+        }
+        if (result.failure != null) {
+            Failure failure = result.failure;
+            if (output.length() > 0) output.append('\n');
+            output.append("summary status=FAILED kind=").append(failure.kind)
+                    .append(" reason=").append(failure.reason)
+                    .append(" httpStatus=").append(failure.httpStatus)
+                    .append(" exception=").append(failure.exceptionType);
+            if (failure.upstreamErrorBody != null && !failure.upstreamErrorBody.isEmpty()) {
+                output.append('\n').append("upstream_error=")
+                        .append(DiagnosticLogStore.sanitizeMessage(failure.upstreamErrorBody));
+            }
+            if (failure.sourcePreview != null) {
+                output.append('\n').append("source_preview=")
+                        .append(DiagnosticLogStore.sanitizeMessage(failure.sourcePreview));
+            }
+        } else {
+            if (output.length() > 0) output.append('\n');
+            output.append("summary status=SUCCESS elapsedMs=").append(result.elapsedMs);
+        }
+        return output.toString();
     }
 
     private static void logResult(Result result) {

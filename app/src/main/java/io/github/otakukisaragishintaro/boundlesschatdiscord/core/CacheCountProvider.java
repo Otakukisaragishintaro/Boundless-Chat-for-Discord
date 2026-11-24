@@ -18,12 +18,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 /**
- * One-way IPC endpoint for the Discord process to publish the persistent cache count.
+ * UID-checked IPC endpoint for cache-count publication and diagnostic log ingestion.
  *
- * <p>LibXposed remote preferences are intentionally read-only in hooked apps, so the target
- * process reports this non-sensitive integer through ContentProvider.call(). The provider
- * accepts writes only from the official Discord package UID and stores the count in this
- * module application's private preferences for the settings UI.</p>
+ * <p>LibXposed remote preferences are read-only in hooked apps. Discord therefore publishes
+ * the non-sensitive cache count and bounded diagnostic events through call(). Only the
+ * official Discord UID may publish; diagnostic records are stored in the module app's
+ * private SQLite database and are never mixed with the Discord translation cache.</p>
  */
 public final class CacheCountProvider extends ContentProvider {
     public static final String PREFERENCES_NAME = "boundless_cache_count";

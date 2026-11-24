@@ -34,6 +34,7 @@ import androidx.annotation.Nullable;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.R;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.CacheCountProvider;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiagnosticLogStore;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.OutboundButtonConfig;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ConfigurationSync;
@@ -47,6 +48,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.IdentityHashMap;
+import java.util.Date;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -189,6 +191,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private TextView streamingHint;
     private TextView statusText;
     private TextView resultText;
+    private TextView testDiagnosticLogText;
     private EditText testTextInput;
     private EditText testGuildIdInput;
     private EditText testChannelIdInput;
@@ -916,11 +919,28 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resultText.setTextSize(12f);
         resultText.setPadding(0, dp(8), 0, 0);
         root.addView(resultText, matchWrap());
+
+        TextView testLogTitle = new TextView(this);
+        testLogTitle.setText("本次测试诊断日志");
+        testLogTitle.setTextSize(14f);
+        testLogTitle.setPadding(0, dp(12), 0, dp(4));
+        root.addView(testLogTitle, matchWrap());
+        testDiagnosticLogText = new TextView(this);
+        testDiagnosticLogText.setTextSize(12f);
+        testDiagnosticLogText.setText("尚未执行测试");
+        testDiagnosticLogText.setPadding(0, dp(4), 0, dp(8));
+        root.addView(testDiagnosticLogText, matchWrap());
+
         copyTestResultButton = new Button(this);
-        copyTestResultButton.setText(R.string.button_copy_test_result);
+        copyTestResultButton.setText("复制测试结果和日志");
         copyTestResultButton.setEnabled(false);
         copyTestResultButton.setOnClickListener(v -> copyTestResult());
         root.addView(copyTestResultButton, matchWrap());
+
+        Button diagnosticLogsButton = new Button(this);
+        diagnosticLogsButton.setText("查看跨进程诊断日志");
+        diagnosticLogsButton.setOnClickListener(v -> showDiagnosticLogs());
+        root.addView(diagnosticLogsButton, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root, new ViewGroup.LayoutParams(
@@ -2143,6 +2163,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         final long generation = ++testGeneration;
         resultText.setText(R.string.status_requesting);
+        if (testDiagnosticLogText != null) testDiagnosticLogText.setText("测试已开始，正在记录处理阶段……");
         if (copyTestResultButton != null) copyTestResultButton.setEnabled(false);
         setTestButtonsEnabled(false);
 
@@ -2203,6 +2224,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             resultText.setText(getString(R.string.status_test_failed_detail,
                     failure == null ? getString(R.string.unknown_error)
                             : failure.getClass().getSimpleName()));
+            if (testDiagnosticLogText != null) {
+                testDiagnosticLogText.setText("stage=future_delivery\nstatus=FAILED\nerror="
+                        + (failure == null ? "unknown" : failure.getClass().getSimpleName()));
+            }
             if (copyTestResultButton != null) {
                 copyTestResultButton.setEnabled(resultText.length() > 0);
             }
@@ -2215,9 +2240,48 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (resultText == null || resultText.length() == 0) return;
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard == null) return;
+        String diagnostics = testDiagnosticLogText == null
+                ? "" : testDiagnosticLogText.getText().toString();
+        String combined = resultText.getText().toString()
+                + (diagnostics.isEmpty() ? "" : "\n\n--- Test diagnostics ---\n" + diagnostics);
         clipboard.setPrimaryClip(ClipData.newPlainText(
-                getString(R.string.button_copy_test_result), resultText.getText()));
+                "Boundless Chat test result and diagnostics", combined));
         Toast.makeText(this, R.string.toast_test_result_copied, Toast.LENGTH_SHORT).show();
+    }
+
+    private void showDiagnosticLogs() {
+        List<DiagnosticLogStore.Entry> entries = DiagnosticLogStore.read(this,
+                DiagnosticLogStore.DEFAULT_READ_LIMIT);
+        StringBuilder output = new StringBuilder();
+        for (DiagnosticLogStore.Entry entry : entries) {
+            output.append(new Date(entry.timestamp)).append(" [")
+                    .append(entry.source).append("] ")
+                    .append(entry.tag).append(" priority=").append(entry.priority);
+            if (!entry.processName.isEmpty()) output.append(" process=").append(entry.processName);
+            if (!entry.requestId.isEmpty()) output.append(" request=").append(entry.requestId);
+            output.append("\n").append(entry.message).append("\n\n");
+        }
+        if (output.length() == 0) output.append("暂无诊断日志。请确认项目日志开关已开启，并在 Discord 中触发一次翻译。");
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("跨进程诊断日志（最近 " + entries.size() + " 条）")
+                .setMessage(output.toString())
+                .setPositiveButton("复制全部", (ignored, which) -> {
+                    ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText(
+                                "Boundless Chat diagnostic logs", output.toString()));
+                        Toast.makeText(this, "诊断日志已复制", Toast.LENGTH_SHORT).show();
+                    }
+                })
+                .setNeutralButton("清空日志", (ignored, which) -> {
+                    boolean cleared = DiagnosticLogStore.clear(this);
+                    Toast.makeText(this, cleared ? "诊断日志已清空" : "清空诊断日志失败",
+                            Toast.LENGTH_SHORT).show();
+                })
+                .setNegativeButton("关闭", null)
+                .create();
+        dialog.show();
     }
 
     private static void recordUnexpectedTestFailure(Throwable failure) {
@@ -2266,6 +2330,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private void showResult(ApiTester.Result result) {
         resultText.setText(ApiTestResultFormatter.format(result, this::getString));
+        if (testDiagnosticLogText != null) {
+            testDiagnosticLogText.setText(ApiTester.formatDiagnostics(result));
+        }
         if (copyTestResultButton != null) {
             copyTestResultButton.setEnabled(resultText.length() > 0);
         }

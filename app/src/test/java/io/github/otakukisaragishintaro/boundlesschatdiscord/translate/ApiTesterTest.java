@@ -82,6 +82,10 @@ public class ApiTesterTest {
                 "hello " + mention).call();
         assertTrue(result.ok);
         assertEquals("你好 " + mention, result.translated);
+        assertTrue(result.diagnostics.toString().contains("stage=scope_filter status=PASSED"));
+        assertTrue(result.diagnostics.toString().contains("protectedTokens=1"));
+        assertTrue(result.diagnostics.toString().contains("production_translation_pipeline status=SUCCESS"));
+        assertTrue(ApiTester.formatDiagnostics(result).contains("summary status=SUCCESS"));
         assertTrue(connection.disconnected);
     }
 

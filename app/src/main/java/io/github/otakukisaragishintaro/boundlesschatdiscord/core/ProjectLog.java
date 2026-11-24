@@ -9,8 +9,8 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Project logging to Logcat and the LSPosed framework log.
- * No cross-process diagnostic provider or export buffer is maintained.
+ * Project logging to Logcat, the LSPosed framework log, and the module-owned
+ * diagnostic database through the UID-checked cache-count ContentProvider.
  */
 public final class ProjectLog {
     private static final String TAG = "BoundlessChatDiscord";
