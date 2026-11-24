@@ -21,21 +21,6 @@ public class RetainedNodeMarkersTest {
         assertFalse(RetainedNodeMarkers.matchesExpected("<keep1/>", Collections.emptyList()));
     }
 
-    @Test public void providerBoundaryUsesNonTagPlaceholdersAndRejectsDamagedMarkers() {
-        String source = "before<keep1/>middle<keep2/>after";
-        RetainedNodeMarkers.ProviderMarkers encoded = RetainedNodeMarkers.encodeForProvider(source);
-        assertNotNull(encoded);
-        assertEquals("before⟦BC_KEEP_1⟧middle⟦BC_KEEP_2⟧after", encoded.text);
-        assertFalse(encoded.text.contains("<keep"));
-        assertEquals(source, encoded.restore(encoded.text));
-        assertNull(encoded.restore("beforemiddleafter"));
-        assertNull(encoded.restore("before⟦BC_KEEP_1⟧middle⟦BC_KEEP_1⟧after"));
-        assertNull(encoded.restore("before<keep1/>middle<keep2/>after"));
-        assertNull(encoded.restore("before⟦BC_KEEP_2⟧middle⟦BC_KEEP_1⟧after"));
-        assertNull(encoded.restore("before⟦BC_KEEP_1middle⟦BC_KEEP_2⟧after"));
-        assertNull(RetainedNodeMarkers.encodeForProvider("literal ⟦BC_KEEP_1⟧ collision"));
-    }
-
     @Test public void sourceAndTranslationShareOneGrammar() {
         String source = "run<keep1/>now";
         assertTrue(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", source));
@@ -149,14 +134,15 @@ public class RetainedNodeMarkersTest {
     @Test public void preservationRuleIsMandatoryForCustomPromptInEveryProtocol() throws Exception {
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_OPENAI_RESPONSES, Config.PROTOCOL_ANTHROPIC_MESSAGES}) {
-            JSONObject body = new JSONObject(Protocols.requestBody(protocol, "Run⟦BC_KEEP_1⟧now",
+            JSONObject body = new JSONObject(Protocols.requestBody(protocol, "Run<keep1/>now",
                     "Custom prompt", "model", false));
             String prompt = Config.PROTOCOL_OPENAI_COMPATIBLE.equals(protocol)
                     ? body.getJSONArray("messages").getJSONObject(0).getString("content")
                     : body.getString(Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol) ? "instructions" : "system");
             assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE, prompt);
-            assertTrue(prompt.contains("⟦BC_KEEP_1⟧"));
-            assertFalse(prompt.contains("<keep1/>"));
+            assertTrue(prompt.contains("<keep1/>"));
+            assertTrue(prompt.contains("character-for-character"));
+            assertTrue(prompt.contains("never translate"));
             assertTrue(prompt.contains("exactly once"));
             assertTrue(prompt.contains("original position and order"));
         }
