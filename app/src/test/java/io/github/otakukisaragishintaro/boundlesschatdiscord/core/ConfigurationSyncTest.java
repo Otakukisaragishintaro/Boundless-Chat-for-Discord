@@ -86,8 +86,10 @@ public class ConfigurationSyncTest {
         assertEquals("Saved {{target_language}} prompt", local.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
         assertEquals("Saved {{target_language}} prompt", remote.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
         assertTrue(local.disk.containsKey(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(local.disk.containsKey(Config.KEY_INCOMING_STYLES));
         assertTrue(local.disk.containsKey(Config.KEY_OUTBOUND_PROMPTS));
         assertTrue(remote.disk.containsKey(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(remote.disk.containsKey(Config.KEY_INCOMING_STYLES));
         assertTrue(remote.disk.containsKey(Config.KEY_OUTBOUND_PROMPTS));
     }
 
