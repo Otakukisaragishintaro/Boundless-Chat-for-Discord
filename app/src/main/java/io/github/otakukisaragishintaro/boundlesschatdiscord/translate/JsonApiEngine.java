@@ -69,14 +69,12 @@ public final class JsonApiEngine implements Scheduler.Engine {
      * from the source verbatim; every chunk still goes through the same decoder,
      * cancellation owner and integrity checks as an ordinary translation.
      */
-    private static final int MAX_PARAGRAPH_CHARS = 400;
-
     @Override
     public String translate(String text) throws Exception {
         java.util.List<String> paragraphs = new java.util.ArrayList<>();
         java.util.List<String> separators = new java.util.ArrayList<>();
         if (!cfg.experimentalLongMessageChunking || text == null
-                || text.length() <= MAX_PARAGRAPH_CHARS) {
+                || text.length() <= cfg.experimentalLongMessageThreshold) {
             return execute(text, true).translated;
         }
         splitParagraphs(text, paragraphs, separators);
@@ -87,14 +85,29 @@ public final class JsonApiEngine implements Scheduler.Engine {
 
         StringBuilder combined = new StringBuilder(text.length());
         ProjectLog.info("translation.chunking start sourceChars=" + text.length()
+                + " threshold=" + cfg.experimentalLongMessageThreshold
                 + " paragraphs=" + paragraphs.size());
         for (int i = 0; i < paragraphs.size(); i++) {
             String paragraph = paragraphs.get(i);
             // Do not cut through a single paragraph: inline style/retained-node markers
             // may span arbitrary text positions. Such a paragraph remains one request.
             // Preserve empty/whitespace-only paragraphs without making an invalid API request.
-            String translated = paragraph.trim().isEmpty()
-                    ? paragraph : execute(paragraph, true).translated;
+            String translated;
+            if (paragraph.trim().isEmpty()) {
+                translated = paragraph;
+            } else {
+                ProjectLog.info("translation.chunking request index=" + (i + 1)
+                        + " sourceChars=" + paragraph.length());
+                try {
+                    translated = execute(paragraph, true).translated;
+                } catch (Exception failure) {
+                    ProjectLog.warn("translation.chunking failed index=" + (i + 1)
+                            + " errorClass=" + failure.getClass().getSimpleName()
+                            + " errorKind=" + (failure instanceof TranslationException
+                                    ? ((TranslationException) failure).kind().name() : "none"));
+                    throw failure;
+                }
+            }
             combined.append(translated);
             if (i < separators.size()) combined.append(separators.get(i));
         }
