@@ -83,14 +83,14 @@ public final class JsonApiEngine implements Scheduler.Engine {
         java.util.List<String> separators = new java.util.ArrayList<>();
         if (!cfg.experimentalLongMessageChunking || requestText == null
                 || requestText.length() <= cfg.experimentalLongMessageThreshold) {
-            return protection.restore(execute(requestText, true).translated);
+            return protection.restore(execute(requestText, true, true).translated);
         }
         splitParagraphs(requestText, paragraphs, separators);
 
         if (paragraphs.size() <= 1) {
             ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
                     + " sourceChars=" + requestText.length());
-            return protection.restore(execute(requestText, true).translated);
+            return protection.restore(execute(requestText, true, true).translated);
         }
 
         StringBuilder combined = new StringBuilder(requestText.length());
@@ -109,7 +109,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 ProjectLog.info("translation.chunking request index=" + (i + 1)
                         + " sourceChars=" + paragraph.length());
                 try {
-                    translated = execute(paragraph, true).translated;
+                    translated = execute(paragraph, true, true).translated;
                 } catch (Exception failure) {
                     ProjectLog.warn("translation.chunking failed index=" + (i + 1)
                             + " errorClass=" + failure.getClass().getSimpleName()
@@ -140,6 +140,12 @@ public final class JsonApiEngine implements Scheduler.Engine {
 
     /** Connection probes share all request/decoder ownership, but do not judge translation safety. */
     Exchange execute(String text, boolean validateTranslation) throws Exception {
+        // Settings/API probes use the same engine but retain their deliberately redacted log contract.
+        return execute(text, validateTranslation, false);
+    }
+
+    private Exchange execute(String text, boolean validateTranslation,
+                             boolean logFailureDiagnostics) throws Exception {
         Thread worker = Thread.currentThread();
         Http.Request request = new Http.Request();
         if (active.putIfAbsent(worker, request) != null) {
@@ -194,17 +200,19 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     ? ((TranslationException) e).httpStatus() : 0;
             String detail = e instanceof TranslationException
                     ? safeDiagnosticDetail(e.getMessage()) : e.getClass().getSimpleName();
-            ProjectLog.warn("translation.failure stage=" + failureStage
-                    + " errorClass=" + e.getClass().getSimpleName()
-                    + " errorKind=" + kind
-                    + " errorReason=" + reason
-                    + " httpStatus=" + status
-                    + " sourceChars=" + codePointLength(text)
-                    + " sourcePreview=" + safeDiagnosticPreview(text, 200)
-                    + " sourceTail=" + safeDiagnosticTail(text, 100)
-                    + " translatedChars=" + codePointLength(diagnosticTranslated)
-                    + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
-                    + " detail=" + detail);
+            if (logFailureDiagnostics) {
+                ProjectLog.warn("translation.failure stage=" + failureStage
+                        + " errorClass=" + e.getClass().getSimpleName()
+                        + " errorKind=" + kind
+                        + " errorReason=" + reason
+                        + " httpStatus=" + status
+                        + " sourceChars=" + codePointLength(text)
+                        + " sourcePreview=" + safeDiagnosticPreview(text, 200)
+                        + " sourceTail=" + safeDiagnosticTail(text, 100)
+                        + " translatedChars=" + codePointLength(diagnosticTranslated)
+                        + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
+                        + " detail=" + detail);
+            }
             throw e;
         } finally {
             active.remove(worker, request);
