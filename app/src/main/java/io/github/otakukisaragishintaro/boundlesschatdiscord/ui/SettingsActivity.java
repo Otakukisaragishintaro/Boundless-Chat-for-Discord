@@ -1185,7 +1185,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         });
         styleSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                if (loadingStyle[0] || position < 0 || position >= styleIds.size()) return;
+                if (loadingStyle[0] || position < 0 || position >= styleIds.size()
+                        || styleIds.get(position).equals(currentStyleId[0])) return;
                 saveCurrentPrompt.run();
                 currentStyleId[0] = styleIds.get(position);
                 prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
