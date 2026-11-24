@@ -46,6 +46,11 @@ public final class TranslationCache {
      * The existing single worker serializes IPC writes and keeps provider calls off UI/render threads.
      */
     public static void publishDiagnosticLog(int priority, String tag, String message) {
+        publishDiagnosticLog(priority, tag, message, ProjectLog.currentRequestId());
+    }
+
+    public static void publishDiagnosticLog(int priority, String tag, String message,
+                                             @Nullable String requestId) {
         TranslationCache cache = sInstance;
         Context context = sContext;
         String modulePackageName = sModulePackageName;
@@ -61,7 +66,8 @@ public final class TranslationCache {
                 try {
                     CacheCountProvider.publishLog(context, modulePackageName,
                             System.currentTimeMillis(), processName, priority, tag,
-                            message == null ? "" : message, "");
+                            message == null ? "" : message,
+                            requestId == null ? "" : requestId);
                 } catch (Throwable failure) {
                     // Avoid ProjectLog here: reporting a failed log write through the same
                     // transport would create a recursive IPC failure loop.

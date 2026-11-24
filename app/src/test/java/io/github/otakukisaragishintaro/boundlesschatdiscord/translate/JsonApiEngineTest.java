@@ -76,11 +76,40 @@ public class JsonApiEngineTest {
                 .put(Config.KEY_STREAMING, streaming));
     }
 
+    private static Config.Snapshot wrapperConfig(boolean strip, boolean checkWrapper) {
+        return Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_STRIP_OUTER_WRAPPER, strip)
+                .put(Config.KEY_CHECK_WRAPPER, checkWrapper));
+    }
+
     @SuppressWarnings("unchecked")
     private static Map<Thread, Http.Request> active(JsonApiEngine engine) throws Exception {
         Field field = JsonApiEngine.class.getDeclaredField("active");
         field.setAccessible(true);
         return (Map<Thread, Http.Request>) field.get(engine);
+    }
+
+    @Test
+    public void outerWrapperStrippingAndValidationSwitchesHaveIndependentEffects() throws Exception {
+        JsonApiEngine stripped = new JsonApiEngine(wrapperConfig(true, true),
+                http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
+        assertEquals("你好", stripped.translate("hello"));
+
+        JsonApiEngine rejected = new JsonApiEngine(wrapperConfig(false, true),
+                http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
+        try {
+            rejected.translate("hello");
+            fail("wrapper validation should reject an unstripped outer wrapper");
+        } catch (TranslationException expected) {
+            assertEquals(TranslationException.Kind.PARSE, expected.kind());
+        }
+
+        JsonApiEngine allowed = new JsonApiEngine(wrapperConfig(false, false),
+                http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
+        assertEquals("<translate>你好</translate>", allowed.translate("hello"));
     }
 
     @Test

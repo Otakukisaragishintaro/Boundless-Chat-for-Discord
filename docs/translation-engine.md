@@ -40,6 +40,10 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 
 错误类别为 `CONFIG / NETWORK / TIMEOUT / HTTP / RATE_LIMIT / PARSE / EMPTY / CANCELLED / UNKNOWN`。未知异常仅保留类型，服务端停止理由使用固定描述。请求校验失败不缓存；原生重建拒绝时删除对应缓存、标记失败并保留宿主原树。
 
+## 按语言独立的提示词
+
+`LanguagePromptConfig` 为 22 种受支持语言分别保存接收消息和发送消息提示词，两个方向互不共享。默认模板按目标语言生成；旧版单一提示词只迁移到旧配置当前选中的语言，不覆盖其他语言。提示词编辑器默认收起内容，用户点击显示开关后才展开；可逐语言恢复默认。发送按钮显式配置的自定义提示词仍是该按钮的优先覆盖，按钮恢复默认后才读取对应语言的发送提示词。必要的 `<keepN/>` 保护规则由 `Protocols` 独立追加，不属于可编辑提示词。
+
 ## 设置与持久化
 
 | 键 | 默认值 | 含义 |
@@ -83,7 +87,7 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 | `CONNECTION`（测试连接） | 固定探针请求成功，按所选协议及 SSE/JSON 模式完成响应解析；**HTTP 200 不够**，不能忽略无效结构、异常停止或缺少完成事件 | 无；不运行译文防损坏校验 |
 | `TRANSLATION`（测试翻译） | 测试文本的请求、完整协议解析及 `Segments` 译文防损坏校验通过（非空、包装标签、旧分段标记、保留节点定位、占位符及长度比例）；不证明宿主节点重建的行段、样式或链接投影校验通过 | 仅成功时展示译文；失败不展示部分或损坏结果 |
 
-`ApiTester.Result` 返回测试类型、成功标志、耗时和结构化 `Failure`。设置页由唯一的 `ApiTestResultFormatter` 通过 `getString` 解析本地化资源，区分三种成功概念；失败显示本地化建议、类别及固定类别码、固定原因码、已知 HTTP 状态和异常类型。耗时只用于页面显示，不进入日志。Failure 包含 `kind / reason / httpStatus / exceptionType / upstreamErrorBody`，异常类型取底层 cause 类型（若有）；仅非 2xx HTTP 错误携带未经修改的上游正文，其余失败的 `upstreamErrorBody` 为 null。不携带原异常对象或异常消息，UI 不调用 `Throwable.getMessage()` 或 `userMessage()`。
+`ApiTester.Result` 返回测试类型、成功标志、耗时和结构化 `Failure`。设置页由唯一的 `ApiTestResultFormatter` 通过 `getString` 解析本地化资源，区分三种成功概念；失败显示本地化建议、类别及固定类别码、固定原因码、已知 HTTP 状态和异常类型。每次测试还在结果下方显示独立请求 ID 与阶段诊断，并可随测试结果一起复制。耗时只用于页面显示，不进入持久化日志。Failure 包含 `kind / reason / httpStatus / exceptionType / upstreamErrorBody`，异常类型取底层 cause 类型（若有）；仅非 2xx HTTP 错误携带未经修改的上游正文，其余失败的 `upstreamErrorBody` 为 null。不携带原异常对象或异常消息，UI 不调用 `Throwable.getMessage()` 或 `userMessage()`。
 
 | 固定原因码 | 排查建议 |
 |---|---|
@@ -106,6 +110,9 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 
 - **设置页进程：logcat**，标签为 `BoundlessChatDiscord`。页面不挂载 LSPosed 框架输出；不需要 LSPosed 连接，也不需要重启页面。必须将“项目日志”开关设为开启并成功保存后生效，或加载/导入已确认本地保存的值；草稿切换、草稿测试和失败的本地提交都不能强行开启日志。保存成功先应用已确认本地快照，再输出保存结果；远程同步失败仍与本地保存成功分开记录。成功保存关闭开关或重置为默认配置后，连该成功结果日志也不输出。
 - **Discord 进程：logcat + LSPosed 项目日志**，框架输出仅由模块入口挂载，使用 remote 配置。因此需保存并同步成功后重启 Discord，设置页的 logcat 诊断与 Discord 的 LSPosed 诊断不是同一进程/目的地。
+- **跨进程持久化诊断**：Discord 进程通过现有 `CacheCountProvider` 的 UID 校验调用新增 `publish_log` 方法，将项目日志异步发送到插件 APK。Provider 仍保留原有缓存数量发布接口；日志写入插件私有 `boundless_diagnostics.db`，与 Discord 翻译缓存完全分离。数据库最多保留最近 5,000 条，记录来源（`discord` / `module_test`）、时间、进程、级别、标签、请求 ID 和消息；写入前限制字段长度并脱敏常见 Bearer/API Key 格式。设置页可查看最近记录、复制全部或清空。
+- **测试翻译诊断**：`ApiTester.Result` 带独立请求 ID 和阶段事件；测试页在结果下方显示阶段、保护标记数量、范围检查、语言检测、生产翻译入口、成功/失败类别、原因和 HTTP 状态。可复制的测试结果同时包含该次诊断。测试预览留在当前界面，不把原文/响应预览写入持久化日志；持久化记录只保存阶段和错误分类。
+- 生产日志在项目日志开关开启时才跨进程转发；测试界面的阶段日志不依赖 Discord 进程日志开关。Provider 仅接受 Discord UID 的写入请求，插件应用自身读取私有数据库，不向 Discord 进程开放数据库文件。
 - 网络请求收到非 2xx 状态时，`JsonApiEngine` 将 HTTP 状态和上游响应正文交给统一错误结果；设置页测试结果原样显示正文，`ProjectLog` 在日志开关启用时也原样记录正文。HTTP 200 后的协议/译文错误不把成功响应正文当作错误详情。
 - 项目诊断不主动输出原请求正文、译文、消息身份、链接或凭据；**非 2xx 上游错误响应正文是明确允许展示和记录的例外**，不进入缓存或任务状态。错误响应正文可能包含上述敏感内容，分享日志或截图前应检查。
 

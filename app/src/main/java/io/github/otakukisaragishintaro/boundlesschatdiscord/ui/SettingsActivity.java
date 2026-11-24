@@ -1026,7 +1026,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         TextView explanation = new TextView(this);
         explanation.setTextSize(12f);
-        explanation.setText("默认提示词默认隐藏。展开后可以编辑当前语言；切换语言或翻译方向时会保留本次对话中的修改。");
+        explanation.setText("默认提示词默认隐藏。展开后可以编辑当前语言；切换语言或翻译方向时会保留本次对话中的修改。发送按钮若单独设置了自定义提示词，会优先使用按钮专属提示词；恢复默认后才读取这里的语言提示词。");
         form.addView(explanation, matchWrap());
 
         Button togglePrompt = new Button(this);

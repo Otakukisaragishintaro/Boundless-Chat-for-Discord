@@ -98,6 +98,15 @@ public final class JsonApiEngine implements Scheduler.Engine {
     }
 
     private String translateInternal(String text, boolean logFailureDiagnostics) throws Exception {
+        String previousRequestId = ProjectLog.beginRequest();
+        try {
+            return translateWithRequestContext(text, logFailureDiagnostics);
+        } finally {
+            ProjectLog.endRequest(previousRequestId);
+        }
+    }
+
+    private String translateWithRequestContext(String text, boolean logFailureDiagnostics) throws Exception {
         // Literal Discord syntax can also arrive inside ordinary text nodes or primitive
         // StructurableText. Shield it before every provider request and restore it only
         // after the same retained-marker integrity check used for native opaque nodes.
