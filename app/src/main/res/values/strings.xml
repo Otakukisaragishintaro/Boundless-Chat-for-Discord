@@ -223,7 +223,7 @@
 
 
     <string name="label_experimental_long_message_threshold">Chunking trigger length</string>
-    <string name="hint_experimental_long_message_threshold">Paragraph chunking is attempted only when the whole message exceeds this length. Range: 100–10000; default: 400. A single paragraph is never forcibly split.</string>
+    <string name="hint_experimental_long_message_threshold">Leave blank to use the default of 400. Range: 100–10000. Chunking is attempted only above this length; a single paragraph is never forcibly split.</string>
     <string name="button_apply_experimental_threshold">Apply threshold</string>
     <string name="error_experimental_long_message_threshold">Enter a whole number from 100 to 10000</string>
 
