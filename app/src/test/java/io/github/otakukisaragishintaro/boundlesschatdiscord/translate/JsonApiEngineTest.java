@@ -83,6 +83,18 @@ public class JsonApiEngineTest {
     }
 
     @Test
+    public void paragraphChunkingUsesWhitespaceAwareBlankLineBoundaries() {
+        String source = "first paragraph\r\n  \r\nsecond paragraph";
+        java.util.List<String> paragraphs = new java.util.ArrayList<>();
+        java.util.List<String> separators = new java.util.ArrayList<>();
+        JsonApiEngine.splitParagraphs(source, paragraphs, separators);
+        assertEquals(2, paragraphs.size());
+        assertEquals("first paragraph", paragraphs.get(0));
+        assertEquals("second paragraph", paragraphs.get(1));
+        assertEquals("\r\n  \r\n", separators.get(0));
+    }
+
+    @Test
     public void longMessageChunkingRequiresExplicitOptIn() throws Exception {
         String first = repeat("x", 250);
         String second = repeat("y", 250);
