@@ -63,9 +63,55 @@ public final class JsonApiEngine implements Scheduler.Engine {
         }
     }
 
+    /**
+     * Keep a Discord message as one scheduled/cached translation, but send long
+     * multi-paragraph bodies as smaller requests. Paragraph separators are copied
+     * from the source verbatim; every chunk still goes through the same decoder,
+     * cancellation owner and integrity checks as an ordinary translation.
+     */
+    private static final int MAX_PARAGRAPH_CHARS = 400;
+
     @Override
     public String translate(String text) throws Exception {
-        return execute(text, true).translated;
+        java.util.List<String> paragraphs = new java.util.ArrayList<>();
+        java.util.List<String> separators = new java.util.ArrayList<>();
+        splitParagraphs(text, paragraphs, separators);
+
+        if (paragraphs.size() <= 1 || text.length() <= MAX_PARAGRAPH_CHARS) {
+            return execute(text, true).translated;
+        }
+
+        StringBuilder combined = new StringBuilder(text.length());
+        ProjectLog.info("translation.chunking start sourceChars=" + text.length()
+                + " paragraphs=" + paragraphs.size());
+        for (int i = 0; i < paragraphs.size(); i++) {
+            String paragraph = paragraphs.get(i);
+            // Do not cut through a single paragraph: inline style/retained-node markers
+            // may span arbitrary text positions. Such a paragraph remains one request.
+            String translated = execute(paragraph, true).translated;
+            combined.append(translated);
+            if (i < separators.size()) combined.append(separators.get(i));
+        }
+        ProjectLog.info("translation.chunking complete chunks=" + paragraphs.size());
+        return combined.toString();
+    }
+
+    /** Split only at blank-line paragraph boundaries, preserving every separator byte-for-byte. */
+    static void splitParagraphs(String source, java.util.List<String> paragraphs,
+                                java.util.List<String> separators) {
+        if (source == null || source.isEmpty()) {
+            paragraphs.add(source == null ? "" : source);
+            return;
+        }
+        java.util.regex.Matcher matcher =
+                java.util.regex.Pattern.compile("\\n{2,}").matcher(source);
+        int start = 0;
+        while (matcher.find()) {
+            paragraphs.add(source.substring(start, matcher.start()));
+            separators.add(matcher.group());
+            start = matcher.end();
+        }
+        paragraphs.add(source.substring(start));
     }
 
     /** Connection probes share all request/decoder ownership, but do not judge translation safety. */
