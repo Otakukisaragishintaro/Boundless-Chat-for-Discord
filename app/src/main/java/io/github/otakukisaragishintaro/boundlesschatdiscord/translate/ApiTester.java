@@ -46,7 +46,8 @@ public final class ApiTester {
         private static Failure from(Throwable failure) {
             if (failure instanceof TranslationException) {
                 TranslationException error = (TranslationException) failure;
-                Throwable cause = error.getCause();
+                Throwable cause = error;
+                while (cause.getCause() != null) cause = cause.getCause();
                 Throwable upstream = error;
                 while (upstream != null && !(upstream instanceof JsonApiEngine.UpstreamHttpException)) {
                     upstream = upstream.getCause();
@@ -57,7 +58,7 @@ public final class ApiTester {
                         error instanceof JsonApiEngine.DiagnosticException
                                 ? (JsonApiEngine.DiagnosticException) error : null;
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
-                        (cause == null ? error : cause).getClass().getSimpleName(), body,
+                        cause.getClass().getSimpleName(), body,
                         safeValidationDetail(error.getMessage()),
                         diagnostic == null ? "request_or_preflight" : diagnostic.stage,
                         null, diagnostic == null ? null : diagnostic.requestPreview,
