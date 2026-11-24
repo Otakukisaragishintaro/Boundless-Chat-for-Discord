@@ -1478,7 +1478,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         pendingScopeEditor = null;
         TranslationScope initial = restore == null ? scopeDraft
                 : TranslationScope.parse(restore.getString("scope"));
-        scopeDialog = TranslationScopeEditor.show(this, initial, updated -> {
+        IncomingPromptStyles promptStyles = IncomingPromptStyles.read(
+                incomingStylesInput.getText().toString(),
+                LanguagePromptConfig.read(systemPromptInput.getText().toString(),
+                        selectedTargetLanguage(), null, false));
+        scopeDialog = TranslationScopeEditor.show(this, initial, promptStyles, updated -> {
             scopeDraft = updated;
             updateScopeSummary();
             markDirty();
