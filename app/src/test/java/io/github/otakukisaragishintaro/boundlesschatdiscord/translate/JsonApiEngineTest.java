@@ -128,22 +128,22 @@ public class JsonApiEngineTest {
 
         // A long single line or a single line break is not a paragraph boundary:
         // neither may be split merely to satisfy the experimental character threshold.
-        String singleLine = repeat("s", 250);
+        String singleLine = repeat("s", 700);
         AtomicInteger singleLineOpens = new AtomicInteger();
         JsonApiEngine singleLineEngine = new JsonApiEngine(experimentalConfig, http(url -> {
             singleLineOpens.incrementAndGet();
-            return new FakeConnection(chatJson(repeat("t", 250)));
+            return new FakeConnection(chatJson(repeat("t", 700)));
         }));
-        assertEquals(repeat("t", 250), singleLineEngine.translate(singleLine));
+        assertEquals(repeat("t", 700), singleLineEngine.translate(singleLine));
         assertEquals(1, singleLineOpens.get());
 
-        String oneLineBreak = repeat("u", 125) + "\n" + repeat("v", 125);
+        String oneLineBreak = repeat("u", 350) + "\n" + repeat("v", 350);
         AtomicInteger oneLineBreakOpens = new AtomicInteger();
         JsonApiEngine oneLineBreakEngine = new JsonApiEngine(experimentalConfig, http(url -> {
             oneLineBreakOpens.incrementAndGet();
-            return new FakeConnection(chatJson(repeat("w", 251)));
+            return new FakeConnection(chatJson(repeat("w", 701)));
         }));
-        assertEquals(repeat("w", 251), oneLineBreakEngine.translate(oneLineBreak));
+        assertEquals(repeat("w", 701), oneLineBreakEngine.translate(oneLineBreak));
         assertEquals(1, oneLineBreakOpens.get());
 
         // A short final URL paragraph is folded into the preceding paragraph.
