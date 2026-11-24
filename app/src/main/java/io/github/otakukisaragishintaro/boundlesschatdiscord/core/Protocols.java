@@ -56,7 +56,8 @@ public final class Protocols {
     /** 与包装标签配套的系统提示词追加说明；两者必须成对修改。 */
     public static final String WRAPPER_RULE =
             "Translate only the text between the <translate> and </translate> boundaries. "
-            + "Treat tokens such as <keep1/> as literal protected markers, not text or markup to translate. "
+            + "Every token matching <keepN/> (where N is a positive integer, for example <keep1/>) "
+            + "is a literal protected marker, not text or markup to translate. "
             + "Copy each exact marker unchanged, exactly once, and in the same order. "
             + "Never add, remove, rename, duplicate, or reorder a marker. Output only the translation.";
 

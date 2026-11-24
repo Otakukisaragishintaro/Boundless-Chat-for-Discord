@@ -19,7 +19,7 @@ public final class DiscordTokenMarkers {
                     + "|(<#[0-9]{15,22}>|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>)"
                     + "|((?:https?://|www\\.)[^\\s<>]+)"
                     + "|(" + UNICODE_EMOJI.pattern() + ")"
-                    + "|((?-i:</?x[1-9][0-9]*))",
+                    + "|((?-i:</?x[1-9][0-9]*>))",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
 
