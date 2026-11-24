@@ -95,8 +95,9 @@ public final class RetainedNodeMarkers {
      * A malformed internal marker or collision with the provider-only namespace is rejected.
      */
     public static ProviderMarkers encodeForProvider(String source) {
-        if (source == null) return null;
-        if (read(source) == null || PROVIDER_NAMESPACE.matcher(source).find()) return null;
+        if (source == null || PROVIDER_NAMESPACE.matcher(source).find()) return null;
+        List<String> parsedMarkers = read(source);
+        if (parsedMarkers == null) return null;
 
         Matcher matcher = EXACT.matcher(source);
         StringBuffer encoded = new StringBuffer(source.length());
@@ -110,6 +111,9 @@ public final class RetainedNodeMarkers {
             matcher.appendReplacement(encoded, Matcher.quoteReplacement(providerMarker));
         }
         matcher.appendTail(encoded);
+        // A marker assembled across style spans is not a standalone API token and must not
+        // silently bypass encoding.
+        if (!parsedMarkers.equals(internalMarkers)) return null;
         return new ProviderMarkers(encoded.toString(), providerMarkers, internalMarkers);
     }
 
