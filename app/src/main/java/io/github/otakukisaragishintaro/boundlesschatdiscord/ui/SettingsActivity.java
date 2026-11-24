@@ -36,6 +36,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.R;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.CacheCountProvider;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiagnosticLogStore;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.LanguagePromptConfig;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.OutboundButtonConfig;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ConfigurationSync;
@@ -50,6 +51,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.IdentityHashMap;
 import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -146,8 +148,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private EditText headersInput;
     private EditText systemPromptInput;
     private EditText sendSystemPromptInput;
-    private Button resetSystemPromptButton;
-    private Button resetSendSystemPromptButton;
     private EditText timeoutInput;
     private EditText concurrencyInput;
     private EditText minLengthPercentInput;
@@ -393,7 +393,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             if (buttonJson != null) {
                 outboundButtonsDraft.clear();
                 outboundButtonsDraft.addAll(OutboundButtonConfig.parse(buttonJson,
-                        sendLanguage, sendSystemPromptInput.getText().toString()));
+                        sendLanguage, Config.DEF_SEND_SYSTEM_PROMPT));
             }
             updateOutboundButtonsSummary();
             baselineProtocol = draft.getString("baseline_protocol");
@@ -795,6 +795,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         manageOutboundButtonsButton.setText(getString(R.string.button_manage_outbound));
         manageOutboundButtonsButton.setOnClickListener(v -> openOutboundButtonsEditor());
         root.addView(manageOutboundButtonsButton, matchWrap());
+        Button manageLanguagePromptsButton = new Button(this);
+        manageLanguagePromptsButton.setText("管理 22 种语言的独立提示词");
+        manageLanguagePromptsButton.setOnClickListener(v -> openLanguagePromptsEditor());
+        root.addView(manageLanguagePromptsButton, matchWrap());
         advancedSettingsButton = new Button(this);
         advancedSettingsButton.setText(getString(R.string.button_advanced_settings));
         advancedSettingsButton.setOnClickListener(v -> openAdvancedSettings());
@@ -809,14 +813,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 getString(R.string.label_incoming_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        resetSystemPromptButton = addPromptResetButton(advancedBacking, systemPromptInput,
-                Config.DEF_SYSTEM_PROMPT);
         sendSystemPromptInput = addField(advancedBacking,
                 getString(R.string.label_new_outbound_prompt),
                 getString(R.string.hint_default_outbound_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        resetSendSystemPromptButton = addPromptResetButton(advancedBacking, sendSystemPromptInput,
-                Config.DEF_SEND_SYSTEM_PROMPT);
         checkWrapperInput = addValidationSwitch(advancedBacking,
                 getString(R.string.validation_check_wrapper), Config.DEF_CHECK_WRAPPER);
         stripOuterWrapperInput = addValidationSwitch(advancedBacking,
@@ -986,7 +986,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         String[] labels = getResources().getStringArray(R.array.target_language_labels);
         outboundButtonsDialog = OutboundButtonsEditor.show(this,
                 new ArrayList<>(outboundButtonsDraft), TARGET_LANGUAGE_VALUES, labels,
-                promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT),
+                Config.DEF_SEND_SYSTEM_PROMPT,
                 updated -> {
                     outboundButtonsDraft.clear();
                     outboundButtonsDraft.addAll(updated);
@@ -1000,6 +1000,132 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         outboundButtonsDialog.setOnDismissListener(dialog -> outboundButtonsDialog = null);
     }
 
+    /** Edit receive/send prompts for any supported language; defaults stay collapsed until requested. */
+    private void openLanguagePromptsEditor() {
+        if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
+                || persistence.isLoading() || saveInProgress || syncInProgress) return;
+
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(8));
+        Spinner language = new Spinner(this);
+        String[] labels = getResources().getStringArray(R.array.target_language_labels);
+        ArrayAdapter<String> languageAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, labels);
+        languageAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        language.setAdapter(languageAdapter);
+        form.addView(language, matchWrap());
+
+        Spinner direction = new Spinner(this);
+        ArrayAdapter<String> directionAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item,
+                new String[]{"接收消息翻译提示词", "发送消息翻译提示词"});
+        directionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        direction.setAdapter(directionAdapter);
+        form.addView(direction, matchWrap());
+
+        TextView explanation = new TextView(this);
+        explanation.setTextSize(12f);
+        explanation.setText("默认提示词默认隐藏。展开后可以编辑当前语言；切换语言或翻译方向时会保留本次对话中的修改。");
+        form.addView(explanation, matchWrap());
+
+        Button togglePrompt = new Button(this);
+        togglePrompt.setText("显示当前语言提示词");
+        form.addView(togglePrompt, matchWrap());
+        LinearLayout promptSection = new LinearLayout(this);
+        promptSection.setOrientation(LinearLayout.VERTICAL);
+        EditText prompt = new EditText(this);
+        prompt.setMinLines(8);
+        prompt.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        prompt.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        promptSection.addView(prompt, matchWrap());
+        Button resetPrompt = new Button(this);
+        resetPrompt.setText("恢复此语言的默认提示词");
+        promptSection.addView(resetPrompt, matchWrap());
+        promptSection.setVisibility(View.GONE);
+        form.addView(promptSection, matchWrap());
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+
+        Map<String, String> incomingDraft = new LinkedHashMap<>(LanguagePromptConfig.read(
+                systemPromptInput.getText().toString(), selectedTargetLanguage(), null, false));
+        Map<String, String> outboundDraft = new LinkedHashMap<>(LanguagePromptConfig.read(
+                sendSystemPromptInput.getText().toString(), selectedSendTargetLanguage(), null, true));
+        int initialPosition = targetLanguagePosition(selectedTargetLanguage());
+        if (initialPosition < 0 || initialPosition >= TARGET_LANGUAGE_VALUES.length) initialPosition = 0;
+        language.setSelection(initialPosition);
+        final String[] currentLanguage = {TARGET_LANGUAGE_VALUES[initialPosition]};
+        final boolean[] currentOutbound = {false};
+        final boolean[] expanded = {false};
+
+        Runnable saveCurrentPrompt = () -> {
+            String value = prompt.getText().toString();
+            if (!value.trim().isEmpty()) {
+                (currentOutbound[0] ? outboundDraft : incomingDraft).put(currentLanguage[0], value);
+            }
+        };
+        Runnable loadSelectedPrompt = () -> {
+            int position = language.getSelectedItemPosition();
+            if (position < 0 || position >= TARGET_LANGUAGE_VALUES.length) return;
+            saveCurrentPrompt.run();
+            currentLanguage[0] = TARGET_LANGUAGE_VALUES[position];
+            currentOutbound[0] = direction.getSelectedItemPosition() == 1;
+            Map<String, String> selected = currentOutbound[0] ? outboundDraft : incomingDraft;
+            prompt.setText(selected.get(currentLanguage[0]));
+            promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
+            togglePrompt.setText(expanded[0] ? "隐藏当前语言提示词" : "显示当前语言提示词");
+        };
+        language.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                loadSelectedPrompt.run();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        direction.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                loadSelectedPrompt.run();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        loadSelectedPrompt.run();
+
+        togglePrompt.setOnClickListener(v -> {
+            expanded[0] = !expanded[0];
+            promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
+            togglePrompt.setText(expanded[0] ? "隐藏当前语言提示词" : "显示当前语言提示词");
+        });
+        resetPrompt.setOnClickListener(v -> {
+            prompt.setText(LanguagePromptConfig.defaultPrompt(currentLanguage[0]));
+            expanded[0] = true;
+            promptSection.setVisibility(View.VISIBLE);
+            togglePrompt.setText("隐藏当前语言提示词");
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("按语言独立设置提示词")
+                .setView(scroll)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("保存", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(v -> {
+                    saveCurrentPrompt.run();
+                    try {
+                        String incomingJson = LanguagePromptConfig.toJson(incomingDraft);
+                        String outboundJson = LanguagePromptConfig.toJson(outboundDraft);
+                        systemPromptInput.setText(incomingJson);
+                        sendSystemPromptInput.setText(outboundJson);
+                        markDirty();
+                        saveSelectedTextFields(Arrays.asList(systemPromptInput, sendSystemPromptInput));
+                        dialog.dismiss();
+                    } catch (IllegalArgumentException invalid) {
+                        Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                }));
+        dialog.show();
+        SettingsUiStyle.styleDialog(this, dialog);
+    }
+
     private void openAdvancedSettings() {
         if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
                 || persistence.isLoading() || saveInProgress || syncInProgress
@@ -1011,59 +1137,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
 
-        // User-editable prompts are separate from mandatory program-owned protection rules.
-        // Keep the large prompt editors collapsed until the user explicitly opens them.
-        LinearLayout incomingPromptSection = new LinearLayout(this);
-        incomingPromptSection.setOrientation(LinearLayout.VERTICAL);
-        EditText incomingPrompt = addField(incomingPromptSection,
-                getString(R.string.label_incoming_prompt),
-                getString(R.string.hint_system_prompt),
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        incomingPrompt.setMinLines(7);
-        incomingPrompt.setText(promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
-        Button resetIncoming = new Button(this);
-        resetIncoming.setText(getString(R.string.button_restore_incoming_prompt));
-        resetIncoming.setOnClickListener(v -> incomingPrompt.setText(Config.DEF_SYSTEM_PROMPT));
-        incomingPromptSection.addView(resetIncoming, matchWrap());
-        incomingPromptSection.setVisibility(View.GONE);
-        Button toggleIncomingPrompt = new Button(this);
-        toggleIncomingPrompt.setText("显示默认提示词");
-        toggleIncomingPrompt.setOnClickListener(v -> {
-            boolean expanded = incomingPromptSection.getVisibility() != View.VISIBLE;
-            incomingPromptSection.setVisibility(expanded ? View.VISIBLE : View.GONE);
-            toggleIncomingPrompt.setText(expanded ? "隐藏默认提示词" : "显示默认提示词");
-        });
-        form.addView(toggleIncomingPrompt, matchWrap());
-        form.addView(incomingPromptSection, matchWrap());
-
-        LinearLayout outboundPromptSection = new LinearLayout(this);
-        outboundPromptSection.setOrientation(LinearLayout.VERTICAL);
-        EditText newButtonPrompt = addField(outboundPromptSection,
-                getString(R.string.label_new_outbound_prompt),
-                getString(R.string.hint_default_outbound_prompt),
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        newButtonPrompt.setMinLines(7);
-        newButtonPrompt.setText(promptOrDefault(sendSystemPromptInput,
-                Config.DEF_SEND_SYSTEM_PROMPT));
-        Button resetOutbound = new Button(this);
-        resetOutbound.setText(getString(R.string.button_restore_outbound_prompt));
-        resetOutbound.setOnClickListener(v ->
-                newButtonPrompt.setText(Config.DEF_SEND_SYSTEM_PROMPT));
-        outboundPromptSection.addView(resetOutbound, matchWrap());
-        outboundPromptSection.setVisibility(View.GONE);
-        Button toggleOutboundPrompt = new Button(this);
-        toggleOutboundPrompt.setText("显示默认提示词");
-        toggleOutboundPrompt.setOnClickListener(v -> {
-            boolean expanded = outboundPromptSection.getVisibility() != View.VISIBLE;
-            outboundPromptSection.setVisibility(expanded ? View.VISIBLE : View.GONE);
-            toggleOutboundPrompt.setText(expanded ? "隐藏默认提示词" : "显示默认提示词");
-        });
-        form.addView(toggleOutboundPrompt, matchWrap());
-        form.addView(outboundPromptSection, matchWrap());
-
         TextView promptProtectionHint = new TextView(this);
         promptProtectionHint.setTextSize(12f);
-        promptProtectionHint.setText("保护占位符及其完整性校验由程序单独管理，不属于可编辑提示词；修改或清空自定义提示词不会删除这些必要规则。");
+        promptProtectionHint.setText("每种受支持语言都有独立的接收消息和发送消息提示词。请使用主页面的“管理语言提示词”入口编辑；默认提示词默认收起，可单独展开查看。保护标记及必要完整性规则由程序独立管理，不属于用户可编辑提示词。");
         form.addView(promptProtectionHint, matchWrap());
 
         TextView filterTitle = new TextView(this);
@@ -1231,14 +1307,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             if (started && !destroyed && pendingScopeEditor == null) startServiceSync();
         });
         updateSaveButtonState();
-    }
-
-    private Button addPromptResetButton(LinearLayout parent, EditText input, String defaultPrompt) {
-        Button button = new Button(this);
-        button.setText(getString(R.string.button_restore_default_prompt));
-        button.setOnClickListener(view -> input.setText(defaultPrompt));
-        parent.addView(button, matchWrap());
-        return button;
     }
 
     /** 每个文本配置项都有独立应用入口；输入内容在点击前只作为草稿显示。 */
@@ -1525,8 +1593,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             ensureTargetLanguageAvailable(firstSendLanguage);
             sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstSendLanguage));
             setTextOrPlaceholder(headersInput, snapshot.extraHeaders, Config.DEF_EXTRA_HEADERS);
-            systemPromptInput.setText(snapshot.systemPrompt);
-            sendSystemPromptInput.setText(snapshot.sendSystemPrompt);
+            systemPromptInput.setText(snapshot.incomingPromptsJson);
+            sendSystemPromptInput.setText(snapshot.outboundPromptsJson);
             setTextOrPlaceholder(timeoutInput, String.valueOf(snapshot.timeoutMs),
                     String.valueOf(Config.DEF_TIMEOUT_MS));
             setTextOrPlaceholder(concurrencyInput, String.valueOf(snapshot.maxConcurrency),
@@ -1732,8 +1800,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         committedTextValues.put(keyInput, snapshot.apiKey);
         committedTextValues.put(modelInput, snapshot.model.equals(Config.DEF_MODEL) ? "" : snapshot.model);
         committedTextValues.put(headersInput, snapshot.extraHeaders);
-        committedTextValues.put(systemPromptInput, snapshot.systemPrompt);
-        committedTextValues.put(sendSystemPromptInput, snapshot.sendSystemPrompt);
+        committedTextValues.put(systemPromptInput, snapshot.incomingPromptsJson);
+        committedTextValues.put(sendSystemPromptInput, snapshot.outboundPromptsJson);
         committedTextValues.put(timeoutInput, snapshot.timeoutMs == Config.DEF_TIMEOUT_MS
                 ? "" : String.valueOf(snapshot.timeoutMs));
         committedTextValues.put(concurrencyInput, snapshot.maxConcurrency == Config.DEF_MAX_CONCURRENCY
@@ -2040,8 +2108,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
         }
-        if (resetSystemPromptButton != null) resetSystemPromptButton.setEnabled(formAvailable);
-        if (resetSendSystemPromptButton != null) resetSendSystemPromptButton.setEnabled(formAvailable);
         updateStreamingAvailability();
         setTestButtonsEnabled(testFuture == null);
     }
@@ -2068,11 +2134,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         field.setText(def.equals(value) ? "" : value);
     }
 
-    private static String promptOrDefault(EditText editText, String defaultValue) {
-        String value = editText.getText().toString();
-        return value.trim().isEmpty() ? defaultValue : value;
-    }
-
 
     private Config.Snapshot snapshotFromUi() {
         if (persistedConfigInvalid) {
@@ -2095,10 +2156,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_OUTBOUND_BUTTONS,
                 OutboundButtonConfig.toJson(outboundButtonsDraft));
         memoryPrefs.put(Config.KEY_EXTRA_HEADERS, headersInput.getText().toString());
-        memoryPrefs.put(Config.KEY_SYSTEM_PROMPT,
-                promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
-        memoryPrefs.put(Config.KEY_SEND_SYSTEM_PROMPT,
-                promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT));
+        memoryPrefs.put(Config.KEY_INCOMING_PROMPTS, systemPromptInput.getText().toString());
+        memoryPrefs.put(Config.KEY_OUTBOUND_PROMPTS, sendSystemPromptInput.getText().toString());
         memoryPrefs.put(Config.KEY_TIMEOUT_MS, parseIntInput(timeoutInput, Config.DEF_TIMEOUT_MS));
         memoryPrefs.put(Config.KEY_MAX_CONCURRENCY,
                 parseIntInput(concurrencyInput, Config.DEF_MAX_CONCURRENCY));

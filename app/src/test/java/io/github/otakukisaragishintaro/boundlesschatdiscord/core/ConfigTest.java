@@ -49,7 +49,10 @@ public class ConfigTest {
         assertEquals(Config.DEF_TARGET_LANG, s.targetLang);
         assertEquals(Config.DEF_SEND_TARGET_LANG, s.sendTargetLang);
         assertEquals(Config.DEF_SYSTEM_PROMPT, s.systemPrompt);
-        assertEquals(Config.DEF_SEND_SYSTEM_PROMPT, s.sendSystemPrompt);
+        assertTrue(s.sendSystemPrompt.contains("into English"));
+        assertFalse(s.sendSystemPrompt.contains("{{target_language}}"));
+        assertEquals(LanguagePromptConfig.LANGUAGES.size(), s.incomingPrompts.size());
+        assertEquals(LanguagePromptConfig.LANGUAGES.size(), s.outboundPrompts.size());
         assertEquals(Config.DEF_PROTOCOL, s.protocol);
         assertEquals(Config.DEF_TIMEOUT_MS, s.timeoutMs);
         assertEquals(Config.DEF_MAX_CONCURRENCY, s.maxConcurrency);
@@ -120,8 +123,8 @@ public class ConfigTest {
         assertEquals("English", defaults.sendTargetLang);
         assertEquals("日本語", sendJapanese.sendTargetLang);
         assertEquals(defaults.targetLang, sendJapanese.targetLang);
-        assertEquals(defaults.version(), sendEnglish.version());
-        assertEquals(defaults.version(), sendJapanese.version());
+        assertNotEquals(defaults.version(), sendEnglish.version());
+        assertNotEquals(defaults.version(), sendJapanese.version());
     }
 
     @Test
@@ -137,9 +140,8 @@ public class ConfigTest {
         assertEquals("Incoming-only custom prompt", incoming.systemPrompt);
         assertEquals("English", outbound.targetLang);
         assertEquals("English", outbound.sendTargetLang);
-        assertEquals(Config.DEF_SEND_SYSTEM_PROMPT, outbound.systemPrompt);
-        assertTrue(outbound.systemPrompt.replace("{{target_language}}", outbound.targetLang)
-                .contains("into English"));
+        assertTrue(outbound.systemPrompt.contains("into English"));
+        assertFalse(outbound.systemPrompt.contains("{{target_language}}"));
         assertNotEquals(incoming.version(), outbound.version());
     }
 
@@ -160,7 +162,8 @@ public class ConfigTest {
     public void defaultPromptUsesConfiguredTargetLanguage() {
         Config.Snapshot japanese = Config.read(new MemoryPrefs()
                 .put(Config.KEY_TARGET_LANG, "日本語"));
-        assertEquals(Config.DEF_SYSTEM_PROMPT, japanese.systemPrompt);
+        assertTrue(japanese.systemPrompt.contains("into 日本語"));
+        assertFalse(japanese.systemPrompt.contains("Simplified Chinese"));
         assertTrue(Config.defaultSystemPromptFor(japanese.targetLang).contains("into 日本語"));
         assertFalse(Config.defaultSystemPromptFor(japanese.targetLang)
                 .contains("Simplified Chinese"));

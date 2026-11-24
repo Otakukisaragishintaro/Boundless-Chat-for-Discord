@@ -53,6 +53,8 @@ public class ConfigurationSyncTest {
     public void sendTargetLanguageUsesTheSameImportAndSaveTransactionChain() {
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_TARGET_LANG));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_SYSTEM_PROMPT));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_OUTBOUND_PROMPTS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_MENTIONS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_CHANNELS_EMOJIS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_URLS));
@@ -82,6 +84,10 @@ public class ConfigurationSyncTest {
         assertEquals("Français", remote.disk.get(Config.KEY_SEND_TARGET_LANG));
         assertEquals("Saved {{target_language}} prompt", local.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
         assertEquals("Saved {{target_language}} prompt", remote.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
+        assertTrue(local.disk.containsKey(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(local.disk.containsKey(Config.KEY_OUTBOUND_PROMPTS));
+        assertTrue(remote.disk.containsKey(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(remote.disk.containsKey(Config.KEY_OUTBOUND_PROMPTS));
     }
 
     @Test
