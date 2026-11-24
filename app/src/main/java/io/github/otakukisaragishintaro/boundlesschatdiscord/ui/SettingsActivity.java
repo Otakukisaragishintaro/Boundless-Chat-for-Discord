@@ -824,13 +824,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         root.addView(resultText, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
-        scroll.setOnApplyWindowInsetsListener((view, insets) -> {
-            // These content insets include the native ActionBar, unlike raw system-bar bounds.
-            // Pad the viewport so its first/last controls remain reachable at the scroll limits.
-            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
-                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
-            return insets.consumeSystemWindowInsets();
-        });
         scroll.addView(root, new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         SettingsUiStyle.apply(this, scroll, saveButton);
@@ -839,6 +832,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         // rebuilding EditTexts/Spinners and therefore preserves pending drafts and scroll state.
         mainSettingsPage = scroll;
         navigationHost = new FrameLayout(this);
+        navigationHost.setOnApplyWindowInsetsListener((view, insets) -> {
+            // Apply the Activity content insets once at the navigation container. Applying and
+            // consuming them on the first child ScrollView prevents later sibling subpages from
+            // receiving the ActionBar/system-bar insets when they are attached dynamically.
+            view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
+                    insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
+            return insets.consumeSystemWindowInsets();
+        });
         navigationHost.addView(scroll, new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         return navigationHost;
@@ -1424,12 +1425,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             pageScroll.setOverScrollMode(View.OVER_SCROLL_IF_CONTENT_SCROLLS);
             pageScroll.addView(pageContent, new ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
-            pageScroll.setOnApplyWindowInsetsListener((view, insets) -> {
-                // Match the main page: keep content clear of system bars and the native ActionBar.
-                view.setPadding(insets.getSystemWindowInsetLeft(), insets.getSystemWindowInsetTop(),
-                        insets.getSystemWindowInsetRight(), insets.getSystemWindowInsetBottom());
-                return insets.consumeSystemWindowInsets();
-            });
+            // Insets are owned by navigationHost so every page uses the same viewport.
             SettingsUiStyle.apply(this, pageScroll, null);
             page = pageScroll;
             if (PAGE_CACHE.equals(pageKey)) {
@@ -1450,23 +1446,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             getActionBar().setHomeButtonEnabled(true);
         }
 
-        // This page is attached after the Activity's first insets dispatch. Explicitly
-        // request a fresh dispatch after attachment so the submenu ScrollView receives
-        // the ActionBar/system-bar insets before its first visible frame. Without this,
-        // cold launches can lay out both submenus outside the viewport until the IME
-        // causes another window-insets pass.
-        // Capture the resolved page in a final local: the variable above is assigned
-        // both from the cached page and when a new page is created, so it cannot be
-        // referenced directly from a Java lambda.
-        final View pageToRefresh = page;
-        pageToRefresh.post(() -> {
-            if (destroyed || navigationHost == null || pageToRefresh.getParent() != navigationHost) {
-                return;
-            }
-            navigationHost.requestApplyInsets();
-            pageToRefresh.requestApplyInsets();
-            pageToRefresh.requestLayout();
-        });
+        // navigationHost owns window insets for both the main page and dynamically attached
+        // subpages. Changing the ActionBar title/back affordance only requires a normal layout.
     }
 
     /** 关闭当前子页面并恢复主设置页；不重建主页面表单。 */
