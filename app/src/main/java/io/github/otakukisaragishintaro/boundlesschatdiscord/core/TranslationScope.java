@@ -191,10 +191,14 @@ public final class TranslationScope {
     /** Resolve a style override with channel > server > global precedence. */
     public String promptStyleId(String guildId, String channelId) {
         if (channelId != null) {
-            for (Rule rule : channels) if (rule.id.equals(channelId)) return rule.promptStyleId;
+            for (Rule rule : channels) {
+                if (rule.id.equals(channelId) && rule.promptStyleId != null) return rule.promptStyleId;
+            }
         }
         if (guildId != null) {
-            for (Rule rule : servers) if (rule.id.equals(guildId)) return rule.promptStyleId;
+            for (Rule rule : servers) {
+                if (rule.id.equals(guildId) && rule.promptStyleId != null) return rule.promptStyleId;
+            }
         }
         return null;
     }
