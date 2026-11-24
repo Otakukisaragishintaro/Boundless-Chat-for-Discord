@@ -364,4 +364,41 @@ public class ConfigTest {
         assertEquals("", s.extraHeaders);
         assertTrue(s.apiKey.isEmpty());
     }
+
+    @Test
+    public void experimentalLongMessageChunkingIsOptInAndVersioned() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        assertFalse(defaults.experimentalLongMessageChunking);
+        assertEquals(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+                defaults.experimentalLongMessageChunking);
+
+        Config.Snapshot enabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        assertTrue(enabled.experimentalLongMessageChunking);
+        assertNotEquals(defaults.version(), enabled.version());
+
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, "true"))
+                .configError != null);
+    }
+
+    @Test
+    public void experimentalLongMessageThresholdHasSafeDefaultAndBounds() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        assertEquals(400, defaults.experimentalLongMessageThreshold);
+
+        Config.Snapshot custom = Config.read(new MemoryPrefs()
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD, 1200));
+        assertEquals(1200, custom.experimentalLongMessageThreshold);
+        assertNotEquals(defaults.version(), custom.version());
+
+        for (int value : new int[]{99, 10001}) {
+            assertTrue(Config.read(new MemoryPrefs()
+                    .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD, value))
+                    .configError != null);
+        }
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD, "800"))
+                .configError != null);
+    }
 }

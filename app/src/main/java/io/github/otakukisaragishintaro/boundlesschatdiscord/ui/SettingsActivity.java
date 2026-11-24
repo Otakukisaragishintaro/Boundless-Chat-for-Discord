@@ -65,6 +65,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private static final String STATE_ACTIVE_SETTINGS_PAGE = "active_settings_page";
     private static final String PAGE_CACHE = "cache";
     private static final String PAGE_API = "api";
+    private static final String PAGE_EXPERIMENTAL = "experimental";
 
     private static final String[] TARGET_LANGUAGE_VALUES = {
             "简体中文", "繁體中文", "English", "日本語", "한국어", "Русский",
@@ -154,6 +155,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Switch checkPlaceholdersInput;
     private Switch checkRetainedMarkersInput;
     private Switch checkLengthInput;
+    private Switch protectMentionsInput;
+    private Switch protectChannelsEmojisInput;
+    private Switch protectUrlsInput;
     private Switch enabledInput;
     private Switch loggingInput;
     private Switch cacheEnabledInput;
@@ -161,16 +165,22 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private TextView cacheEntryCountText;
     private Button cacheSettingsButton;
     private Button apiSettingsButton;
+    private Button experimentalSettingsButton;
+    private Switch experimentalChunkingInput;
+    private EditText experimentalChunkThresholdInput;
+    private Button experimentalChunkThresholdApplyButton;
     private Button cacheApplyButton;
     private Button apiApplyButton;
     private LinearLayout cacheBacking;
     private LinearLayout apiBacking;
+    private LinearLayout experimentalBacking;
     /** Main settings page stays attached so its scroll position and draft widgets are preserved. */
     @Nullable private FrameLayout navigationHost;
     @Nullable private ScrollView mainSettingsPage;
     @Nullable private View activeSubpageView;
     @Nullable private View cacheSettingsPage;
     @Nullable private View apiSettingsPage;
+    @Nullable private View experimentalSettingsPage;
     @Nullable private String activeSettingsPage;
     private Button clearCacheButton;
     private Switch streamingInput;
@@ -220,6 +230,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             openCacheSettings();
         } else if (PAGE_API.equals(restoredPage)) {
             openApiSettings();
+        } else if (PAGE_EXPERIMENTAL.equals(restoredPage)) {
+            openExperimentalSettings();
         }
     }
 
@@ -307,6 +319,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("check_placeholders", checkPlaceholdersInput.isChecked());
         draft.putBoolean("check_retained", checkRetainedMarkersInput.isChecked());
         draft.putBoolean("check_length", checkLengthInput.isChecked());
+        draft.putBoolean("protect_mentions", protectMentionsInput.isChecked());
+        draft.putBoolean("protect_channels_emojis", protectChannelsEmojisInput.isChecked());
+        draft.putBoolean("protect_urls", protectUrlsInput.isChecked());
+        draft.putBoolean("experimental_long_message_chunking",
+                experimentalChunkingInput.isChecked());
+        draft.putString("experimental_long_message_threshold",
+                experimentalChunkThresholdInput.getText().toString());
         draft.putInt("protocol", protocolSpinner.getSelectedItemPosition());
         draft.putString("language", selectedTargetLanguage());
         draft.putString("send_language", selectedSendTargetLanguage());
@@ -347,6 +366,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkRetainedMarkersInput.setChecked(draft.getBoolean("check_retained",
                     Config.DEF_CHECK_RETAINED_MARKERS));
             checkLengthInput.setChecked(draft.getBoolean("check_length", Config.DEF_CHECK_LENGTH));
+            protectMentionsInput.setChecked(draft.getBoolean("protect_mentions",
+                    Config.DEF_PROTECT_MENTIONS));
+            protectChannelsEmojisInput.setChecked(draft.getBoolean("protect_channels_emojis",
+                    Config.DEF_PROTECT_CHANNELS_EMOJIS));
+            protectUrlsInput.setChecked(draft.getBoolean("protect_urls", Config.DEF_PROTECT_URLS));
+            experimentalChunkingInput.setChecked(draft.getBoolean("experimental_long_message_chunking",
+                    Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING));
+            experimentalChunkThresholdInput.setText(draft.getString(
+                    "experimental_long_message_threshold",
+                    String.valueOf(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD)));
             String language = draft.getString("language");
             ensureTargetLanguageAvailable(language);
             targetLanguageSpinner.setSelection(targetLanguagePosition(language));
@@ -697,6 +726,57 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         apiSettingsButton.setOnClickListener(v -> openApiSettings());
         root.addView(apiSettingsButton, matchWrap());
 
+        // All experimental behavior is isolated behind one opt-in submenu.
+        experimentalBacking = new LinearLayout(this);
+        experimentalBacking.setOrientation(LinearLayout.VERTICAL);
+        experimentalChunkingInput = new Switch(this);
+        experimentalChunkingInput.setText(R.string.label_experimental_long_message_chunking);
+        experimentalChunkingInput.setShowText(false);
+        experimentalChunkingInput.setMinimumHeight(dp(48));
+        experimentalBacking.addView(experimentalChunkingInput, matchWrap());
+        TextView experimentalChunkingHint = new TextView(this);
+        experimentalChunkingHint.setTextSize(12f);
+        experimentalChunkingHint.setText(R.string.hint_experimental_long_message_chunking);
+        experimentalBacking.addView(experimentalChunkingHint, matchWrap());
+        experimentalChunkThresholdInput = addField(experimentalBacking,
+                getString(R.string.label_experimental_long_message_threshold),
+                getString(R.string.hint_experimental_long_message_threshold),
+                InputType.TYPE_CLASS_NUMBER);
+        experimentalChunkThresholdApplyButton = new Button(this);
+        experimentalChunkThresholdApplyButton.setText(R.string.button_apply_experimental_threshold);
+        experimentalChunkThresholdApplyButton.setOnClickListener(v -> {
+            String thresholdText = experimentalChunkThresholdInput.getText().toString().trim();
+            int value;
+            if (thresholdText.isEmpty()) {
+                value = Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD;
+            } else {
+                try {
+                    value = Integer.parseInt(thresholdText);
+                } catch (NumberFormatException invalid) {
+                    experimentalChunkThresholdInput.setError(getString(
+                            R.string.error_experimental_long_message_threshold));
+                    return;
+                }
+            }
+            if (value < Config.MIN_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
+                    || value > Config.MAX_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD) {
+                experimentalChunkThresholdInput.setError(getString(
+                        R.string.error_experimental_long_message_threshold));
+                return;
+            }
+            experimentalChunkThresholdInput.setError(null);
+            saveSingleField(experimentalChunkThresholdInput);
+        });
+        experimentalBacking.addView(experimentalChunkThresholdApplyButton, matchWrap());
+        experimentalChunkingInput.setOnCheckedChangeListener((button, checked) -> {
+            markDirty();
+            if (!loadingUi) saveOptionsOnly();
+        });
+        experimentalSettingsButton = new Button(this);
+        experimentalSettingsButton.setText(R.string.menu_experimental_features);
+        experimentalSettingsButton.setOnClickListener(v -> openExperimentalSettings());
+        root.addView(experimentalSettingsButton, matchWrap());
+
         TextView outboundTitle = new TextView(this);
         outboundTitle.setText(getString(R.string.label_outbound_section));
         outboundTitle.setPadding(0, dp(10), 0, 0);
@@ -747,6 +827,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         checkLengthInput = addValidationSwitch(advancedBacking,
                 getString(R.string.validation_check_length),
                 Config.DEF_CHECK_LENGTH);
+        protectMentionsInput = addValidationSwitch(advancedBacking,
+                getString(R.string.protection_discord_mentions), Config.DEF_PROTECT_MENTIONS);
+        protectChannelsEmojisInput = addValidationSwitch(advancedBacking,
+                getString(R.string.protection_discord_channels_emojis),
+                Config.DEF_PROTECT_CHANNELS_EMOJIS);
+        protectUrlsInput = addValidationSwitch(advancedBacking,
+                getString(R.string.protection_urls), Config.DEF_PROTECT_URLS);
         minLengthPercentInput = addField(advancedBacking,
                 getString(R.string.label_min_translation_length),
                 String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
@@ -942,6 +1029,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Switch length = addDialogSwitch(form,
                 getString(R.string.validation_check_length),
                 checkLengthInput.isChecked());
+        Switch mentions = addDialogSwitch(form,
+                getString(R.string.protection_discord_mentions), protectMentionsInput.isChecked());
+        Switch channelsEmojis = addDialogSwitch(form,
+                getString(R.string.protection_discord_channels_emojis),
+                protectChannelsEmojisInput.isChecked());
+        Switch urls = addDialogSwitch(form,
+                getString(R.string.protection_urls), protectUrlsInput.isChecked());
         EditText minPercent = addField(form,
                 getString(R.string.label_min_translation_length),
                 String.valueOf(Config.DEF_MIN_LENGTH_PERCENT), InputType.TYPE_CLASS_NUMBER);
@@ -980,6 +1074,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     checkPlaceholdersInput.setChecked(placeholders.isChecked());
                     checkRetainedMarkersInput.setChecked(retained.isChecked());
                     checkLengthInput.setChecked(length.isChecked());
+                    protectMentionsInput.setChecked(mentions.isChecked());
+                    protectChannelsEmojisInput.setChecked(channelsEmojis.isChecked());
+                    protectUrlsInput.setChecked(urls.isChecked());
                     minLengthPercentInput.setText(String.valueOf(min));
                     maxLengthPercentInput.setText(String.valueOf(max));
                     markDirty();
@@ -1263,6 +1360,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkPlaceholdersInput.setChecked(Config.DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkersInput.setChecked(Config.DEF_CHECK_RETAINED_MARKERS);
             checkLengthInput.setChecked(Config.DEF_CHECK_LENGTH);
+            protectMentionsInput.setChecked(Config.DEF_PROTECT_MENTIONS);
+            protectChannelsEmojisInput.setChecked(Config.DEF_PROTECT_CHANNELS_EMOJIS);
+            protectUrlsInput.setChecked(Config.DEF_PROTECT_URLS);
+            experimentalChunkingInput.setChecked(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
+            experimentalChunkThresholdInput.setText("");
             protocolSpinner.setSelection(AdapterView.INVALID_POSITION);
             targetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
             sendTargetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
@@ -1371,6 +1473,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkPlaceholdersInput.setChecked(snapshot.checkPlaceholders);
             checkRetainedMarkersInput.setChecked(snapshot.checkRetainedMarkers);
             checkLengthInput.setChecked(snapshot.checkLength);
+            protectMentionsInput.setChecked(snapshot.protectMentions);
+            protectChannelsEmojisInput.setChecked(snapshot.protectChannelsEmojis);
+            protectUrlsInput.setChecked(snapshot.protectUrls);
+            experimentalChunkingInput.setChecked(snapshot.experimentalLongMessageChunking);
+            setTextOrPlaceholder(experimentalChunkThresholdInput,
+                    String.valueOf(snapshot.experimentalLongMessageThreshold),
+                    String.valueOf(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD));
             setTextOrPlaceholder(minLengthPercentInput, String.valueOf(snapshot.minLengthPercent),
                     String.valueOf(Config.DEF_MIN_LENGTH_PERCENT));
             setTextOrPlaceholder(maxLengthPercentInput, String.valueOf(snapshot.maxLengthPercent),
@@ -1399,6 +1508,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         showSettingsSubpage(PAGE_API, R.string.menu_api_settings, apiBacking);
     }
 
+    /** 所有实验性功能集中在此页面，且每项默认关闭。 */
+    private void openExperimentalSettings() {
+        if (persistedConfigInvalid) return;
+        showSettingsSubpage(PAGE_EXPERIMENTAL, R.string.menu_experimental_features,
+                experimentalBacking);
+    }
+
     /**
      * 将目标设置内容推入全屏页面层，而不是放进 AlertDialog。
      * 主设置页只隐藏、不销毁；子页面退出时原样恢复。
@@ -1410,7 +1526,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         // Build each submenu exactly once. Reusing its view prevents style margins from
         // accumulating and preserves the submenu's own scroll position when revisited.
-        View page = PAGE_CACHE.equals(pageKey) ? cacheSettingsPage : apiSettingsPage;
+        View page = PAGE_CACHE.equals(pageKey) ? cacheSettingsPage
+                : PAGE_API.equals(pageKey) ? apiSettingsPage : experimentalSettingsPage;
         if (page == null) {
             LinearLayout pageContent = new LinearLayout(this);
             pageContent.setOrientation(LinearLayout.VERTICAL);
@@ -1430,8 +1547,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             page = pageScroll;
             if (PAGE_CACHE.equals(pageKey)) {
                 cacheSettingsPage = page;
-            } else {
+            } else if (PAGE_API.equals(pageKey)) {
                 apiSettingsPage = page;
+            } else {
+                experimentalSettingsPage = page;
             }
         }
 
@@ -1537,7 +1656,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private List<EditText> persistedTextFields() {
         return Arrays.asList(urlInput, keyInput, modelInput, headersInput,
                 systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
-                minLengthPercentInput, maxLengthPercentInput, cacheLimitInput);
+                minLengthPercentInput, maxLengthPercentInput, cacheLimitInput,
+                experimentalChunkThresholdInput);
     }
 
     /** 将已提交快照转换为输入框实际显示的基线文本（默认值继续显示为提示文字）。 */
@@ -1561,6 +1681,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 snapshot.maxLengthPercent == Config.DEF_MAX_LENGTH_PERCENT ? ""
                         : String.valueOf(snapshot.maxLengthPercent));
         committedTextValues.put(cacheLimitInput, String.valueOf(snapshot.cacheLimit));
+        committedTextValues.put(experimentalChunkThresholdInput,
+                snapshot.experimentalLongMessageThreshold == Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
+                        ? "" : String.valueOf(snapshot.experimentalLongMessageThreshold));
     }
 
     private Map<EditText, String> captureTextDrafts() {
@@ -1831,6 +1954,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         checkPlaceholdersInput.setEnabled(formAvailable);
         checkRetainedMarkersInput.setEnabled(formAvailable);
         checkLengthInput.setEnabled(formAvailable);
+        protectMentionsInput.setEnabled(formAvailable);
+        protectChannelsEmojisInput.setEnabled(formAvailable);
+        protectUrlsInput.setEnabled(formAvailable);
         updateToggleText(enabledInput, enabledHint, SettingsToggleText.Setting.TRANSLATION);
         updateToggleText(loggingInput, loggingHint, SettingsToggleText.Setting.LOGGING);
         protocolSpinner.setEnabled(formAvailable);
@@ -1840,6 +1966,12 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         sendTargetLanguageSpinner.setEnabled(formAvailable);
         sendTargetLanguageSpinner.setVisibility(View.GONE);
         if (manageOutboundButtonsButton != null) manageOutboundButtonsButton.setEnabled(formAvailable);
+        if (experimentalSettingsButton != null) experimentalSettingsButton.setEnabled(formAvailable);
+        if (experimentalChunkingInput != null) experimentalChunkingInput.setEnabled(formAvailable);
+        if (experimentalChunkThresholdInput != null) experimentalChunkThresholdInput.setEnabled(formAvailable);
+        if (experimentalChunkThresholdApplyButton != null) {
+            experimentalChunkThresholdApplyButton.setEnabled(formAvailable && available);
+        }
         if (advancedSettingsButton != null) advancedSettingsButton.setEnabled(formAvailable);
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
@@ -1912,6 +2044,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_CHECK_PLACEHOLDERS, checkPlaceholdersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_RETAINED_MARKERS, checkRetainedMarkersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_LENGTH, checkLengthInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECT_MENTIONS, protectMentionsInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECT_CHANNELS_EMOJIS, protectChannelsEmojisInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECT_URLS, protectUrlsInput.isChecked());
+        memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+                experimentalChunkingInput.isChecked());
+        memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD,
+                parseIntInput(experimentalChunkThresholdInput,
+                        Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD));
         memoryPrefs.put(Config.KEY_MIN_LENGTH_PERCENT,
                 parseIntInput(minLengthPercentInput, Config.DEF_MIN_LENGTH_PERCENT));
         memoryPrefs.put(Config.KEY_MAX_LENGTH_PERCENT,

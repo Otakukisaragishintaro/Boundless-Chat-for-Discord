@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.MemoryPrefs;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
@@ -80,6 +81,161 @@ public class JsonApiEngineTest {
         Field field = JsonApiEngine.class.getDeclaredField("active");
         field.setAccessible(true);
         return (Map<Thread, Http.Request>) field.get(engine);
+    }
+
+    @Test
+    public void paragraphChunkingUsesWhitespaceAwareBlankLineBoundaries() {
+        String source = "first paragraph\r\n  \r\nsecond paragraph";
+        java.util.List<String> paragraphs = new java.util.ArrayList<>();
+        java.util.List<String> separators = new java.util.ArrayList<>();
+        JsonApiEngine.splitParagraphs(source, paragraphs, separators);
+        assertEquals(2, paragraphs.size());
+        assertEquals("first paragraph", paragraphs.get(0));
+        assertEquals("second paragraph", paragraphs.get(1));
+        assertEquals("\r\n  \r\n", separators.get(0));
+    }
+
+    @Test
+    public void longMessageChunkingRequiresExplicitOptIn() throws Exception {
+        String first = repeat("x", 250);
+        String second = repeat("y", 250);
+        String source = first + "\n\n" + second;
+
+        AtomicInteger normalOpens = new AtomicInteger();
+        FakeConnection normalConnection = new FakeConnection(chatJson(repeat("z", 502)));
+        JsonApiEngine normal = new JsonApiEngine(config(
+                Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
+                    normalOpens.incrementAndGet();
+                    return normalConnection;
+                }));
+        assertEquals(repeat("z", 502), normal.translate(source));
+        assertEquals(1, normalOpens.get());
+
+        AtomicInteger chunkedOpens = new AtomicInteger();
+        FakeConnection firstChunk = new FakeConnection(chatJson(repeat("a", 250)));
+        FakeConnection secondChunk = new FakeConnection(chatJson(repeat("b", 250)));
+        Config.Snapshot experimentalConfig = Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_PROTOCOL, Config.PROTOCOL_OPENAI_COMPATIBLE)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        JsonApiEngine chunked = new JsonApiEngine(experimentalConfig, http(url ->
+                chunkedOpens.getAndIncrement() == 0 ? firstChunk : secondChunk));
+        assertEquals(repeat("a", 250) + "\n\n" + repeat("b", 250),
+                chunked.translate(source));
+        assertEquals(2, chunkedOpens.get());
+
+        // A long single line or a single line break is not a paragraph boundary:
+        // neither may be split merely to satisfy the experimental character threshold.
+        String singleLine = repeat("s", 700);
+        AtomicInteger singleLineOpens = new AtomicInteger();
+        JsonApiEngine singleLineEngine = new JsonApiEngine(experimentalConfig, http(url -> {
+            singleLineOpens.incrementAndGet();
+            return new FakeConnection(chatJson(repeat("t", 700)));
+        }));
+        assertEquals(repeat("t", 700), singleLineEngine.translate(singleLine));
+        assertEquals(1, singleLineOpens.get());
+
+        String oneLineBreak = repeat("u", 350) + "\n" + repeat("v", 350);
+        AtomicInteger oneLineBreakOpens = new AtomicInteger();
+        JsonApiEngine oneLineBreakEngine = new JsonApiEngine(experimentalConfig, http(url -> {
+            oneLineBreakOpens.incrementAndGet();
+            return new FakeConnection(chatJson(repeat("w", 701)));
+        }));
+        assertEquals(repeat("w", 701), oneLineBreakEngine.translate(oneLineBreak));
+        assertEquals(1, oneLineBreakOpens.get());
+
+        // A short final URL paragraph is folded into the preceding paragraph.
+        java.util.List<String> tailParagraphs = java.util.Arrays.asList(
+                repeat("a", 250), "https://example.com/release");
+        java.util.List<String> tailSeparators = java.util.Collections.singletonList("\n\n");
+        JsonApiEngine.ParagraphGroups tailGroups = JsonApiEngine.groupParagraphs(
+                tailParagraphs, tailSeparators, 200);
+        assertEquals(1, tailGroups.chunks.size());
+        assertEquals(2, tailGroups.paragraphCounts.get(0).intValue());
+        assertEquals(repeat("a", 250) + "\n\nhttps://example.com/release",
+                tailGroups.chunks.get(0));
+
+        // Grouped requests protect their internal blank-line layout from model normalization.
+        io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers.Protection
+                separatorProtection =
+                io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers
+                        .protectBlankLineSeparators("first\n\nsecond");
+        assertTrue(separatorProtection.text.contains("<keep1/>"));
+        assertEquals("first\n\nsecond",
+                separatorProtection.restore(separatorProtection.text));
+
+        AtomicInteger raisedThresholdOpens = new AtomicInteger();
+        FakeConnection raisedThresholdConnection =
+                new FakeConnection(chatJson(repeat("q", 502)));
+        Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_PROTOCOL, Config.PROTOCOL_OPENAI_COMPATIBLE)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD, 600));
+        JsonApiEngine raisedThreshold = new JsonApiEngine(raisedThresholdConfig, http(url -> {
+            raisedThresholdOpens.incrementAndGet();
+            return raisedThresholdConnection;
+        }));
+        assertEquals(repeat("q", 502), raisedThreshold.translate(source));
+        assertEquals(1, raisedThresholdOpens.get());
+    }
+
+    @Test
+    public void literalDiscordMentionsChannelTokensAndUrlsAreShieldedAndRestored() throws Exception {
+        String source = "Please contact <@403924274437685248> and visit "
+                + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
+        FakeConnection connection = new FakeConnection(chatJson(
+                "请联系 <keep1/> 并访问 <keep2/> <keep3/> <keep4/>"));
+        JsonApiEngine engine = new JsonApiEngine(
+                config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
+
+        assertEquals("请联系 <@403924274437685248> 并访问 <#1570408648533082167> @everyone "
+                        + "https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4",
+                engine.translate(source));
+
+        JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
+        String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
+        for (int i = 1; i <= 4; i++) assertTrue(userContent.contains("<keep" + i + "/>"));
+        assertFalse(userContent.contains("403924274437685248"));
+        assertFalse(userContent.contains("1570408648533082167"));
+        assertFalse(userContent.contains("@everyone"));
+        assertFalse(userContent.contains("github.com/YusufOzmen01"));
+        assertTrue(connection.disconnected);
+        assertTrue(active(engine).isEmpty());
+    }
+
+    @Test
+    public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        assertTrue(defaults.protectMentions);
+        assertTrue(defaults.protectChannelsEmojis);
+        assertTrue(defaults.protectUrls);
+
+        String source = "<@403924274437685248> <#1570408648533082167> "
+                + "<:openhouse:123456789012345678> @everyone https://example.com/path";
+        DiscordTokenMarkers.Protection selected = DiscordTokenMarkers.protect(
+                source, false, true, false);
+        assertEquals("<@403924274437685248> <keep1/> <keep2/> @everyone https://example.com/path",
+                selected.text);
+        assertEquals(source, selected.restore(selected.text));
+
+        Config.Snapshot disabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_PROTECT_MENTIONS, false)
+                .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, true)
+                .put(Config.KEY_PROTECT_URLS, false));
+        assertFalse(disabled.protectMentions);
+        assertTrue(disabled.protectChannelsEmojis);
+        assertFalse(disabled.protectUrls);
+    }
+
+    private static String repeat(String value, int count) {
+        StringBuilder result = new StringBuilder(value.length() * count);
+        for (int i = 0; i < count; i++) result.append(value);
+        return result.toString();
     }
 
     @Test

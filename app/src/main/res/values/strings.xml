@@ -167,6 +167,9 @@
     <string name="validation_check_placeholders">Check template placeholders</string>
     <string name="validation_check_retained">Check retained-node markers</string>
     <string name="validation_check_length">Check translation length ratio</string>
+    <string name="protection_discord_mentions">Protect Discord user/role mentions and @everyone / @here</string>
+    <string name="protection_discord_channels_emojis">Protect channel mentions and custom emoji</string>
+    <string name="protection_urls">Protect website links (http, https, www)</string>
     <string name="label_min_translation_length">Minimum translation length (%% of source)</string>
     <string name="label_max_translation_length">Maximum translation length (%% of source)</string>
     <string name="button_apply_to_draft">Apply to draft</string>
@@ -215,5 +218,16 @@
     <string name="confirm_clear_translation_cache">Permanently delete all locally saved translations? This does not change API settings or chat messages.</string>
     <string name="status_cache_clear_requested">Cache clear request sent to Discord. It will be processed by the Discord module.</string>
     <string name="status_cache_clear_unavailable">Unable to contact the Discord module. Open Discord and reconnect LSPosed, then try again.</string>
+
+
+    <string name="menu_experimental_features">Experimental features…</string>
+    <string name="label_experimental_long_message_chunking">Chunk long-message API requests</string>
+    <string name="hint_experimental_long_message_chunking">When enabled, messages longer than the threshold above with blank-line paragraph breaks are sent as separate translation requests and then recombined. Off by default. This changes API request behavior only; it does not split writes back into Discord. Experimental: it may increase request count and token usage.</string>
+
+
+    <string name="label_experimental_long_message_threshold">Chunking trigger length</string>
+    <string name="hint_experimental_long_message_threshold">Leave blank to use the default of 400. Range: 100–10000. Chunking is attempted only above this length; a single paragraph is never forcibly split.</string>
+    <string name="button_apply_experimental_threshold">Apply threshold</string>
+    <string name="error_experimental_long_message_threshold">Enter a whole number from 100 to 10000</string>
 
 </resources>

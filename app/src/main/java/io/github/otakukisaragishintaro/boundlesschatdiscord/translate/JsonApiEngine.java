@@ -2,7 +2,9 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.translate;
 
 import java.util.concurrent.ConcurrentHashMap;
 
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.BlankLines;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
@@ -63,18 +65,173 @@ public final class JsonApiEngine implements Scheduler.Engine {
         }
     }
 
+    /**
+     * Keep a Discord message as one scheduled/cached translation, but send long
+     * multi-paragraph bodies as smaller requests. Paragraph separators are copied
+     * from the source verbatim; every chunk still goes through the same decoder,
+     * cancellation owner and integrity checks as an ordinary translation.
+     */
     @Override
     public String translate(String text) throws Exception {
-        return execute(text, true).translated;
+        // Literal Discord syntax can also arrive inside ordinary text nodes or primitive
+        // StructurableText. Shield it before every provider request and restore it only
+        // after the same retained-marker integrity check used for native opaque nodes.
+        DiscordTokenMarkers.Protection protection = DiscordTokenMarkers.protect(text,
+                cfg.protectMentions, cfg.protectChannelsEmojis, cfg.protectUrls);
+        String requestText = protection.text;
+        java.util.List<String> paragraphs = new java.util.ArrayList<>();
+        java.util.List<String> separators = new java.util.ArrayList<>();
+        if (!cfg.experimentalLongMessageChunking || requestText == null
+                || requestText.length() <= cfg.experimentalLongMessageThreshold) {
+            return protection.restore(execute(requestText, true, true).translated);
+        }
+        splitParagraphs(requestText, paragraphs, separators);
+
+        if (paragraphs.size() <= 1) {
+            ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
+                    + " sourceChars=" + requestText.length());
+            return protection.restore(execute(requestText, true, true).translated);
+        }
+
+        ParagraphGroups groups = groupParagraphs(paragraphs, separators,
+                cfg.experimentalLongMessageThreshold);
+        if (groups.chunks.size() <= 1) {
+            ProjectLog.info("translation.chunking skipped reason=paragraphs_fit_one_request"
+                    + " sourceChars=" + requestText.length()
+                    + " paragraphs=" + paragraphs.size());
+            return protection.restore(execute(requestText, true, true).translated);
+        }
+
+        StringBuilder combined = new StringBuilder(requestText.length());
+        ProjectLog.info("translation.chunking start sourceChars=" + requestText.length()
+                + " threshold=" + cfg.experimentalLongMessageThreshold
+                + " paragraphs=" + paragraphs.size()
+                + " requests=" + groups.chunks.size());
+        for (int i = 0; i < groups.chunks.size(); i++) {
+            String group = groups.chunks.get(i);
+            DiscordTokenMarkers.Protection separatorProtection =
+                    DiscordTokenMarkers.protectBlankLineSeparators(group);
+            ProjectLog.info("translation.chunking request index=" + (i + 1)
+                    + " sourceChars=" + group.length()
+                    + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
+            try {
+                String translated = execute(separatorProtection.text, true, true).translated;
+                combined.append(separatorProtection.restore(translated));
+            } catch (Exception failure) {
+                ProjectLog.warn("translation.chunking failed index=" + (i + 1)
+                        + " errorClass=" + failure.getClass().getSimpleName()
+                        + " errorKind=" + (failure instanceof TranslationException
+                                ? ((TranslationException) failure).kind().name() : "none")
+                        + " errorReason=" + (failure instanceof TranslationException
+                                ? ((TranslationException) failure).reason().name() : "UNKNOWN_FAILURE")
+                        + " httpStatus=" + (failure instanceof TranslationException
+                                ? ((TranslationException) failure).httpStatus() : 0));
+                throw failure;
+            }
+            if (i < groups.separators.size()) combined.append(groups.separators.get(i));
+        }
+        ProjectLog.info("translation.chunking complete chunks=" + groups.chunks.size()
+                + " protectedDiscordTokens=" + protection.tokenCount());
+        return protection.restore(combined.toString());
+    }
+
+    /** Split using the same whitespace-aware blank-line rules as Discord node alignment. */
+    static void splitParagraphs(String source, java.util.List<String> paragraphs,
+                                java.util.List<String> separators) {
+        BlankLines.Split split = BlankLines.split(source);
+        paragraphs.addAll(split.chunks);
+        separators.addAll(split.separators);
+    }
+
+    /** A request-sized group of whole paragraphs plus the exact separators between requests. */
+    static final class ParagraphGroups {
+        final java.util.List<String> chunks;
+        final java.util.List<String> separators;
+        final java.util.List<Integer> paragraphCounts;
+
+        ParagraphGroups(java.util.List<String> chunks, java.util.List<String> separators,
+                        java.util.List<Integer> paragraphCounts) {
+            this.chunks = chunks;
+            this.separators = separators;
+            this.paragraphCounts = paragraphCounts;
+        }
+    }
+
+    /**
+     * Groups only complete paragraphs. A final undersized group is folded into its
+     * predecessor so a short URL/code/formatting tail is never sent without context.
+     * No character-level splitting is performed, even when one paragraph exceeds threshold.
+     */
+    static ParagraphGroups groupParagraphs(java.util.List<String> paragraphs,
+                                           java.util.List<String> separators, int threshold) {
+        java.util.List<String> chunks = new java.util.ArrayList<>();
+        java.util.List<String> boundaries = new java.util.ArrayList<>();
+        java.util.List<Integer> counts = new java.util.ArrayList<>();
+        if (paragraphs == null || paragraphs.isEmpty()) {
+            return new ParagraphGroups(chunks, boundaries, counts);
+        }
+        if (separators == null || separators.size() != paragraphs.size() - 1) {
+            throw new IllegalArgumentException("Paragraph separators do not match paragraph count");
+        }
+
+        StringBuilder current = new StringBuilder();
+        int currentCount = 0;
+        int minimumIndependentGroup = Math.max(1, threshold / 2);
+        for (int i = 0; i < paragraphs.size(); i++) {
+            if (i > 0) {
+                String boundary = separators.get(i - 1);
+                String nextParagraph = paragraphs.get(i);
+                int candidateLength = current.length() + boundary.length() + nextParagraph.length();
+                // Do not strand a tiny leading paragraph. Split only after the current
+                // group is substantial and adding the next whole paragraph exceeds target.
+                if (current.length() >= minimumIndependentGroup
+                        && candidateLength > Math.max(1, threshold)) {
+                    chunks.add(current.toString());
+                    counts.add(currentCount);
+                    boundaries.add(boundary);
+                    current.setLength(0);
+                    currentCount = 0;
+                } else {
+                    current.append(boundary);
+                }
+            }
+            current.append(paragraphs.get(i));
+            currentCount++;
+        }
+        chunks.add(current.toString());
+        counts.add(currentCount);
+
+        // A short trailing paragraph is more likely to be a URL, code fragment, or
+        // continuation than an independent translation unit. Keep it with prior context.
+        if (chunks.size() > 1
+                && chunks.get(chunks.size() - 1).codePointCount(
+                        0, chunks.get(chunks.size() - 1).length()) < minimumIndependentGroup) {
+            int last = chunks.size() - 1;
+            String merged = chunks.get(last - 1) + boundaries.get(last - 1) + chunks.get(last);
+            chunks.set(last - 1, merged);
+            counts.set(last - 1, counts.get(last - 1) + counts.get(last));
+            chunks.remove(last);
+            counts.remove(last);
+            boundaries.remove(last - 1);
+        }
+        return new ParagraphGroups(chunks, boundaries, counts);
     }
 
     /** Connection probes share all request/decoder ownership, but do not judge translation safety. */
     Exchange execute(String text, boolean validateTranslation) throws Exception {
+        // Settings/API probes use the same engine but retain their deliberately redacted log contract.
+        return execute(text, validateTranslation, false);
+    }
+
+    private Exchange execute(String text, boolean validateTranslation,
+                             boolean logFailureDiagnostics) throws Exception {
         Thread worker = Thread.currentThread();
         Http.Request request = new Http.Request();
         if (active.putIfAbsent(worker, request) != null) {
             throw new IllegalStateException("Worker already owns a request");
         }
+        String failureStage = "request_setup";
+        String diagnosticTranslated = null;
         try {
             // Registration precedes validation/body construction. A prior cancel interrupts
             // the worker; a concurrent cancel marks this handle before any connection exists.
@@ -83,7 +240,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 throw new TranslationException(TranslationException.Kind.EMPTY, "原文为空，无需翻译");
             }
             Http.Headers headers = validateConfig(cfg);
+            failureStage = "http_response_decode";
             Http.Response response = requestOnce(text, request, headers);
+            failureStage = "translation_validation";
+            diagnosticTranslated = response.body;
             String translated = response.body;
             if (translated == null || translated.trim().isEmpty()) {
                 throw new TranslationException(TranslationException.Kind.EMPTY,
@@ -111,10 +271,71 @@ public final class JsonApiEngine implements Scheduler.Engine {
             return new Exchange(translated, response.status);
         } catch (Exception e) {
             request.checkCancelled();
+            String kind = e instanceof TranslationException
+                    ? ((TranslationException) e).kind().name() : "UNKNOWN";
+            String reason = e instanceof TranslationException
+                    ? ((TranslationException) e).reason().name() : "UNKNOWN_FAILURE";
+            int status = e instanceof TranslationException
+                    ? ((TranslationException) e).httpStatus() : 0;
+            String detail = e instanceof TranslationException
+                    ? safeDiagnosticDetail(e.getMessage()) : e.getClass().getSimpleName();
+            if (logFailureDiagnostics) {
+                ProjectLog.warn("translation.failure stage=" + failureStage
+                        + " errorClass=" + e.getClass().getSimpleName()
+                        + " errorKind=" + kind
+                        + " errorReason=" + reason
+                        + " httpStatus=" + status
+                        + " sourceChars=" + codePointLength(text)
+                        + " sourcePreview=" + safeDiagnosticPreview(text, 200)
+                        + " sourceTail=" + safeDiagnosticTail(text, 100)
+                        + " translatedChars=" + codePointLength(diagnosticTranslated)
+                        + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
+                        + " detail=" + detail);
+            }
             throw e;
         } finally {
             active.remove(worker, request);
         }
+    }
+
+    /** Keep diagnostic details useful while preventing multiline or unbounded log output. */
+    private static String safeDiagnosticDetail(String message) {
+        if (message == null || message.isEmpty()) return "none";
+        String safe = message.replaceAll("[\\r\\n\\t]+", " ").trim();
+        return safe.length() <= 160 ? safe : safe.substring(0, 160);
+    }
+
+    /** Counts Unicode code points so preview limits do not split surrogate pairs. */
+    private static int codePointLength(String value) {
+        return value == null ? 0 : value.codePointCount(0, value.length());
+    }
+
+    /** Escapes control characters and bounds diagnostic previews; never logs an entire message. */
+    private static String safeDiagnosticPreview(String value, int maxCodePoints) {
+        if (value == null) return "none";
+        StringBuilder out = new StringBuilder();
+        int count = 0;
+        for (int i = 0; i < value.length() && count < maxCodePoints;) {
+            int point = value.codePointAt(i);
+            i += Character.charCount(point);
+            count++;
+            if (point == '\r') out.append("\\r");
+            else if (point == '\n') out.append("\\n");
+            else if (point == '\t') out.append("\\t");
+            else if (Character.isISOControl(point)) out.append('?');
+            else out.appendCodePoint(point);
+        }
+        if (codePointLength(value) > maxCodePoints) out.append("…");
+        return out.toString();
+    }
+
+    /** Keeps the final context of long messages, also with escaped control characters. */
+    private static String safeDiagnosticTail(String value, int maxCodePoints) {
+        if (value == null) return "none";
+        int count = codePointLength(value);
+        int start = count > maxCodePoints
+                ? value.offsetByCodePoints(0, count - maxCodePoints) : 0;
+        return (start > 0 ? "…" : "") + safeDiagnosticPreview(value.substring(start), maxCodePoints);
     }
 
     /** Sends exactly once and retains the decoded response status for post-request validation. */

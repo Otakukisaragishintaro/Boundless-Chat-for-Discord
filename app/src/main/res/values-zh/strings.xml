@@ -167,6 +167,9 @@
     <string name="validation_check_placeholders">检查模板占位符</string>
     <string name="validation_check_retained">检查保留节点定位标记</string>
     <string name="validation_check_length">检查译文长度比例</string>
+    <string name="protection_discord_mentions">保护 Discord 用户/身份组提及及 @everyone / @here</string>
+    <string name="protection_discord_channels_emojis">保护频道引用和自定义表情</string>
+    <string name="protection_urls">保护网站链接（http、https、www）</string>
     <string name="label_min_translation_length">译文最小长度（原文百分比）</string>
     <string name="label_max_translation_length">译文最大长度（原文百分比）</string>
     <string name="button_apply_to_draft">应用到待保存设置</string>
@@ -215,5 +218,16 @@
     <string name="confirm_clear_translation_cache">确定永久删除本机保存的全部译文吗？此操作不会修改 API 设置或 Discord 聊天记录。</string>
     <string name="status_cache_clear_requested">已向 Discord 发送清空请求，将由 Discord 模块执行。</string>
     <string name="status_cache_clear_unavailable">无法联系 Discord 模块。请打开 Discord 并确认 LSPosed 已连接，然后重试。</string>
+
+
+    <string name="menu_experimental_features">试验功能…</string>
+    <string name="label_experimental_long_message_chunking">长消息分段请求</string>
+    <string name="hint_experimental_long_message_chunking">开启后，整条消息超过上方设定字数且包含空行分段时，会按段分别请求翻译服务，再合并译文。默认关闭；这只改变 API 请求方式，不会分段写入 Discord。属于实验性功能，可能增加请求次数和 Token 消耗。</string>
+
+
+    <string name="label_experimental_long_message_threshold">分段触发字数</string>
+    <string name="hint_experimental_long_message_threshold">留空使用默认值 400；允许范围 100–10000。超过该字数才尝试按空行分段，不会强行切开单个段落。</string>
+    <string name="button_apply_experimental_threshold">应用触发字数</string>
+    <string name="error_experimental_long_message_threshold">请输入 100 到 10000 之间的整数</string>
 
 </resources>
