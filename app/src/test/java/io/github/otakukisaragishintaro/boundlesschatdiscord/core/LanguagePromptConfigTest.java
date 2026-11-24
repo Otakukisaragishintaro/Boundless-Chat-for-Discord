@@ -86,6 +86,18 @@ public class LanguagePromptConfigTest {
     }
 
     @Test
+    public void configRejectsScopeRulesThatReferenceMissingPromptStyles() {
+        TranslationScope scope = new TranslationScope(true,
+                java.util.Collections.singletonList(
+                        new TranslationScope.Rule("10", "Server", true, "missing-style")),
+                java.util.Collections.emptyList());
+        Config.Snapshot invalid = Config.read(new MemoryPrefs()
+                .put(Config.KEY_INCOMING_STYLES, IncomingPromptStyles.defaults().toJson())
+                .put(Config.KEY_TRANSLATION_SCOPE, scope.toJson()));
+        org.junit.Assert.assertNotNull(invalid.configError);
+    }
+
+    @Test
     public void defaultSendTestUsesTheButtonMatchingTheSelectedLanguage() {
         Map<String, String> prompts = new LinkedHashMap<>(LanguagePromptConfig.defaults());
         prompts.put("English", "English send prompt");
