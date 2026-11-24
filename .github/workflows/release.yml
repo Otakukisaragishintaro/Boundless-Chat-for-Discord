@@ -66,7 +66,7 @@ jobs:
       # Stable releases use main; prereleases use the selected branch or SHA.
       # Tags track release versions, so release/prerelease branches are no longer maintained.
       - name: Checkout source
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ steps.source.outputs.sha }}
           fetch-depth: 0
@@ -76,13 +76,13 @@ jobs:
         run: python3 .github/scripts/release_notes.py --check
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
         with:
           gradle-version: '9.6.0'
 
