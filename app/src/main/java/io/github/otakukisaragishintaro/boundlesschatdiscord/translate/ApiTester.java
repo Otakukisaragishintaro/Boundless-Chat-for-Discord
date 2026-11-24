@@ -47,8 +47,12 @@ public final class ApiTester {
             if (failure instanceof TranslationException) {
                 TranslationException error = (TranslationException) failure;
                 Throwable cause = error.getCause();
-                String body = error instanceof JsonApiEngine.UpstreamHttpException
-                        ? ((JsonApiEngine.UpstreamHttpException) error).responseBody : null;
+                Throwable upstream = error;
+                while (upstream != null && !(upstream instanceof JsonApiEngine.UpstreamHttpException)) {
+                    upstream = upstream.getCause();
+                }
+                String body = upstream instanceof JsonApiEngine.UpstreamHttpException
+                        ? ((JsonApiEngine.UpstreamHttpException) upstream).responseBody : null;
                 JsonApiEngine.DiagnosticException diagnostic =
                         error instanceof JsonApiEngine.DiagnosticException
                                 ? (JsonApiEngine.DiagnosticException) error : null;
