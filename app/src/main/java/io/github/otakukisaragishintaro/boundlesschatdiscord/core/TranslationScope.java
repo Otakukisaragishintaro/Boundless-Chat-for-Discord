@@ -218,6 +218,13 @@ public final class TranslationScope {
         return defaultTranslate;
     }
 
+    public boolean usesPromptStyle(String styleId) {
+        if (styleId == null) return false;
+        for (Rule rule : servers) if (styleId.equals(rule.promptStyleId)) return true;
+        for (Rule rule : channels) if (styleId.equals(rule.promptStyleId)) return true;
+        return false;
+    }
+
     /** Compare matching policy only: labels and rule order are display/serialization details. */
     public boolean sameMatchingPolicy(TranslationScope other) {
         return other != null && defaultTranslate == other.defaultTranslate
