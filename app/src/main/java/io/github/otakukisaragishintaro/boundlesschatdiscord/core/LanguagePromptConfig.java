@@ -6,6 +6,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +50,9 @@ public final class LanguagePromptConfig {
                 if (object.length() < LANGUAGES.size()) {
                     throw new IllegalArgumentException("语言提示词配置必须包含全部受支持语言");
                 }
-                for (String key : object.keySet()) {
+                Iterator<String> keys = object.keys();
+                while (keys.hasNext()) {
+                    String key = keys.next();
                     if (key == null || key.trim().isEmpty()) {
                         throw new IllegalArgumentException("语言提示词包含空语言键");
                     }

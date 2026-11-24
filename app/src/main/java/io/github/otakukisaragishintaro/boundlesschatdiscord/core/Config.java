@@ -443,9 +443,13 @@ public final class Config {
          * Incoming translation preferences and cache identity remain untouched.
          */
         public Snapshot forSendTranslation() {
-            OutboundButtonConfig button = outboundButtons.isEmpty()
-                    ? OutboundButtonConfig.defaults(sendTargetLang, DEF_SEND_SYSTEM_PROMPT).get(0)
-                    : outboundButtons.get(0);
+            for (OutboundButtonConfig button : outboundButtons) {
+                if (sendTargetLang.equals(button.targetLanguage)) {
+                    return forSendTranslation(button);
+                }
+            }
+            OutboundButtonConfig button = OutboundButtonConfig.defaults(
+                    sendTargetLang, DEF_SEND_SYSTEM_PROMPT).get(0);
             return forSendTranslation(button);
         }
 

@@ -60,6 +60,21 @@ public class LanguagePromptConfigTest {
     }
 
     @Test
+    public void defaultSendTestUsesTheButtonMatchingTheSelectedLanguage() {
+        Map<String, String> prompts = new LinkedHashMap<>(LanguagePromptConfig.defaults());
+        prompts.put("English", "English send prompt");
+        prompts.put("日本語", "Japanese send prompt");
+        java.util.List<OutboundButtonConfig> buttons = java.util.Arrays.asList(
+                new OutboundButtonConfig("en", "English", "English", Config.DEF_SEND_SYSTEM_PROMPT),
+                new OutboundButtonConfig("ja", "Japanese", "日本語", Config.DEF_SEND_SYSTEM_PROMPT));
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_SEND_TARGET_LANG, "日本語")
+                .put(Config.KEY_OUTBOUND_BUTTONS, OutboundButtonConfig.toJson(buttons))
+                .put(Config.KEY_OUTBOUND_PROMPTS, LanguagePromptConfig.toJson(prompts)));
+        assertEquals("Japanese send prompt", snapshot.forSendTranslation().systemPrompt);
+    }
+
+    @Test
     public void sendTranslationUsesLanguagePromptUnlessButtonHasExplicitOverride() {
         Map<String, String> prompts = new LinkedHashMap<>(LanguagePromptConfig.defaults());
         prompts.put("日本語", "Japanese send prompt");

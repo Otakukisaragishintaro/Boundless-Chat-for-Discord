@@ -1206,8 +1206,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         Toast.makeText(this, R.string.error_length_range, Toast.LENGTH_LONG).show();
                         return;
                     }
-                    systemPromptInput.setText(incomingPrompt.getText().toString());
-                    sendSystemPromptInput.setText(newButtonPrompt.getText().toString());
                     checkWrapperInput.setChecked(wrapper.isChecked());
                     stripOuterWrapperInput.setChecked(strip.isChecked());
                     checkSegmentMarkersInput.setChecked(segments.isChecked());
@@ -1220,7 +1218,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     minLengthPercentInput.setText(String.valueOf(min));
                     maxLengthPercentInput.setText(String.valueOf(max));
                     markDirty();
-                    saveSelectedTextFields(Arrays.asList(systemPromptInput, sendSystemPromptInput));
+                    saveSelectedTextFields(Arrays.asList(minLengthPercentInput, maxLengthPercentInput));
                     dialog.dismiss();
                 }));
         advancedSettingsDialog = dialog;
