@@ -56,8 +56,9 @@ public final class Protocols {
     /** 与包装标签配套的系统提示词追加说明；两者必须成对修改。 */
     public static final String WRAPPER_RULE =
             "Translate only the text between the <translate> and </translate> boundaries. "
-            + "Copy every <keepN/> marker exactly once, unchanged, and in the same order. "
-            + "Never translate, remove, duplicate, reorder, or alter these markers. Output only the translation.";
+            + "Treat tokens such as <keep1/> as literal protected markers, not text or markup to translate. "
+            + "Copy each exact marker unchanged, exactly once, and in the same order. "
+            + "Never add, remove, rename, duplicate, or reorder a marker. Output only the translation.";
 
     private static final String SUFFIX_CHAT_COMPLETIONS = "/chat/completions";
     private static final String SUFFIX_RESPONSES = "/responses";
