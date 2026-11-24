@@ -67,7 +67,7 @@ public final class TranslationCache {
                 } catch (Throwable failure) {
                     String message = failure.getMessage();
                     if (message == null || message.isEmpty()) message = "none";
-                    message = message.replace('\\n', ' ').replace('\\r', ' ');
+                    message = message.replace('\n', ' ').replace('\r', ' ');
                     if (message.length() > 180) message = message.substring(0, 180);
                     ProjectLog.warnOnce("cache.count.publish.failed",
                             "local translation cache count publish failed errorClass="
