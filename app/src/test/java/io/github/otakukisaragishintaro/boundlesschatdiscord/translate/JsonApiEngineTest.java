@@ -9,6 +9,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.MemoryPrefs;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
 
 import org.json.JSONArray;
