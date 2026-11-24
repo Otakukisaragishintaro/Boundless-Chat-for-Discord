@@ -210,6 +210,15 @@ public class JsonApiEngineTest {
     }
 
     @Test
+    public void styleBoundariesAlsoUseTheSingleKeepMarkerNamespace() throws Exception {
+        String source = "<x1>Visit <keep1/> for details</x1>";
+        DiscordTokenMarkers.Protection protection =
+                DiscordTokenMarkers.protect(source, true, true, true);
+        assertEquals("<keep2/>Visit <keep1/> for details<keep3/>", protection.text);
+        assertEquals(source, protection.restore(protection.text));
+    }
+
+    @Test
     public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() {
         Config.Snapshot defaults = Config.read(new MemoryPrefs());
         assertTrue(defaults.protectMentions);
