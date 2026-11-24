@@ -530,11 +530,33 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         TextView cacheTitle = new TextView(this);
         cacheTitle.setText(R.string.label_translation_cache);
         cacheBacking.addView(cacheTitle, matchWrap());
+        // Use a dedicated row instead of relying on Switch's compound-text rendering.
+        // This keeps the label and control measurable and visible on the first cold launch.
+        LinearLayout cacheEnabledRow = new LinearLayout(this);
+        cacheEnabledRow.setOrientation(LinearLayout.HORIZONTAL);
+        cacheEnabledRow.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        cacheEnabledRow.setMinimumHeight(dp(56));
+        cacheEnabledRow.setVisibility(View.VISIBLE);
+
+        TextView cacheEnabledLabel = new TextView(this);
+        cacheEnabledLabel.setText(R.string.label_cache_enabled);
+        cacheEnabledLabel.setTextSize(16f);
+        cacheEnabledLabel.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        cacheEnabledLabel.setMinimumHeight(dp(48));
+        cacheEnabledLabel.setClickable(true);
+        cacheEnabledLabel.setOnClickListener(v ->
+                cacheEnabledInput.setChecked(!cacheEnabledInput.isChecked()));
+        cacheEnabledRow.addView(cacheEnabledLabel, new LinearLayout.LayoutParams(
+                0, dp(48), 1f));
+
         cacheEnabledInput = new Switch(this);
-        cacheEnabledInput.setText(R.string.label_cache_enabled);
         cacheEnabledInput.setShowText(false);
         cacheEnabledInput.setMinimumHeight(dp(48));
-        cacheBacking.addView(cacheEnabledInput, matchWrap());
+        cacheEnabledInput.setMinimumWidth(dp(64));
+        cacheEnabledInput.setVisibility(View.VISIBLE);
+        cacheEnabledRow.addView(cacheEnabledInput, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, dp(48)));
+        cacheBacking.addView(cacheEnabledRow, matchWrap());
         cacheEnabledInput.setOnCheckedChangeListener((button, checked) -> {
             updateCacheControls();
             markDirty();
