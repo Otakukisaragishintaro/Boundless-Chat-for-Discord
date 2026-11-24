@@ -65,6 +65,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private static final String STATE_ACTIVE_SETTINGS_PAGE = "active_settings_page";
     private static final String PAGE_CACHE = "cache";
     private static final String PAGE_API = "api";
+    private static final String PAGE_EXPERIMENTAL = "experimental";
 
     private static final String[] TARGET_LANGUAGE_VALUES = {
             "简体中文", "繁體中文", "English", "日本語", "한국어", "Русский",
@@ -161,16 +162,20 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private TextView cacheEntryCountText;
     private Button cacheSettingsButton;
     private Button apiSettingsButton;
+    private Button experimentalSettingsButton;
+    private Switch experimentalChunkingInput;
     private Button cacheApplyButton;
     private Button apiApplyButton;
     private LinearLayout cacheBacking;
     private LinearLayout apiBacking;
+    private LinearLayout experimentalBacking;
     /** Main settings page stays attached so its scroll position and draft widgets are preserved. */
     @Nullable private FrameLayout navigationHost;
     @Nullable private ScrollView mainSettingsPage;
     @Nullable private View activeSubpageView;
     @Nullable private View cacheSettingsPage;
     @Nullable private View apiSettingsPage;
+    @Nullable private View experimentalSettingsPage;
     @Nullable private String activeSettingsPage;
     private Button clearCacheButton;
     private Switch streamingInput;
@@ -220,6 +225,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             openCacheSettings();
         } else if (PAGE_API.equals(restoredPage)) {
             openApiSettings();
+        } else if (PAGE_EXPERIMENTAL.equals(restoredPage)) {
+            openExperimentalSettings();
         }
     }
 
@@ -307,6 +314,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("check_placeholders", checkPlaceholdersInput.isChecked());
         draft.putBoolean("check_retained", checkRetainedMarkersInput.isChecked());
         draft.putBoolean("check_length", checkLengthInput.isChecked());
+        draft.putBoolean("experimental_long_message_chunking",
+                experimentalChunkingInput.isChecked());
         draft.putInt("protocol", protocolSpinner.getSelectedItemPosition());
         draft.putString("language", selectedTargetLanguage());
         draft.putString("send_language", selectedSendTargetLanguage());
@@ -347,6 +356,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkRetainedMarkersInput.setChecked(draft.getBoolean("check_retained",
                     Config.DEF_CHECK_RETAINED_MARKERS));
             checkLengthInput.setChecked(draft.getBoolean("check_length", Config.DEF_CHECK_LENGTH));
+            experimentalChunkingInput.setChecked(draft.getBoolean("experimental_long_message_chunking",
+                    Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING));
             String language = draft.getString("language");
             ensureTargetLanguageAvailable(language);
             targetLanguageSpinner.setSelection(targetLanguagePosition(language));
@@ -696,6 +707,27 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         apiSettingsButton.setText(R.string.menu_api_settings);
         apiSettingsButton.setOnClickListener(v -> openApiSettings());
         root.addView(apiSettingsButton, matchWrap());
+
+        // All experimental behavior is isolated behind one opt-in submenu.
+        experimentalBacking = new LinearLayout(this);
+        experimentalBacking.setOrientation(LinearLayout.VERTICAL);
+        experimentalChunkingInput = new Switch(this);
+        experimentalChunkingInput.setText(R.string.label_experimental_long_message_chunking);
+        experimentalChunkingInput.setShowText(false);
+        experimentalChunkingInput.setMinimumHeight(dp(48));
+        experimentalBacking.addView(experimentalChunkingInput, matchWrap());
+        TextView experimentalChunkingHint = new TextView(this);
+        experimentalChunkingHint.setTextSize(12f);
+        experimentalChunkingHint.setText(R.string.hint_experimental_long_message_chunking);
+        experimentalBacking.addView(experimentalChunkingHint, matchWrap());
+        experimentalChunkingInput.setOnCheckedChangeListener((button, checked) -> {
+            markDirty();
+            if (!loadingUi) saveOptionsOnly();
+        });
+        experimentalSettingsButton = new Button(this);
+        experimentalSettingsButton.setText(R.string.menu_experimental_features);
+        experimentalSettingsButton.setOnClickListener(v -> openExperimentalSettings());
+        root.addView(experimentalSettingsButton, matchWrap());
 
         TextView outboundTitle = new TextView(this);
         outboundTitle.setText(getString(R.string.label_outbound_section));
@@ -1371,6 +1403,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkPlaceholdersInput.setChecked(snapshot.checkPlaceholders);
             checkRetainedMarkersInput.setChecked(snapshot.checkRetainedMarkers);
             checkLengthInput.setChecked(snapshot.checkLength);
+            experimentalChunkingInput.setChecked(snapshot.experimentalLongMessageChunking);
             setTextOrPlaceholder(minLengthPercentInput, String.valueOf(snapshot.minLengthPercent),
                     String.valueOf(Config.DEF_MIN_LENGTH_PERCENT));
             setTextOrPlaceholder(maxLengthPercentInput, String.valueOf(snapshot.maxLengthPercent),
@@ -1399,6 +1432,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         showSettingsSubpage(PAGE_API, R.string.menu_api_settings, apiBacking);
     }
 
+    /** 所有实验性功能集中在此页面，且每项默认关闭。 */
+    private void openExperimentalSettings() {
+        if (persistedConfigInvalid) return;
+        showSettingsSubpage(PAGE_EXPERIMENTAL, R.string.menu_experimental_features,
+                experimentalBacking);
+    }
+
     /**
      * 将目标设置内容推入全屏页面层，而不是放进 AlertDialog。
      * 主设置页只隐藏、不销毁；子页面退出时原样恢复。
@@ -1410,7 +1450,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         // Build each submenu exactly once. Reusing its view prevents style margins from
         // accumulating and preserves the submenu's own scroll position when revisited.
-        View page = PAGE_CACHE.equals(pageKey) ? cacheSettingsPage : apiSettingsPage;
+        View page = PAGE_CACHE.equals(pageKey) ? cacheSettingsPage
+                : PAGE_API.equals(pageKey) ? apiSettingsPage : experimentalSettingsPage;
         if (page == null) {
             LinearLayout pageContent = new LinearLayout(this);
             pageContent.setOrientation(LinearLayout.VERTICAL);
@@ -1430,8 +1471,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             page = pageScroll;
             if (PAGE_CACHE.equals(pageKey)) {
                 cacheSettingsPage = page;
-            } else {
+            } else if (PAGE_API.equals(pageKey)) {
                 apiSettingsPage = page;
+            } else {
+                experimentalSettingsPage = page;
             }
         }
 
@@ -1840,6 +1883,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         sendTargetLanguageSpinner.setEnabled(formAvailable);
         sendTargetLanguageSpinner.setVisibility(View.GONE);
         if (manageOutboundButtonsButton != null) manageOutboundButtonsButton.setEnabled(formAvailable);
+        if (experimentalSettingsButton != null) experimentalSettingsButton.setEnabled(formAvailable);
+        if (experimentalChunkingInput != null) experimentalChunkingInput.setEnabled(formAvailable);
         if (advancedSettingsButton != null) advancedSettingsButton.setEnabled(formAvailable);
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
@@ -1912,6 +1957,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_CHECK_PLACEHOLDERS, checkPlaceholdersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_RETAINED_MARKERS, checkRetainedMarkersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_LENGTH, checkLengthInput.isChecked());
+        memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+                experimentalChunkingInput.isChecked());
         memoryPrefs.put(Config.KEY_MIN_LENGTH_PERCENT,
                 parseIntInput(minLengthPercentInput, Config.DEF_MIN_LENGTH_PERCENT));
         memoryPrefs.put(Config.KEY_MAX_LENGTH_PERCENT,
