@@ -5,6 +5,8 @@ import androidx.annotation.Nullable;
 import java.util.concurrent.Callable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.EnglishDetector;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
 
@@ -20,16 +22,25 @@ public final class ApiTester {
         public final String exceptionType;
         @Nullable public final String upstreamErrorBody;
         public final String detail;
+        public final String stage;
+        @Nullable public final String sourcePreview;
+        @Nullable public final String requestPreview;
+        @Nullable public final String translatedPreview;
 
         private Failure(TranslationException.Kind kind, TranslationException.Reason reason,
                         int httpStatus, String exceptionType, @Nullable String upstreamErrorBody,
-                        String detail) {
+                        String detail, String stage, @Nullable String sourcePreview,
+                        @Nullable String requestPreview, @Nullable String translatedPreview) {
             this.kind = kind;
             this.reason = reason;
             this.httpStatus = httpStatus;
             this.exceptionType = exceptionType;
             this.upstreamErrorBody = upstreamErrorBody;
             this.detail = detail == null ? "" : detail;
+            this.stage = stage == null ? "" : stage;
+            this.sourcePreview = sourcePreview;
+            this.requestPreview = requestPreview;
+            this.translatedPreview = translatedPreview;
         }
 
         private static Failure from(Throwable failure) {
@@ -38,19 +49,26 @@ public final class ApiTester {
                 Throwable cause = error.getCause();
                 String body = error instanceof JsonApiEngine.UpstreamHttpException
                         ? ((JsonApiEngine.UpstreamHttpException) error).responseBody : null;
+                JsonApiEngine.DiagnosticException diagnostic =
+                        error instanceof JsonApiEngine.DiagnosticException
+                                ? (JsonApiEngine.DiagnosticException) error : null;
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
                         (cause == null ? error : cause).getClass().getSimpleName(), body,
-                        error.reason() == TranslationException.Reason.TRANSLATION_INVALID
-                                ? safeValidationDetail(error.getMessage()) : "");
+                        safeValidationDetail(error.getMessage()),
+                        diagnostic == null ? "request_or_preflight" : diagnostic.stage,
+                        null, diagnostic == null ? null : diagnostic.requestPreview,
+                        diagnostic == null ? null : diagnostic.translatedPreview);
             }
             return new Failure(TranslationException.Kind.UNKNOWN,
                     TranslationException.Reason.UNKNOWN_FAILURE, 0,
-                    failure.getClass().getSimpleName(), null, "");
+                    failure.getClass().getSimpleName(), null, "",
+                    "request_or_preflight", null, null, null);
         }
 
         private static Failure cancelled(int httpStatus) {
             return new Failure(TranslationException.Kind.CANCELLED,
-                    TranslationException.Reason.CANCELLED, httpStatus, "TranslationException", null, "");
+                    TranslationException.Reason.CANCELLED, httpStatus, "TranslationException", null, "",
+                    "cancelled", null, null, null);
         }
     }
 
@@ -80,9 +98,15 @@ public final class ApiTester {
 
     /** Create before executor submission so cancellation also covers queued work. */
     public static Call newCall(Config.Snapshot cfg, TestKind testKind, String text) {
+        return newCall(cfg, testKind, text, "", "");
+    }
+
+    public static Call newCall(Config.Snapshot cfg, TestKind testKind, String text,
+                               String testGuildId, String testChannelId) {
         Config.Snapshot requestConfig = testKind == TestKind.SEND_TRANSLATION
                 ? cfg.forSendTranslation() : cfg;
-        return new Call(new JsonApiEngine(requestConfig), testKind, text, cfg);
+        return new Call(new JsonApiEngine(requestConfig), testKind, text, cfg,
+                testGuildId, testChannelId);
     }
 
     /** One-shot owner; page cancellation actively disconnects HTTP I/O. */
@@ -92,11 +116,15 @@ public final class ApiTester {
         private final String text;
         private final String protocol;
         private final boolean streaming;
+        private final Config.Snapshot sourceConfig;
+        private final String testGuildId;
+        private final String testChannelId;
         private boolean used;
         private boolean cancelled;
         @Nullable private Thread worker;
 
-        Call(JsonApiEngine engine, TestKind testKind, String text, Config.Snapshot cfg) {
+        Call(JsonApiEngine engine, TestKind testKind, String text, Config.Snapshot cfg,
+             String testGuildId, String testChannelId) {
             if (testKind != TestKind.CONNECTION && testKind != TestKind.TRANSLATION
                     && testKind != TestKind.SEND_TRANSLATION) {
                 throw new IllegalArgumentException("Network tests require a network test kind");
@@ -106,6 +134,9 @@ public final class ApiTester {
             this.text = testKind == TestKind.CONNECTION ? DEFAULT_TEST_TEXT : text;
             this.protocol = diagnosticProtocol(cfg.protocol);
             this.streaming = cfg.streaming;
+            this.sourceConfig = cfg;
+            this.testGuildId = testGuildId == null ? "" : testGuildId.trim();
+            this.testChannelId = testChannelId == null ? "" : testChannelId.trim();
         }
 
         @Override
@@ -127,12 +158,36 @@ public final class ApiTester {
             Result result;
             int responseStatus = 0;
             try {
-                JsonApiEngine.Exchange exchange = engine.execute(text,
-                        testKind == TestKind.TRANSLATION || testKind == TestKind.SEND_TRANSLATION);
-                responseStatus = exchange.httpStatus;
-                result = new Result(testKind, exchange.translated, elapsed(start), null);
+                if (testKind == TestKind.TRANSLATION) {
+                    enforceTestScope(sourceConfig.translationScope, testGuildId, testChannelId);
+                    EnglishDetector.Verdict verdict = EnglishDetector.evaluate(
+                            text, 1, sourceConfig.targetLang);
+                    if (!verdict.shouldTranslate) {
+                        throw new TranslationException(TranslationException.Kind.EMPTY,
+                                TranslationException.Reason.NO_TRANSLATABLE_TEXT,
+                                "语言检测跳过：" + verdict.reason.name());
+                    }
+                    // Same production entry point used by Scheduler.Engine: Discord token
+                    // protection, paragraph chunking, request/decoder handling, integrity
+                    // validation, and protected-token restoration all run here.
+                    result = new Result(testKind, engine.translate(text), elapsed(start), null);
+                } else if (testKind == TestKind.SEND_TRANSLATION) {
+                    result = new Result(testKind, engine.translate(text), elapsed(start), null);
+                } else {
+                    JsonApiEngine.Exchange exchange = engine.execute(text, false);
+                    responseStatus = exchange.httpStatus;
+                    result = new Result(testKind, exchange.translated, elapsed(start), null);
+                }
             } catch (Exception failure) {
-                result = new Result(testKind, null, elapsed(start), Failure.from(failure));
+                Failure diagnostic = Failure.from(failure);
+                if (diagnostic.sourcePreview == null) {
+                    diagnostic = new Failure(diagnostic.kind, diagnostic.reason,
+                            diagnostic.httpStatus, diagnostic.exceptionType,
+                            diagnostic.upstreamErrorBody, diagnostic.detail, diagnostic.stage,
+                            preview(text, 1000), diagnostic.requestPreview,
+                            diagnostic.translatedPreview);
+                }
+                result = new Result(testKind, null, elapsed(start), diagnostic);
             } finally {
                 synchronized (this) {
                     // Always release ownership, including Errors handled by the Future boundary.
@@ -155,6 +210,34 @@ public final class ApiTester {
             cancelled = true;
             if (worker != null) engine.cancel(worker);
         }
+    }
+
+    private static void enforceTestScope(TranslationScope scope, String guildId,
+                                          String channelId) throws TranslationException {
+        if (!scope.channels.isEmpty() && !TranslationScope.isValidId(channelId)) {
+            throw new TranslationException(TranslationException.Kind.CONFIG,
+                    TranslationException.Reason.SCOPE_CONTEXT_REQUIRED,
+                    "此翻译范围包含频道规则，请填写测试频道 ID。");
+        }
+        if (!scope.servers.isEmpty() && !TranslationScope.isValidId(guildId)) {
+            throw new TranslationException(TranslationException.Kind.CONFIG,
+                    TranslationException.Reason.SCOPE_CONTEXT_REQUIRED,
+                    "此翻译范围包含服务器规则，请填写测试服务器 ID。");
+        }
+        String effectiveChannel = TranslationScope.isValidId(channelId) ? channelId : "1";
+        String effectiveGuild = TranslationScope.isValidId(guildId) ? guildId : null;
+        if (!scope.allows(effectiveGuild, effectiveChannel)) {
+            throw new TranslationException(TranslationException.Kind.CONFIG,
+                    TranslationException.Reason.SCOPE_DENIED,
+                    "当前测试服务器/频道被翻译范围规则排除。");
+        }
+    }
+
+    private static String preview(String value, int max) {
+        if (value == null) return null;
+        String safe = value.replace("\\r", "\\\\r").replace("\\n", "\\\\n")
+                .replace("\\t", "\\\\t");
+        return safe.length() <= max ? safe : safe.substring(0, max) + "…";
     }
 
     /** Offline check consumes the same configuration validation, without network I/O. */
