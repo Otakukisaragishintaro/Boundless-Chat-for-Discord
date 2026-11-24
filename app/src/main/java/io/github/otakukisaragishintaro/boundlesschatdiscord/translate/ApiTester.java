@@ -30,6 +30,13 @@ public final class ApiTester {
 
         private Failure(TranslationException.Kind kind, TranslationException.Reason reason,
                         int httpStatus, String exceptionType, @Nullable String upstreamErrorBody,
+                        String detail) {
+            this(kind, reason, httpStatus, exceptionType, upstreamErrorBody,
+                    detail, "", null, null, null);
+        }
+
+        private Failure(TranslationException.Kind kind, TranslationException.Reason reason,
+                        int httpStatus, String exceptionType, @Nullable String upstreamErrorBody,
                         String detail, String stage, @Nullable String sourcePreview,
                         @Nullable String requestPreview, @Nullable String translatedPreview) {
             this.kind = kind;
@@ -63,7 +70,7 @@ public final class ApiTester {
                                 || error.reason() == TranslationException.Reason.SCOPE_DENIED
                                 ? "scope_filter"
                         : error.reason() == TranslationException.Reason.NO_TRANSLATABLE_TEXT
-                                ? "language_detection" : "request_or_preflight";
+                                ? "language_detection" : "";
                 boolean showDetail = error.reason() == TranslationException.Reason.TRANSLATION_INVALID
                         || error.reason() == TranslationException.Reason.NO_TRANSLATABLE_TEXT
                         || error.reason() == TranslationException.Reason.SCOPE_CONTEXT_REQUIRED
