@@ -7,7 +7,6 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProviderMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments;
@@ -376,7 +375,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
     /** Sends exactly once and retains the decoded response status for post-request validation. */
     private Http.Response requestOnce(String text, Http.Request request, Http.Headers headers)
             throws Exception {
-        // 1) 单一输入按协议构造请求体；内部节点标记已在 API 边界前编码为专用占位符。
+        // 1) 单一输入按协议构造请求体；保留节点统一使用 <keepN/> 标记。
         boolean sse = cfg.streaming;
         String systemPrompt;
         if (cfg.systemPrompt.contains("{{target_language}}")) {
@@ -386,9 +385,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         } else {
             systemPrompt = cfg.systemPrompt;
         }
-        ProviderMarkers.Protection protection =
-                ProviderMarkers.protect(text, cfg.protectChannelsEmojis);
-        String body = Protocols.requestBody(cfg.protocol, protection.text, systemPrompt, cfg.model,
+        String body = Protocols.requestBody(cfg.protocol, text, systemPrompt, cfg.model,
                 sse);
         buildHeaders(headers);
 
@@ -404,7 +401,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         }
 
         // Successful HTTP bodies have already passed the selected protocol decoder.
-        return new Http.Response(resp.status, protection.restore(resp.body));
+        return resp;
     }
 
     /**
