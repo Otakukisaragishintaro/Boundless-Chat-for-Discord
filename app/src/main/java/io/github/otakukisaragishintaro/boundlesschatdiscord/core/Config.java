@@ -77,6 +77,8 @@ public final class Config {
     /** 是否对支持的协议使用 SSE 流式请求。 */
     public static final String KEY_STREAMING = "streaming_enabled";
     public static final boolean DEF_STREAMING = true;
+    public static final String KEY_PROTECTION_PROMPT_ENABLED = "protection_prompt_enabled";
+    public static final boolean DEF_PROTECTION_PROMPT_ENABLED = true;
 
     /** OpenAI 兼容协议：{@code POST /v1/chat/completions}，译文取 {@code choices.0.message.content}。 */
     public static final String PROTOCOL_OPENAI_COMPATIBLE = "openai-compatible";
@@ -208,6 +210,7 @@ public final class Config {
         public final String protocol;
         /** 是否对支持的协议使用 SSE 流式请求。 */
         public final boolean streaming;
+        public final boolean protectionPromptEnabled;
         /** 配置读取失败原因；非 null 时不得用于请求、填充设置表单、保存或同步。 */
         public final String configError;
         public final int timeoutMs;
@@ -257,6 +260,8 @@ public final class Config {
                     outboundButtonsJson, sendTargetLang, DEF_SEND_SYSTEM_PROMPT);
             protocol = readProtocol(p);
             streaming = readBoolean(p, KEY_STREAMING, DEF_STREAMING);
+            protectionPromptEnabled = readBoolean(p, KEY_PROTECTION_PROMPT_ENABLED,
+                    DEF_PROTECTION_PROMPT_ENABLED);
             timeoutMs = positiveInt(p, KEY_TIMEOUT_MS, DEF_TIMEOUT_MS);
             maxConcurrency = positiveInt(p, KEY_MAX_CONCURRENCY, DEF_MAX_CONCURRENCY);
             checkWrapper = readBoolean(p, KEY_CHECK_WRAPPER, DEF_CHECK_WRAPPER);
@@ -304,6 +309,7 @@ public final class Config {
                     DEF_SEND_TARGET_LANG, DEF_SEND_SYSTEM_PROMPT);
             protocol = DEF_PROTOCOL;
             streaming = DEF_STREAMING;
+            protectionPromptEnabled = DEF_PROTECTION_PROMPT_ENABLED;
             timeoutMs = DEF_TIMEOUT_MS;
             maxConcurrency = DEF_MAX_CONCURRENCY;
             checkWrapper = DEF_CHECK_WRAPPER;
@@ -411,7 +417,8 @@ public final class Config {
          */
         public String version() {
             return encode(apiUrl) + encode(model) + encode(targetLang) + encode(protocol)
-                    + encode(Boolean.toString(streaming)) + encode(incomingPromptsJson)
+                    + encode(Boolean.toString(streaming))
+                    + encode(Boolean.toString(protectionPromptEnabled)) + encode(incomingPromptsJson)
                     + encode(outboundPromptsJson) + encode(systemPrompt) + encode(sendSystemPrompt)
                     + encode(outboundButtonsJson)
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
@@ -490,6 +497,7 @@ public final class Config {
             outboundPrompts = source.outboundPrompts;
             protocol = source.protocol;
             streaming = source.streaming;
+            protectionPromptEnabled = source.protectionPromptEnabled;
             configError = source.configError;
             timeoutMs = source.timeoutMs;
             maxConcurrency = source.maxConcurrency;
