@@ -55,6 +55,22 @@ public final class JsonApiEngine implements Scheduler.Engine {
     }
 
     /** Decoded exchange metadata stays with the single request owner, including late cancellation. */
+    /** Carries bounded failure context to the settings test without changing error classification. */
+    static final class DiagnosticException extends TranslationException {
+        final String stage;
+        final String requestPreview;
+        final String translatedPreview;
+
+        DiagnosticException(TranslationException original, String stage,
+                            String requestText, String translatedText) {
+            super(original.kind(), original.reason(), original.getMessage(),
+                    original.httpStatus(), original);
+            this.stage = stage;
+            this.requestPreview = safeDiagnosticPreview(requestText, 1000);
+            this.translatedPreview = safeDiagnosticPreview(translatedText, 1000);
+        }
+    }
+
     static final class Exchange {
         final String translated;
         final int httpStatus;
@@ -291,6 +307,14 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         + " translatedChars=" + codePointLength(diagnosticTranslated)
                         + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                         + " detail=" + detail);
+                if (!(e instanceof DiagnosticException)) {
+                    TranslationException classified = e instanceof TranslationException
+                            ? (TranslationException) e
+                            : new TranslationException(TranslationException.Kind.UNKNOWN,
+                                    TranslationException.Reason.UNKNOWN_FAILURE,
+                                    e.getClass().getSimpleName(), 0, e);
+                    throw new DiagnosticException(classified, failureStage, text, diagnosticTranslated);
+                }
             }
             throw e;
         } finally {
