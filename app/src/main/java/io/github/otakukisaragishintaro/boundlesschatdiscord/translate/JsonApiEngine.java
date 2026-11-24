@@ -115,7 +115,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         if (paragraphs.size() <= 1) {
             ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
                     + " sourceChars=" + requestText.length());
-            return protection.restore(execute(requestText, true, logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics, !logFailureDiagnostics).translated);
         }
 
         ParagraphGroups groups = groupParagraphs(paragraphs, separators,
@@ -124,7 +124,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             ProjectLog.info("translation.chunking skipped reason=paragraphs_fit_one_request"
                     + " sourceChars=" + requestText.length()
                     + " paragraphs=" + paragraphs.size());
-            return protection.restore(execute(requestText, true, logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics, !logFailureDiagnostics).translated);
         }
 
         StringBuilder combined = new StringBuilder(requestText.length());
