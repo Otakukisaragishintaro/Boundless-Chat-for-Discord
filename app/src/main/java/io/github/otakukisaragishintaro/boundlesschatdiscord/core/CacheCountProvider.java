@@ -7,6 +7,9 @@ import android.content.SharedPreferences;
 import android.database.Cursor;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Binder;
+import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageManager;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -83,9 +86,19 @@ public final class CacheCountProvider extends ContentProvider {
     }
 
     private boolean isDiscordCaller() {
+        // getCallingPackage() may be unavailable for some ContentProvider.call() paths.
+        // Compare the Binder caller UID with the UID assigned to the installed Discord app.
+        // The manifest declares <queries><package android:name="com.discord" /></queries>
+        // so package visibility does not hide this package from PackageManager.
         try {
-            // Android verifies that this package name belongs to the Binder caller UID.
-            return ALLOWED_CALLER_PACKAGE.equals(getCallingPackage());
+            Context context = getContext();
+            if (context == null) return false;
+            int callerUid = Binder.getCallingUid();
+            ApplicationInfo discord = context.getPackageManager()
+                    .getApplicationInfo(ALLOWED_CALLER_PACKAGE, 0);
+            return callerUid == discord.uid;
+        } catch (PackageManager.NameNotFoundException | SecurityException ignored) {
+            return false;
         } catch (Throwable ignored) {
             return false;
         }
