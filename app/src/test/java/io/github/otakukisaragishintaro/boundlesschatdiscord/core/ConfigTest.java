@@ -364,4 +364,21 @@ public class ConfigTest {
         assertEquals("", s.extraHeaders);
         assertTrue(s.apiKey.isEmpty());
     }
+
+    @Test
+    public void experimentalLongMessageChunkingIsOptInAndVersioned() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        assertFalse(defaults.experimentalLongMessageChunking);
+        assertEquals(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+                defaults.experimentalLongMessageChunking);
+
+        Config.Snapshot enabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        assertTrue(enabled.experimentalLongMessageChunking);
+        assertNotEquals(defaults.version(), enabled.version());
+
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, "true"))
+                .configError != null);
+    }
 }
