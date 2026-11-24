@@ -223,7 +223,7 @@
 
 
     <string name="label_experimental_long_message_threshold">分段触发字数</string>
-    <string name="hint_experimental_long_message_threshold">当整条消息超过此字数时，才尝试按空行分段请求。范围：100–10000，默认 400。不会在单个段落内部强行切开。</string>
+    <string name="hint_experimental_long_message_threshold">留空使用默认值 400；允许范围 100–10000。超过该字数才尝试按空行分段，不会强行切开单个段落。</string>
     <string name="button_apply_experimental_threshold">应用触发字数</string>
     <string name="error_experimental_long_message_threshold">请输入 100 到 10000 之间的整数</string>
 
