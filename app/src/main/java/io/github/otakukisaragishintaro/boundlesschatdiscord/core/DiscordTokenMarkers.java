@@ -6,8 +6,8 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Shields Discord syntax and optionally Unicode emoji with the same <keepN/> markers
- * used by retained content nodes. Markers are restored after the shared integrity check.
+ * Shields Discord syntax, style boundaries, and optionally Unicode emoji with the same
+ * <keepN/> markers used by retained content nodes. Markers are restored after validation.
  */
 public final class DiscordTokenMarkers {
     private static final Pattern UNICODE_EMOJI = Pattern.compile(
@@ -18,7 +18,8 @@ public final class DiscordTokenMarkers {
             "(<(?:@!?[0-9]{15,22}|@&[0-9]{15,22})>|@(?:everyone|here)\\b)"
                     + "|(<#[0-9]{15,22}>|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>)"
                     + "|((?:https?://|www\\.)[^\\s<>]+)"
-                    + "|(" + UNICODE_EMOJI.pattern() + ")",
+                    + "|(" + UNICODE_EMOJI.pattern() + ")"
+                    + "|(</?x[1-9][0-9]*>)",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
 
@@ -116,7 +117,8 @@ public final class DiscordTokenMarkers {
         while (matcher.find()) {
             boolean selected = matcher.group(1) != null ? protectMentions
                     : matcher.group(2) != null ? protectChannelsAndEmojis
-                    : matcher.group(3) != null ? protectUrls : protectChannelsAndEmojis;
+                    : matcher.group(3) != null ? protectUrls
+                    : matcher.group(4) != null ? protectChannelsAndEmojis : true;
             if (selected) {
                 String marker = "<keep" + next++ + "/>";
                 markers.add(marker);
