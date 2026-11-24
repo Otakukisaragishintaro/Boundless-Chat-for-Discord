@@ -332,14 +332,21 @@ public final class ApiTester {
     /** Offline check consumes the same configuration validation, without network I/O. */
     public static Result selfCheck(Config.Snapshot cfg) {
         long start = System.nanoTime();
+        List<String> diagnostics = new ArrayList<>();
+        diagnostics.add("stage=offline_configuration_validation status=STARTED");
         ProjectLog.info("api.test.start test=CONFIGURATION protocol="
                 + diagnosticProtocol(cfg.protocol) + " streaming=" + cfg.streaming);
         Result result;
         try {
             JsonApiEngine.validateConfig(cfg);
-            result = new Result(TestKind.CONFIGURATION, null, elapsed(start), null);
+            diagnostics.add("stage=offline_configuration_validation status=SUCCESS network=NOT_USED");
+            result = new Result(TestKind.CONFIGURATION, null, elapsed(start), null, diagnostics);
         } catch (Exception failure) {
-            result = new Result(TestKind.CONFIGURATION, null, elapsed(start), Failure.from(failure));
+            Failure diagnostic = Failure.from(failure);
+            diagnostics.add("stage=offline_configuration_validation status=FAILED category="
+                    + diagnostic.kind + " reason=" + diagnostic.reason
+                    + " exception=" + diagnostic.exceptionType);
+            result = new Result(TestKind.CONFIGURATION, null, elapsed(start), diagnostic, diagnostics);
         }
         logResult(result);
         return result;
