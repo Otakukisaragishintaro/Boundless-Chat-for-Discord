@@ -264,7 +264,7 @@ public class ApiTestDiagnosticsTest {
     }
 
     @Test
-    public void connectionAcceptsWrapperPollutionAndPlaceholderButTranslationRejectsSameResponse()
+    public void connectionAcceptsWrapperPollutionButTranslationOnlyNormalizesTerminalBoundary()
             throws Exception {
         for (String protocol : PROTOCOLS) {
             for (boolean streaming : new boolean[]{false, true}) {
@@ -279,8 +279,10 @@ public class ApiTestDiagnosticsTest {
                     });
                     assertSuccess(harness.call(ApiTester.TestKind.CONNECTION, PRIVATE_INPUT),
                             ApiTester.TestKind.CONNECTION, null);
-                    if ("<translate>你好</translate>".equals(text)) {
-                        // One exact outer wrapper pair is normalized before validation.
+                    if ("<translate>你好</translate>".equals(text)
+                            || "你好</translate>".equals(text)) {
+                        // The exact outer pair and one unmatched terminal boundary are normalized.
+                        // Embedded/partial wrappers and unrelated placeholders remain invalid.
                         assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, "你好");
                     } else {
