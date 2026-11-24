@@ -50,6 +50,69 @@ public final class RetainedNodeMarkers {
         return EXACT.matcher(text).replaceAll(" ");
     }
 
+    private static final Pattern PROVIDER_MARKER = Pattern.compile("⟦BC_KEEP_([1-9][0-9]*)⟧");
+    private static final Pattern PROVIDER_NAMESPACE = Pattern.compile("(?i)BC[_ -]?KEEP");
+
+    /**
+     * Per-request representation sent to translation providers. Internal <keepN/> anchors
+     * never cross the API boundary; they are encoded as non-tag Unicode-bracket tokens and
+     * restored only after exact order and multiplicity validation.
+     */
+    public static final class ProviderMarkers {
+        public final String text;
+        private final List<String> providerMarkers;
+        private final List<String> internalMarkers;
+
+        private ProviderMarkers(String text, List<String> providerMarkers,
+                                List<String> internalMarkers) {
+            this.text = text;
+            this.providerMarkers = providerMarkers;
+            this.internalMarkers = internalMarkers;
+        }
+
+        /** Null means the provider changed, removed, duplicated, or leaked a reserved marker. */
+        public String restore(String translated) {
+            if (translated == null) return null;
+            Matcher matcher = PROVIDER_MARKER.matcher(translated);
+            List<String> actual = new ArrayList<>();
+            while (matcher.find()) actual.add(matcher.group());
+            String withoutValidMarkers = matcher.reset().replaceAll("");
+            if (!actual.equals(providerMarkers)
+                    || PROVIDER_NAMESPACE.matcher(withoutValidMarkers).find()
+                    || hasReservedPrefix(translated)) {
+                return null;
+            }
+            String restored = translated;
+            for (int i = 0; i < providerMarkers.size(); i++) {
+                restored = restored.replace(providerMarkers.get(i), internalMarkers.get(i));
+            }
+            return restored;
+        }
+    }
+
+    /**
+     * Encode every internal retained-node anchor before the request is sent to a provider.
+     * A malformed internal marker or collision with the provider-only namespace is rejected.
+     */
+    public static ProviderMarkers encodeForProvider(String source) {
+        if (source == null) return null;
+        if (read(source) == null || PROVIDER_NAMESPACE.matcher(source).find()) return null;
+
+        Matcher matcher = EXACT.matcher(source);
+        StringBuffer encoded = new StringBuffer(source.length());
+        List<String> providerMarkers = new ArrayList<>();
+        List<String> internalMarkers = new ArrayList<>();
+        int index = 1;
+        while (matcher.find()) {
+            String providerMarker = "⟦BC_KEEP_" + index++ + "⟧";
+            providerMarkers.add(providerMarker);
+            internalMarkers.add(matcher.group());
+            matcher.appendReplacement(encoded, Matcher.quoteReplacement(providerMarker));
+        }
+        matcher.appendTail(encoded);
+        return new ProviderMarkers(encoded.toString(), providerMarkers, internalMarkers);
+    }
+
     public static boolean matchesSource(String translated, String source) {
         List<String> expected = read(source);
         return expected != null && matchesExpected(translated, expected);
