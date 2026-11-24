@@ -165,6 +165,10 @@ public final class Config {
     // ---- Experimental features (opt-in; disabled by default) ----
     public static final String KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING = "experimental_long_message_chunking";
     public static final boolean DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING = false;
+    public static final String KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD = "experimental_long_message_threshold";
+    public static final int DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD = 400;
+    public static final int MIN_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD = 100;
+    public static final int MAX_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD = 10000;
 
     private Config() {
     }
@@ -209,6 +213,7 @@ public final class Config {
         public final boolean checkRetainedMarkers;
         public final boolean checkLength;
         public final boolean experimentalLongMessageChunking;
+        public final int experimentalLongMessageThreshold;
         public final int minLengthPercent;
         public final int maxLengthPercent;
 
@@ -243,6 +248,7 @@ public final class Config {
             checkLength = readBoolean(p, KEY_CHECK_LENGTH, DEF_CHECK_LENGTH);
             experimentalLongMessageChunking = readBoolean(p, KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
                     DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
+            experimentalLongMessageThreshold = boundedExperimentalThreshold(p);
             minLengthPercent = boundedPercent(p, KEY_MIN_LENGTH_PERCENT, DEF_MIN_LENGTH_PERCENT);
             maxLengthPercent = boundedPercent(p, KEY_MAX_LENGTH_PERCENT, DEF_MAX_LENGTH_PERCENT);
             if (minLengthPercent > maxLengthPercent) {
@@ -280,6 +286,7 @@ public final class Config {
             checkRetainedMarkers = DEF_CHECK_RETAINED_MARKERS;
             checkLength = DEF_CHECK_LENGTH;
             experimentalLongMessageChunking = DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING;
+            experimentalLongMessageThreshold = DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD;
             minLengthPercent = DEF_MIN_LENGTH_PERCENT;
             maxLengthPercent = DEF_MAX_LENGTH_PERCENT;
             configError = error;
@@ -341,6 +348,21 @@ public final class Config {
             return value;
         }
 
+        private static int boundedExperimentalThreshold(SharedPreferences p) {
+            if (!p.contains(KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD)) {
+                return DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD;
+            }
+            int value = p.getInt(KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD,
+                    DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD);
+            if (value < MIN_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
+                    || value > MAX_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD) {
+                throw new IllegalArgumentException(KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
+                        + " 必须在 " + MIN_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD + " 到 "
+                        + MAX_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD + " 之间");
+            }
+            return value;
+        }
+
         private static int boundedPercent(SharedPreferences p, String key, int def) {
             if (!p.contains(key)) return def;
             int value = p.getInt(key, def);
@@ -365,6 +387,7 @@ public final class Config {
                     + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
                     + encode(Boolean.toString(checkRetainedMarkers)) + encode(Boolean.toString(checkLength))
                     + encode(Boolean.toString(experimentalLongMessageChunking))
+                    + encode(Integer.toString(experimentalLongMessageThreshold))
                     + encode(Integer.toString(minLengthPercent)) + encode(Integer.toString(maxLengthPercent))
                     + encode(configError == null ? "" : "invalid")
                     + encode(credentialFingerprint());
@@ -429,6 +452,7 @@ public final class Config {
             checkRetainedMarkers = source.checkRetainedMarkers;
             checkLength = source.checkLength;
             experimentalLongMessageChunking = source.experimentalLongMessageChunking;
+            experimentalLongMessageThreshold = source.experimentalLongMessageThreshold;
             minLengthPercent = source.minLengthPercent;
             maxLengthPercent = source.maxLengthPercent;
             outboundButtonsJson = source.outboundButtonsJson;
