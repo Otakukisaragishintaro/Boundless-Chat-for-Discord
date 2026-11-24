@@ -176,10 +176,16 @@ public final class JsonApiEngine implements Scheduler.Engine {
 
         StringBuilder current = new StringBuilder();
         int currentCount = 0;
+        int minimumIndependentGroup = Math.max(1, threshold / 2);
         for (int i = 0; i < paragraphs.size(); i++) {
             if (i > 0) {
                 String boundary = separators.get(i - 1);
-                if (current.length() >= Math.max(1, threshold)) {
+                String nextParagraph = paragraphs.get(i);
+                int candidateLength = current.length() + boundary.length() + nextParagraph.length();
+                // Do not strand a tiny leading paragraph. Split only after the current
+                // group is substantial and adding the next whole paragraph exceeds target.
+                if (current.length() >= minimumIndependentGroup
+                        && candidateLength > Math.max(1, threshold)) {
                     chunks.add(current.toString());
                     counts.add(currentCount);
                     boundaries.add(boundary);
@@ -199,7 +205,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         // continuation than an independent translation unit. Keep it with prior context.
         if (chunks.size() > 1
                 && chunks.get(chunks.size() - 1).codePointCount(
-                        0, chunks.get(chunks.size() - 1).length()) < Math.max(1, threshold)) {
+                        0, chunks.get(chunks.size() - 1).length()) < minimumIndependentGroup) {
             int last = chunks.size() - 1;
             String merged = chunks.get(last - 1) + boundaries.get(last - 1) + chunks.get(last);
             chunks.set(last - 1, merged);
