@@ -745,6 +745,9 @@ public class ApiTestDiagnosticsTest {
         assertEquals(cfg.streaming, request.getBoolean("stream"));
         String wrapped = Protocols.WRAPPER_OPEN + text + Protocols.WRAPPER_CLOSE;
         String prompt = Config.defaultSystemPromptFor(cfg.targetLang) + "\n\n" + Protocols.WRAPPER_RULE;
+        if (cfg.protectionPromptEnabled) {
+            prompt += "\n\n" + Protocols.protectionPromptFor(cfg.targetLang);
+        }
         if (RESPONSES.equals(cfg.protocol)) {
             assertEquals(wrapped, request.getString("input"));
             assertEquals(prompt, request.getString("instructions"));
