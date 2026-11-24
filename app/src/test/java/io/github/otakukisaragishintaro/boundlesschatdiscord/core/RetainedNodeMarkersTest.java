@@ -28,6 +28,8 @@ public class RetainedNodeMarkersTest {
         assertEquals("before⟦BC_KEEP_1⟧middle⟦BC_KEEP_2⟧after", encoded.text);
         assertFalse(encoded.text.contains("<keep"));
         assertEquals(source, encoded.restore(encoded.text));
+        assertNull(encoded.restore("beforemiddleafter"));
+        assertNull(encoded.restore("before⟦BC_KEEP_1⟧middle⟦BC_KEEP_1⟧after"));
         assertNull(encoded.restore("before<keep1/>middle<keep2/>after"));
         assertNull(encoded.restore("before⟦BC_KEEP_2⟧middle⟦BC_KEEP_1⟧after"));
         assertNull(encoded.restore("before⟦BC_KEEP_1middle⟦BC_KEEP_2⟧after"));
