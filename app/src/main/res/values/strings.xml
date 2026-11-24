@@ -56,7 +56,7 @@
     <string name="label_timeout">Timeout (ms)</string>
     <string name="label_concurrency">Maximum concurrent requests</string>
     <string name="label_test_text">Test text</string>
-    <string name="hint_test_text">Used by Test translation. This runs the Discord text detection, token protection, chunking, request, and response validation pipeline.</string>
+    <string name="hint_test_text">Used by Test translation. This runs the Discord text detection, token protection, chunking, request, and response validation pipeline. Diagnostics include input and provider response previews; check for sensitive content before sharing.</string>
     <string name="label_test_server_id">Test server ID (required by matching scope rules)</string>
     <string name="hint_test_server_id">Enter the numeric Discord server ID when server rules are configured.</string>
     <string name="label_test_channel_id">Test channel ID (required by matching scope rules)</string>
