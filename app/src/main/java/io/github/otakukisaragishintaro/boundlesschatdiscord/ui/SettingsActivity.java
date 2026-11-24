@@ -157,6 +157,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Switch checkSegmentMarkersInput;
     private Switch checkPlaceholdersInput;
     private Switch checkRetainedMarkersInput;
+    private Switch protectionPromptEnabledInput;
     private Switch checkLengthInput;
     private Switch protectMentionsInput;
     private Switch protectChannelsEmojisInput;
@@ -320,6 +321,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("cache_enabled", cacheEnabledInput.isChecked());
         draft.putString("cache_limit", cacheLimitInput.getText().toString());
         draft.putBoolean("streaming", streamingInput.isChecked());
+        draft.putBoolean("protection_prompt_enabled", protectionPromptEnabledInput.isChecked());
         draft.putBoolean("check_wrapper", checkWrapperInput.isChecked());
         draft.putBoolean("strip_outer_wrapper", stripOuterWrapperInput.isChecked());
         draft.putBoolean("check_segments", checkSegmentMarkersInput.isChecked());
@@ -363,6 +365,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             cacheLimitInput.setText(draft.getString("cache_limit", String.valueOf(Config.DEF_CACHE_LIMIT)));
             protocolSpinner.setSelection(draft.getInt("protocol"));
             streamingInput.setChecked(draft.getBoolean("streaming"));
+            protectionPromptEnabledInput.setChecked(draft.getBoolean("protection_prompt_enabled",
+                    Config.DEF_PROTECTION_PROMPT_ENABLED));
             checkWrapperInput.setChecked(draft.getBoolean("check_wrapper", Config.DEF_CHECK_WRAPPER));
             stripOuterWrapperInput.setChecked(draft.getBoolean("strip_outer_wrapper",
                     Config.DEF_STRIP_OUTER_WRAPPER));
@@ -813,6 +817,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 getString(R.string.label_incoming_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        protectionPromptEnabledInput = addValidationSwitch(advancedBacking,
+                "启用必要保护提示词（默认开启）", Config.DEF_PROTECTION_PROMPT_ENABLED);
         sendSystemPromptInput = addField(advancedBacking,
                 getString(R.string.label_new_outbound_prompt),
                 getString(R.string.hint_default_outbound_prompt),
@@ -1026,7 +1032,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         TextView explanation = new TextView(this);
         explanation.setTextSize(12f);
-        explanation.setText("默认提示词默认隐藏。展开后可以编辑当前语言；切换语言或翻译方向时会保留本次对话中的修改。发送按钮若单独设置了自定义提示词，会优先使用按钮专属提示词；恢复默认后才读取这里的语言提示词。");
+        explanation.setText("普通提示词与必要保护提示词完全分开。普通提示词可编辑；必要保护提示词由程序按当前语言生成，只读查看。必要保护提示词是否发送由高级设置中的独立开关控制，默认开启。切换语言或翻译方向时会保留本次对话中的修改。发送按钮若单独设置了自定义提示词，会优先使用按钮专属提示词。");
         form.addView(explanation, matchWrap());
 
         Button togglePrompt = new Button(this);
@@ -1044,6 +1050,16 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         promptSection.addView(resetPrompt, matchWrap());
         promptSection.setVisibility(View.GONE);
         form.addView(promptSection, matchWrap());
+
+        Button toggleProtectionPrompt = new Button(this);
+        toggleProtectionPrompt.setText("显示当前语言的必要保护提示词");
+        form.addView(toggleProtectionPrompt, matchWrap());
+        TextView protectionPromptPreview = new TextView(this);
+        protectionPromptPreview.setTextSize(13f);
+        protectionPromptPreview.setTextIsSelectable(true);
+        protectionPromptPreview.setPadding(dp(8), dp(8), dp(8), dp(8));
+        protectionPromptPreview.setVisibility(View.GONE);
+        form.addView(protectionPromptPreview, matchWrap());
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
 
@@ -1072,6 +1088,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             currentOutbound[0] = direction.getSelectedItemPosition() == 1;
             Map<String, String> selected = currentOutbound[0] ? outboundDraft : incomingDraft;
             prompt.setText(selected.get(currentLanguage[0]));
+            protectionPromptPreview.setText(Protocols.protectionPromptFor(currentLanguage[0]));
             promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
             togglePrompt.setText(expanded[0] ? "隐藏当前语言提示词" : "显示当前语言提示词");
         };
@@ -1093,6 +1110,13 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             expanded[0] = !expanded[0];
             promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
             togglePrompt.setText(expanded[0] ? "隐藏当前语言提示词" : "显示当前语言提示词");
+        });
+        final boolean[] protectionExpanded = {false};
+        toggleProtectionPrompt.setOnClickListener(v -> {
+            protectionExpanded[0] = !protectionExpanded[0];
+            protectionPromptPreview.setVisibility(protectionExpanded[0] ? View.VISIBLE : View.GONE);
+            toggleProtectionPrompt.setText(protectionExpanded[0]
+                    ? "隐藏当前语言的必要保护提示词" : "显示当前语言的必要保护提示词");
         });
         resetPrompt.setOnClickListener(v -> {
             prompt.setText(LanguagePromptConfig.defaultPrompt(currentLanguage[0]));
@@ -1139,7 +1163,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         TextView promptProtectionHint = new TextView(this);
         promptProtectionHint.setTextSize(12f);
-        promptProtectionHint.setText("每种受支持语言都有独立的接收消息和发送消息提示词。请使用主页面的“管理语言提示词”入口编辑；默认提示词默认收起，可单独展开查看。保护标记及必要完整性规则由程序独立管理，不属于用户可编辑提示词。");
+        promptProtectionHint.setText("普通提示词与必要保护提示词分开管理。普通提示词可按语言编辑；必要保护提示词按目标语言单独生成，可在“管理语言提示词”中展开只读查看，并由下面的独立开关控制是否随请求发送。关闭此开关不会关闭程序对内部保护标记的强制完整性检查。");
         form.addView(promptProtectionHint, matchWrap());
 
         TextView filterTitle = new TextView(this);
@@ -1152,6 +1176,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         filterHint.setText(getString(R.string.hint_translation_integrity));
         form.addView(filterHint, matchWrap());
 
+        Switch protectionPrompt = addDialogSwitch(form,
+                "启用必要保护提示词（默认开启）", protectionPromptEnabledInput.isChecked());
         Switch wrapper = addDialogSwitch(form, getString(R.string.validation_check_wrapper),
                 checkWrapperInput.isChecked());
         Switch strip = addDialogSwitch(form,
@@ -1210,6 +1236,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         Toast.makeText(this, R.string.error_length_range, Toast.LENGTH_LONG).show();
                         return;
                     }
+                    protectionPromptEnabledInput.setChecked(protectionPrompt.isChecked());
                     checkWrapperInput.setChecked(wrapper.isChecked());
                     stripOuterWrapperInput.setChecked(strip.isChecked());
                     checkSegmentMarkersInput.setChecked(segments.isChecked());
@@ -1488,6 +1515,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeSummary.setText("");
             loggingInput.setChecked(false);
             streamingInput.setChecked(false);
+            protectionPromptEnabledInput.setChecked(Config.DEF_PROTECTION_PROMPT_ENABLED);
             checkWrapperInput.setChecked(Config.DEF_CHECK_WRAPPER);
             stripOuterWrapperInput.setChecked(Config.DEF_STRIP_OUTER_WRAPPER);
             checkSegmentMarkersInput.setChecked(Config.DEF_CHECK_SEGMENT_MARKERS);
@@ -1581,6 +1609,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             updateCacheControls();
             protocolSpinner.setSelection(positionOf(snapshot.protocol));
             streamingInput.setChecked(snapshot.streaming);
+            protectionPromptEnabledInput.setChecked(snapshot.protectionPromptEnabled);
             updateStreamingAvailability();
             setTextOrPlaceholder(urlInput, snapshot.apiUrl, Config.DEF_API_URL);
             setTextOrPlaceholder(keyInput, snapshot.apiKey, Config.DEF_API_KEY);
@@ -2082,6 +2111,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (cacheSettingsButton != null) cacheSettingsButton.setEnabled(formAvailable);
         if (apiSettingsButton != null) apiSettingsButton.setEnabled(formAvailable);
         clearCacheButton.setEnabled(formAvailable && remotePrefs != null);
+        protectionPromptEnabledInput.setEnabled(formAvailable);
         checkWrapperInput.setEnabled(formAvailable);
         stripOuterWrapperInput.setEnabled(formAvailable);
         checkSegmentMarkersInput.setEnabled(formAvailable);
@@ -2150,6 +2180,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_PROTOCOL,
                 protocolAt(protocolSpinner.getSelectedItemPosition()));
         memoryPrefs.put(Config.KEY_STREAMING, streamingInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECTION_PROMPT_ENABLED,
+                protectionPromptEnabledInput.isChecked());
         memoryPrefs.put(Config.KEY_API_URL, textOrDefault(urlInput, Config.DEF_API_URL));
         memoryPrefs.put(Config.KEY_API_KEY, keyInput.getText().toString().trim());
         memoryPrefs.put(Config.KEY_MODEL, textOrDefault(modelInput, Config.DEF_MODEL));
