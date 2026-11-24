@@ -1029,14 +1029,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Spinner direction = new Spinner(this);
         ArrayAdapter<String> directionAdapter = new ArrayAdapter<>(this,
                 android.R.layout.simple_spinner_item,
-                new String[]{"接收消息翻译提示词", "发送消息翻译提示词"});
+                new String[]{"接收翻译风格", "发送消息翻译提示词"});
         directionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         direction.setAdapter(directionAdapter);
         form.addView(direction, matchWrap());
 
         TextView explanation = new TextView(this);
         explanation.setTextSize(12f);
-        explanation.setText("普通提示词与必要保护提示词完全分开。普通提示词可编辑；必要保护提示词由程序按当前语言生成，只读查看，并在这里通过独立开关控制是否发送（默认开启）。切换语言或翻译方向时会保留本次对话中的修改。发送按钮若单独设置了自定义提示词，会优先使用按钮专属提示词。");
+        explanation.setText("接收翻译支持多种风格：每种风格都包含 22 种语言各自的提示词，每种语言可独立指定全局默认风格。服务器和频道规则可以覆盖风格，频道优先于服务器。必要保护提示词独立于普通风格提示词。");
         form.addView(explanation, matchWrap());
 
         Switch protectionPromptToggle = new Switch(this);
@@ -1044,13 +1044,39 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         protectionPromptToggle.setShowText(false);
         protectionPromptToggle.setChecked(protectionPromptEnabledInput.isChecked());
         form.addView(protectionPromptToggle, matchWrap());
-        final boolean[] protectionPromptEnabledDraft = {
-                protectionPromptEnabledInput.isChecked()};
+        final boolean[] protectionPromptEnabledDraft = {protectionPromptEnabledInput.isChecked()};
         protectionPromptToggle.setOnCheckedChangeListener((button, checked) ->
                 protectionPromptEnabledDraft[0] = checked);
 
+        LinearLayout styleControls = new LinearLayout(this);
+        styleControls.setOrientation(LinearLayout.VERTICAL);
+        TextView styleLabel = new TextView(this);
+        styleLabel.setText("当前语言的接收翻译风格");
+        styleControls.addView(styleLabel, matchWrap());
+        Spinner styleSpinner = new Spinner(this);
+        styleControls.addView(styleSpinner, matchWrap());
+        LinearLayout styleActions = new LinearLayout(this);
+        styleActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button addStyle = new Button(this);
+        addStyle.setText("新增风格");
+        styleActions.addView(addStyle, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button renameStyle = new Button(this);
+        renameStyle.setText("重命名");
+        styleActions.addView(renameStyle, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button deleteStyle = new Button(this);
+        deleteStyle.setText("删除");
+        styleActions.addView(deleteStyle, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        styleControls.addView(styleActions, matchWrap());
+        Button setDefaultStyle = new Button(this);
+        setDefaultStyle.setText("设为此语言的全局默认风格");
+        styleControls.addView(setDefaultStyle, matchWrap());
+        form.addView(styleControls, matchWrap());
+
         Button togglePrompt = new Button(this);
-        togglePrompt.setText("显示当前语言提示词");
+        togglePrompt.setText("显示当前提示词");
         form.addView(togglePrompt, matchWrap());
         LinearLayout promptSection = new LinearLayout(this);
         promptSection.setOrientation(LinearLayout.VERTICAL);
@@ -1060,7 +1086,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         prompt.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
         promptSection.addView(prompt, matchWrap());
         Button resetPrompt = new Button(this);
-        resetPrompt.setText("恢复此语言的默认提示词");
+        resetPrompt.setText("恢复当前风格在此语言下的默认提示词");
         promptSection.addView(resetPrompt, matchWrap());
         promptSection.setVisibility(View.GONE);
         form.addView(promptSection, matchWrap());
@@ -1077,34 +1103,73 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
 
-        Map<String, String> incomingDraft = new LinkedHashMap<>(LanguagePromptConfig.read(
+        Map<String, String> incomingLegacy = new LinkedHashMap<>(LanguagePromptConfig.read(
                 systemPromptInput.getText().toString(), selectedTargetLanguage(), null, false));
         Map<String, String> outboundDraft = new LinkedHashMap<>(LanguagePromptConfig.read(
                 sendSystemPromptInput.getText().toString(), selectedSendTargetLanguage(), null, true));
+        final IncomingPromptStyles[] stylesDraft = {IncomingPromptStyles.read(
+                incomingStylesInput.getText().toString(), incomingLegacy)};
         int initialPosition = targetLanguagePosition(selectedTargetLanguage());
         if (initialPosition < 0 || initialPosition >= TARGET_LANGUAGE_VALUES.length) initialPosition = 0;
         language.setSelection(initialPosition);
         final String[] currentLanguage = {TARGET_LANGUAGE_VALUES[initialPosition]};
         final boolean[] currentOutbound = {false};
+        final String[] currentStyleId = {stylesDraft[0].defaultStyleId(currentLanguage[0])};
         final boolean[] expanded = {false};
+        final boolean[] loadingStyle = {false};
+        final List<String> styleIds = new ArrayList<>();
 
         Runnable saveCurrentPrompt = () -> {
             String value = prompt.getText().toString();
-            if (!value.trim().isEmpty()) {
-                (currentOutbound[0] ? outboundDraft : incomingDraft).put(currentLanguage[0], value);
+            if (value.trim().isEmpty()) return;
+            if (currentOutbound[0]) {
+                outboundDraft.put(currentLanguage[0], value);
+            } else {
+                stylesDraft[0] = stylesDraft[0].withPrompt(
+                        currentStyleId[0], currentLanguage[0], value);
             }
+        };
+        Runnable refreshStyleSpinner = () -> {
+            loadingStyle[0] = true;
+            styleIds.clear();
+            List<String> styleLabels = new ArrayList<>();
+            for (IncomingPromptStyles.Style style : stylesDraft[0].styles()) {
+                styleIds.add(style.id);
+                String suffix = style.id.equals(stylesDraft[0].defaultStyleId(currentLanguage[0]))
+                        ? "（本语言默认）" : "";
+                styleLabels.add(style.name + suffix);
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item, styleLabels);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            styleSpinner.setAdapter(adapter);
+            int selected = styleIds.indexOf(currentStyleId[0]);
+            styleSpinner.setSelection(Math.max(0, selected));
+            loadingStyle[0] = false;
         };
         Runnable loadSelectedPrompt = () -> {
             int position = language.getSelectedItemPosition();
             if (position < 0 || position >= TARGET_LANGUAGE_VALUES.length) return;
             saveCurrentPrompt.run();
-            currentLanguage[0] = TARGET_LANGUAGE_VALUES[position];
-            currentOutbound[0] = direction.getSelectedItemPosition() == 1;
-            Map<String, String> selected = currentOutbound[0] ? outboundDraft : incomingDraft;
-            prompt.setText(selected.get(currentLanguage[0]));
+            String selectedLanguage = TARGET_LANGUAGE_VALUES[position];
+            boolean outbound = direction.getSelectedItemPosition() == 1;
+            boolean languageChanged = !selectedLanguage.equals(currentLanguage[0]);
+            boolean directionChanged = outbound != currentOutbound[0];
+            currentLanguage[0] = selectedLanguage;
+            currentOutbound[0] = outbound;
+            if (languageChanged || directionChanged) {
+                currentStyleId[0] = stylesDraft[0].defaultStyleId(currentLanguage[0]);
+            }
+            styleControls.setVisibility(outbound ? View.GONE : View.VISIBLE);
+            if (outbound) {
+                prompt.setText(outboundDraft.get(currentLanguage[0]));
+            } else {
+                refreshStyleSpinner.run();
+                prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+            }
             protectionPromptPreview.setText(Protocols.protectionPromptFor(currentLanguage[0]));
             promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
-            togglePrompt.setText(expanded[0] ? "隐藏当前语言提示词" : "显示当前语言提示词");
+            togglePrompt.setText(expanded[0] ? "隐藏当前提示词" : "显示当前提示词");
         };
         language.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
@@ -1118,45 +1183,122 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             }
             @Override public void onNothingSelected(AdapterView<?> parent) { }
         });
+        styleSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (loadingStyle[0] || position < 0 || position >= styleIds.size()) return;
+                saveCurrentPrompt.run();
+                currentStyleId[0] = styleIds.get(position);
+                prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
         loadSelectedPrompt.run();
 
-        togglePrompt.setOnClickListener(v -> {
+        addStyle.setOnClickListener(view -> {
+            saveCurrentPrompt.run();
+            EditText name = new EditText(this);
+            name.setSingleLine(true);
+            name.setHint("例如：口语、正式、简洁");
+            new AlertDialog.Builder(this).setTitle("新增接收翻译风格").setView(name)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("创建", (dialog, which) -> {
+                        try {
+                            stylesDraft[0] = stylesDraft[0].addStyle(name.getText().toString());
+                            currentStyleId[0] = stylesDraft[0].styles()
+                                    .get(stylesDraft[0].styles().size() - 1).id;
+                            refreshStyleSpinner.run();
+                            prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+                            expanded[0] = true;
+                            promptSection.setVisibility(View.VISIBLE);
+                            togglePrompt.setText("隐藏当前提示词");
+                        } catch (IllegalArgumentException invalid) {
+                            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+        });
+        renameStyle.setOnClickListener(view -> {
+            saveCurrentPrompt.run();
+            EditText name = new EditText(this);
+            name.setSingleLine(true);
+            name.setText(stylesDraft[0].style(currentStyleId[0]).name);
+            new AlertDialog.Builder(this).setTitle("重命名翻译风格").setView(name)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("保存", (dialog, which) -> {
+                        try {
+                            stylesDraft[0] = stylesDraft[0].renameStyle(
+                                    currentStyleId[0], name.getText().toString());
+                            refreshStyleSpinner.run();
+                        } catch (IllegalArgumentException invalid) {
+                            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+        });
+        deleteStyle.setOnClickListener(view -> {
+            String deleting = currentStyleId[0];
+            if (scopeDraft.usesPromptStyle(deleting)) {
+                Toast.makeText(this, "此风格仍被服务器或频道规则使用，不能删除", Toast.LENGTH_LONG).show();
+                return;
+            }
+            new AlertDialog.Builder(this).setTitle("删除翻译风格")
+                    .setMessage("确定删除“" + stylesDraft[0].style(deleting).name + "”？")
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("删除", (dialog, which) -> {
+                        try {
+                            stylesDraft[0] = stylesDraft[0].deleteStyle(deleting);
+                            currentStyleId[0] = stylesDraft[0].defaultStyleId(currentLanguage[0]);
+                            refreshStyleSpinner.run();
+                            prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+                        } catch (IllegalArgumentException invalid) {
+                            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+        });
+        setDefaultStyle.setOnClickListener(view -> {
+            saveCurrentPrompt.run();
+            stylesDraft[0] = stylesDraft[0].setDefault(currentLanguage[0], currentStyleId[0]);
+            refreshStyleSpinner.run();
+            Toast.makeText(this, "已将当前风格设为此语言的全局默认", Toast.LENGTH_SHORT).show();
+        });
+        togglePrompt.setOnClickListener(view -> {
             expanded[0] = !expanded[0];
             promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
-            togglePrompt.setText(expanded[0] ? "隐藏当前语言提示词" : "显示当前语言提示词");
+            togglePrompt.setText(expanded[0] ? "隐藏当前提示词" : "显示当前提示词");
         });
         final boolean[] protectionExpanded = {false};
-        toggleProtectionPrompt.setOnClickListener(v -> {
+        toggleProtectionPrompt.setOnClickListener(view -> {
             protectionExpanded[0] = !protectionExpanded[0];
             protectionPromptPreview.setVisibility(protectionExpanded[0] ? View.VISIBLE : View.GONE);
             toggleProtectionPrompt.setText(protectionExpanded[0]
                     ? "隐藏当前语言的必要保护提示词" : "显示当前语言的必要保护提示词");
         });
-        resetPrompt.setOnClickListener(v -> {
-            prompt.setText(LanguagePromptConfig.defaultPrompt(currentLanguage[0]));
+        resetPrompt.setOnClickListener(view -> {
+            String value = currentOutbound[0] ? Config.DEF_SEND_SYSTEM_PROMPT
+                    : LanguagePromptConfig.defaultPrompt(currentLanguage[0]);
+            prompt.setText(value);
             expanded[0] = true;
             promptSection.setVisibility(View.VISIBLE);
-            togglePrompt.setText("隐藏当前语言提示词");
+            togglePrompt.setText("隐藏当前提示词");
         });
 
         AlertDialog dialog = new AlertDialog.Builder(this)
-                .setTitle("按语言独立设置提示词")
+                .setTitle("按语言管理接收风格与发送提示词")
                 .setView(scroll)
                 .setNegativeButton(android.R.string.cancel, null)
                 .setPositiveButton("保存", null)
                 .create();
         dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(v -> {
+                .setOnClickListener(view -> {
                     saveCurrentPrompt.run();
                     try {
-                        String incomingJson = LanguagePromptConfig.toJson(incomingDraft);
+                        String incomingJson = LanguagePromptConfig.toJson(stylesDraft[0].defaultPrompts());
                         String outboundJson = LanguagePromptConfig.toJson(outboundDraft);
                         systemPromptInput.setText(incomingJson);
+                        incomingStylesInput.setText(stylesDraft[0].toJson());
                         sendSystemPromptInput.setText(outboundJson);
-                        protectionPromptEnabledInput.setChecked(
-                                protectionPromptEnabledDraft[0]);
+                        protectionPromptEnabledInput.setChecked(protectionPromptEnabledDraft[0]);
                         markDirty();
-                        saveSelectedTextFields(Arrays.asList(systemPromptInput, sendSystemPromptInput));
+                        saveSelectedTextFields(Arrays.asList(
+                                systemPromptInput, incomingStylesInput, sendSystemPromptInput));
                         dialog.dismiss();
                     } catch (IllegalArgumentException invalid) {
                         Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
