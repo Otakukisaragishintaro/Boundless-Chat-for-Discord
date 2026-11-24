@@ -207,6 +207,18 @@ public class ConfigTest {
     }
 
     @Test
+    public void protectionPromptToggleIsStrictlyTypedAndChangesRequestVersion() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        Config.Snapshot disabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false));
+        assertTrue(defaults.protectionPromptEnabled);
+        assertFalse(disabled.protectionPromptEnabled);
+        assertNotEquals(defaults.version(), disabled.version());
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, "false")).configError != null);
+    }
+
+    @Test
     public void wrongTypedPreferenceMarksSnapshotInvalid() {
         Config.Snapshot s = Config.read(new MemoryPrefs()
                 .put(Config.KEY_API_URL, 17)
