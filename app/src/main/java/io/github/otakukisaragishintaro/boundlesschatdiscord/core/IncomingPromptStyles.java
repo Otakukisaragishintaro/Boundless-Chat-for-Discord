@@ -157,8 +157,9 @@ public final class IncomingPromptStyles {
         Style selected = style(styleId == null || styleId.trim().isEmpty()
                 ? defaultStyleId(target) : styleId);
         String prompt = selected.prompts.get(target);
-        if (prompt == null) throw new IllegalArgumentException("翻译风格不支持目标语言：" + target);
-        return prompt;
+        // Preserve the legacy behavior for older/custom target-language labels that are not
+        // among the 22 picker values; supported languages always use their stored style prompt.
+        return prompt == null ? LanguagePromptConfig.defaultPrompt(target) : prompt;
     }
 
     public Map<String, String> defaultPrompts() {
