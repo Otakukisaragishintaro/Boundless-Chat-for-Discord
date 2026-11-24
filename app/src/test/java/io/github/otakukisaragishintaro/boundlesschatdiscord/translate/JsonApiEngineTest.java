@@ -189,7 +189,7 @@ public class JsonApiEngineTest {
         String source = "Please contact <@403924274437685248> and visit "
                 + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
         FakeConnection connection = new FakeConnection(chatJson(
-                "请联系 <keep1/> 并访问 <keep2/> <keep3/> <keep4/>"));
+                "请联系 ⟦BC_KEEP_1⟧ 并访问 ⟦BC_KEEP_2⟧ ⟦BC_KEEP_3⟧ ⟦BC_KEEP_4⟧"));
         JsonApiEngine engine = new JsonApiEngine(
                 config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
 
@@ -199,13 +199,32 @@ public class JsonApiEngineTest {
 
         JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
         String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
-        for (int i = 1; i <= 4; i++) assertTrue(userContent.contains("<keep" + i + "/>"));
+        for (int i = 1; i <= 4; i++) assertTrue(userContent.contains("⟦BC_KEEP_" + i + "⟧"));
+        assertFalse(userContent.contains("<keep"));
         assertFalse(userContent.contains("403924274437685248"));
         assertFalse(userContent.contains("1570408648533082167"));
         assertFalse(userContent.contains("@everyone"));
         assertFalse(userContent.contains("github.com/YusufOzmen01"));
         assertTrue(connection.disconnected);
         assertTrue(active(engine).isEmpty());
+    }
+
+    @Test
+    public void providerCannotReturnLegacyKeepTagsInsteadOfOpaquePlaceholders() throws Exception {
+        FakeConnection connection = new FakeConnection(chatJson("translated <keep1/> text"));
+        JsonApiEngine engine = new JsonApiEngine(
+                config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
+        try {
+            engine.translate("source <keep1/> text");
+            fail("Legacy internal markers must never be accepted from the provider");
+        } catch (TranslationException expected) {
+            assertEquals(TranslationException.Reason.TRANSLATION_INVALID, expected.reason());
+        }
+        JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
+        String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
+        assertTrue(userContent.contains("⟦BC_KEEP_1⟧"));
+        assertFalse(userContent.contains("<keep1/>"));
+        assertTrue(connection.disconnected);
     }
 
     @Test
