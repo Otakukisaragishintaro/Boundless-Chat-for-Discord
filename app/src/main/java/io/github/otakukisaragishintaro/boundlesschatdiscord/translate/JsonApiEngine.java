@@ -114,7 +114,11 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     ProjectLog.warn("translation.chunking failed index=" + (i + 1)
                             + " errorClass=" + failure.getClass().getSimpleName()
                             + " errorKind=" + (failure instanceof TranslationException
-                                    ? ((TranslationException) failure).kind().name() : "none"));
+                                    ? ((TranslationException) failure).kind().name() : "none")
+                            + " errorReason=" + (failure instanceof TranslationException
+                                    ? ((TranslationException) failure).reason().name() : "UNKNOWN_FAILURE")
+                            + " httpStatus=" + (failure instanceof TranslationException
+                                    ? ((TranslationException) failure).httpStatus() : 0));
                     throw failure;
                 }
             }
@@ -141,6 +145,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         if (active.putIfAbsent(worker, request) != null) {
             throw new IllegalStateException("Worker already owns a request");
         }
+        String failureStage = "request_setup";
         try {
             // Registration precedes validation/body construction. A prior cancel interrupts
             // the worker; a concurrent cancel marks this handle before any connection exists.
@@ -149,7 +154,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 throw new TranslationException(TranslationException.Kind.EMPTY, "原文为空，无需翻译");
             }
             Http.Headers headers = validateConfig(cfg);
+            failureStage = "http_response_decode";
             Http.Response response = requestOnce(text, request, headers);
+            failureStage = "translation_validation";
             String translated = response.body;
             if (translated == null || translated.trim().isEmpty()) {
                 throw new TranslationException(TranslationException.Kind.EMPTY,
@@ -177,10 +184,31 @@ public final class JsonApiEngine implements Scheduler.Engine {
             return new Exchange(translated, response.status);
         } catch (Exception e) {
             request.checkCancelled();
+            String kind = e instanceof TranslationException
+                    ? ((TranslationException) e).kind().name() : "UNKNOWN";
+            String reason = e instanceof TranslationException
+                    ? ((TranslationException) e).reason().name() : "UNKNOWN_FAILURE";
+            int status = e instanceof TranslationException
+                    ? ((TranslationException) e).httpStatus() : 0;
+            String detail = e instanceof TranslationException
+                    ? safeDiagnosticDetail(e.getMessage()) : e.getClass().getSimpleName();
+            ProjectLog.warn("translation.failure stage=" + failureStage
+                    + " errorClass=" + e.getClass().getSimpleName()
+                    + " errorKind=" + kind
+                    + " errorReason=" + reason
+                    + " httpStatus=" + status
+                    + " detail=" + detail);
             throw e;
         } finally {
             active.remove(worker, request);
         }
+    }
+
+    /** Keep diagnostic details useful while preventing multiline or unbounded log output. */
+    private static String safeDiagnosticDetail(String message) {
+        if (message == null || message.isEmpty()) return "none";
+        String safe = message.replaceAll("[\\r\\n\\t]+", " ").trim();
+        return safe.length() <= 160 ? safe : safe.substring(0, 160);
     }
 
     /** Sends exactly once and retains the decoded response status for post-request validation. */
