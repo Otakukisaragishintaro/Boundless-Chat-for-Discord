@@ -25,6 +25,8 @@ import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
 import android.widget.ScrollView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
 import android.widget.TextView;
 
 import java.util.ArrayList;
@@ -37,6 +39,7 @@ import java.util.function.Consumer;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.R;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.IncomingPromptStyles;
 
 /** Edits an isolated draft; only Apply delivers it to the activity's existing save flow. */
 final class TranslationScopeEditor {
@@ -46,7 +49,12 @@ final class TranslationScopeEditor {
     /** The owner must dismiss the returned dialog in Activity.onStop(). */
     static Dialog show(Activity activity, TranslationScope initial,
                        Consumer<TranslationScope> onApply) {
-        ScopeDialog dialog = new ScopeDialog(activity, initial, onApply);
+        return show(activity, initial, IncomingPromptStyles.defaults(), onApply);
+    }
+
+    static Dialog show(Activity activity, TranslationScope initial, IncomingPromptStyles styles,
+                       Consumer<TranslationScope> onApply) {
+        ScopeDialog dialog = new ScopeDialog(activity, initial, styles, onApply);
         dialog.show();
         Window window = Objects.requireNonNull(dialog.getWindow());
         window.getDecorView().setPadding(0, 0, 0, 0);
@@ -67,6 +75,9 @@ final class TranslationScopeEditor {
             state.putString("id", editor.idField.getText().toString());
             state.putString("label", editor.labelField.getText().toString());
             state.putBoolean("translate", editor.actionField.getCheckedRadioButtonId() == editor.translateChoice);
+            int stylePosition = editor.promptStyleField.getSelectedItemPosition();
+            state.putString("prompt_style", stylePosition <= 0 ? null
+                    : editor.promptStyleIds.get(stylePosition - 1));
         }
         return state;
     }
@@ -83,12 +94,15 @@ final class TranslationScopeEditor {
             editor.editRule(server, original, state.getString("id", ""));
             editor.labelField.setText(state.getString("label", ""));
             editor.actionField.check(state.getBoolean("translate") ? editor.translateChoice : editor.otherChoice);
+            String styleId = state.getString("prompt_style");
+            editor.selectPromptStyle(styleId);
         }
     }
 
     private static final class ScopeDialog extends Dialog {
         private final Activity activity;
         private final Consumer<TranslationScope> onApply;
+        private final IncomingPromptStyles promptStyles;
         private final List<TranslationScope.Rule> servers;
         private final List<TranslationScope.Rule> channels;
         private final Set<Dialog> children = new LinkedHashSet<>();
@@ -110,12 +124,15 @@ final class TranslationScopeEditor {
         private RadioGroup actionField;
         private int translateChoice;
         private int otherChoice;
+        private Spinner promptStyleField;
+        private final List<String> promptStyleIds = new ArrayList<>();
 
-        ScopeDialog(Activity activity, TranslationScope initial,
+        ScopeDialog(Activity activity, TranslationScope initial, IncomingPromptStyles promptStyles,
                     Consumer<TranslationScope> onApply) {
             super(activity);
             this.activity = Objects.requireNonNull(activity);
             this.onApply = Objects.requireNonNull(onApply);
+            this.promptStyles = Objects.requireNonNull(promptStyles);
             Objects.requireNonNull(initial);
             servers = new ArrayList<>(initial.servers);
             channels = new ArrayList<>(initial.channels);
@@ -358,6 +375,26 @@ final class TranslationScopeEditor {
             boolean initialAction = original == null ? defaultTranslate : original.translate;
             actionGroup.check(initialAction ? translate.getId() : doNotTranslate.getId());
             form.addView(actionGroup);
+
+            form.addView(text("接收翻译风格覆盖（不选择则继承上级）", true));
+            Spinner styleSpinner = new Spinner(activity);
+            promptStyleField = styleSpinner;
+            List<String> styleLabels = new ArrayList<>();
+            styleLabels.add("继承上级 / 全局默认");
+            promptStyleIds.clear();
+            for (IncomingPromptStyles.Style style : promptStyles.styles()) {
+                promptStyleIds.add(style.id);
+                styleLabels.add(style.name);
+            }
+            ArrayAdapter<String> styleAdapter = new ArrayAdapter<>(activity,
+                    android.R.layout.simple_spinner_item, styleLabels);
+            styleAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            styleSpinner.setAdapter(styleAdapter);
+            int initialStyle = original == null || original.promptStyleId == null
+                    ? 0 : promptStyleIds.indexOf(original.promptStyleId) + 1;
+            styleSpinner.setSelection(Math.max(0, initialStyle));
+            form.addView(styleSpinner);
+
             TextView error = text("", true);
             error.setVisibility(View.GONE);
             error.setAccessibilityLiveRegion(View.ACCESSIBILITY_LIVE_REGION_POLITE);
@@ -426,8 +463,11 @@ final class TranslationScopeEditor {
                     error.setVisibility(View.VISIBLE);
                     return;
                 }
+                int stylePosition = styleSpinner.getSelectedItemPosition();
+                String styleId = stylePosition <= 0 || stylePosition > promptStyleIds.size()
+                        ? null : promptStyleIds.get(stylePosition - 1);
                 TranslationScope.Rule updated = new TranslationScope.Rule(id, label,
-                        checkedId == translate.getId());
+                        checkedId == translate.getId(), styleId);
                 if (original == null) {
                     rules.add(updated);
                 } else {
@@ -436,6 +476,12 @@ final class TranslationScopeEditor {
                 renderRules();
                 editor.dismiss();
             });
+        }
+
+        private void selectPromptStyle(String styleId) {
+            if (promptStyleField == null) return;
+            int position = styleId == null ? 0 : promptStyleIds.indexOf(styleId) + 1;
+            promptStyleField.setSelection(Math.max(0, position));
         }
 
         private LinearLayout column() {
