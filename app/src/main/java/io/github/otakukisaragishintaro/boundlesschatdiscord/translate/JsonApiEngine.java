@@ -8,7 +8,6 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMar
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.RetainedNodeMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
@@ -258,7 +257,6 @@ public final class JsonApiEngine implements Scheduler.Engine {
             throw new IllegalStateException("Worker already owns a request");
         }
         String failureStage = "request_setup";
-        String diagnosticRequest = text;
         String diagnosticTranslated = null;
         try {
             // Registration precedes validation/body construction. A prior cancel interrupts
@@ -267,17 +265,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
             if (text == null || text.trim().isEmpty()) {
                 throw new TranslationException(TranslationException.Kind.EMPTY, "原文为空，无需翻译");
             }
-            RetainedNodeMarkers.ProviderMarkers providerMarkers =
-                    RetainedNodeMarkers.encodeForProvider(text);
-            if (providerMarkers == null) {
-                throw new TranslationException(TranslationException.Kind.PARSE,
-                        TranslationException.Reason.TRANSLATION_INVALID,
-                        "原文包含无效或冲突的保留节点标记", 0, null);
-            }
-            diagnosticRequest = providerMarkers.text;
             Http.Headers headers = validateConfig(cfg);
             failureStage = "http_response_decode";
-            Http.Response response = requestOnce(providerMarkers.text, request, headers);
+            Http.Response response = requestOnce(text, request, headers);
             failureStage = "translation_validation";
             diagnosticTranslated = response.body;
             String translated = response.body;
@@ -286,12 +276,6 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         "提取到的译文为空", response.status, null);
             }
             translated = translated.trim();
-            translated = providerMarkers.restore(translated);
-            if (translated == null) {
-                throw new TranslationException(TranslationException.Kind.PARSE,
-                        TranslationException.Reason.TRANSLATION_INVALID,
-                        "服务返回的保留节点占位符无效或已损坏", response.status, null);
-            }
             if (validateTranslation) {
                 // Optional normalization: remove only one exact outer wrapper pair.
                 // Embedded, partial, and nested markers remain available to the checks below.
@@ -327,9 +311,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         + " errorKind=" + kind
                         + " errorReason=" + reason
                         + " httpStatus=" + status
-                        + " sourceChars=" + codePointLength(diagnosticRequest)
-                        + " sourcePreview=" + safeDiagnosticPreview(diagnosticRequest, 200)
-                        + " sourceTail=" + safeDiagnosticTail(diagnosticRequest, 100)
+                        + " sourceChars=" + codePointLength(text)
+                        + " sourcePreview=" + safeDiagnosticPreview(text, 200)
+                        + " sourceTail=" + safeDiagnosticTail(text, 100)
                         + " translatedChars=" + codePointLength(diagnosticTranslated)
                         + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                         + " detail=" + detail);
@@ -340,7 +324,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         : new TranslationException(TranslationException.Kind.UNKNOWN,
                                 TranslationException.Reason.UNKNOWN_FAILURE,
                                 e.getClass().getSimpleName(), 0, e);
-                throw new DiagnosticException(classified, failureStage, diagnosticRequest, diagnosticTranslated);
+                throw new DiagnosticException(classified, failureStage, text, diagnosticTranslated);
             }
             throw e;
         } finally {
