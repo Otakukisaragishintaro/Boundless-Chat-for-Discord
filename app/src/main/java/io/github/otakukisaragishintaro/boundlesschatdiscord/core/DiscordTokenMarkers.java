@@ -11,14 +11,11 @@ import java.util.regex.Pattern;
  * markers use the same integrity-checked namespace and are restored only after validation.
  */
 public final class DiscordTokenMarkers {
-    private static final Pattern MENTION = Pattern.compile(
-            "<(?:@!?[0-9]{15,22}|@&[0-9]{15,22})>|@(?:everyone|here)\\b",
+    private static final Pattern TOKEN = Pattern.compile(
+            "(<(?:@!?[0-9]{15,22}|@&[0-9]{15,22})>|@(?:everyone|here)\\b)"
+                    + "|(<#[0-9]{15,22}>|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>)"
+                    + "|((?:https?://|www\\.)[^\\s<>]+)",
             Pattern.CASE_INSENSITIVE);
-    private static final Pattern CHANNEL_OR_EMOJI = Pattern.compile(
-            "<#[0-9]{15,22}>|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>",
-            Pattern.CASE_INSENSITIVE);
-    private static final Pattern URL = Pattern.compile(
-            "(?:https?://|www\\.)[^\\s<>]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
 
     private DiscordTokenMarkers() { }
@@ -70,27 +67,23 @@ public final class DiscordTokenMarkers {
             }
         }
 
-        String protectedSource = source;
+        Matcher matcher = TOKEN.matcher(source);
+        StringBuffer protectedText = new StringBuffer(source.length());
         List<String> markers = new ArrayList<>();
         List<String> originals = new ArrayList<>();
-        Pattern[] patterns = new Pattern[] {
-                protectMentions ? MENTION : null,
-                protectChannelsAndEmojis ? CHANNEL_OR_EMOJI : null,
-                protectUrls ? URL : null
-        };
-        for (Pattern pattern : patterns) {
-            if (pattern == null) continue;
-            Matcher matcher = pattern.matcher(protectedSource);
-            StringBuffer protectedText = new StringBuffer(protectedSource.length());
-            while (matcher.find()) {
+        while (matcher.find()) {
+            boolean selected = matcher.group(1) != null ? protectMentions
+                    : matcher.group(2) != null ? protectChannelsAndEmojis : protectUrls;
+            if (selected) {
                 String marker = "<keep" + next++ + "/>";
                 markers.add(marker);
                 originals.add(matcher.group());
                 matcher.appendReplacement(protectedText, Matcher.quoteReplacement(marker));
+            } else {
+                matcher.appendReplacement(protectedText, Matcher.quoteReplacement(matcher.group()));
             }
-            matcher.appendTail(protectedText);
-            protectedSource = protectedText.toString();
         }
-        return new Protection(protectedSource, markers, originals);
+        matcher.appendTail(protectedText);
+        return new Protection(protectedText.toString(), markers, originals);
     }
 }
