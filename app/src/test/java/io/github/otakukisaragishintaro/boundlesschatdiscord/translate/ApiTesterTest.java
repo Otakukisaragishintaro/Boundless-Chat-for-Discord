@@ -10,6 +10,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.MemoryPrefs;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 
 import org.junit.Test;
 
@@ -71,6 +72,38 @@ public class ApiTesterTest {
         assertEquals(0, result.failure.httpStatus);
         assertNull(result.translated);
         assertTrue(result.elapsedMs >= 0);
+    }
+
+    @Test
+    public void translationTestAppliesDiscordTokenProtectionAndRestoresMention() throws Exception {
+        String mention = "<@285191197662904320>";
+        FakeConnection connection = successfulConnection("你好 <keep1/>");
+        ApiTester.Result result = call(url -> connection,
+                "hello " + mention).call();
+        assertTrue(result.ok);
+        assertEquals("你好 " + mention, result.translated);
+        assertTrue(connection.disconnected);
+    }
+
+    @Test
+    public void translationTestHonorsConfiguredScopeBeforeOpeningNetwork() {
+        TranslationScope scope = new TranslationScope(true,
+                java.util.Collections.emptyList(),
+                java.util.Collections.singletonList(
+                        new TranslationScope.Rule("456", "blocked test channel", false)));
+        Config.Snapshot config = Config.read(new MemoryPrefs()
+                .put(Config.KEY_TRANSLATION_SCOPE, scope.toJson()));
+        ApiTester.Result missingContext = ApiTester.newCall(config,
+                ApiTester.TestKind.TRANSLATION, "hello").call();
+        assertFalse(missingContext.ok);
+        assertEquals(TranslationException.Reason.SCOPE_CONTEXT_REQUIRED,
+                missingContext.failure.reason);
+
+        ApiTester.Result denied = ApiTester.newCall(config,
+                ApiTester.TestKind.TRANSLATION, "hello", "", "456").call();
+        assertFalse(denied.ok);
+        assertEquals(TranslationException.Reason.SCOPE_DENIED, denied.failure.reason);
+        assertEquals("scope_denied", denied.failure.stage);
     }
 
     @Test
@@ -287,6 +320,10 @@ public class ApiTesterTest {
 
     /** Same package-private transport injection used by engine tests, without widening APIs. */
     private static ApiTester.Call call(Factory factory) throws Exception {
+        return call(factory, "hello");
+    }
+
+    private static ApiTester.Call call(Factory factory, String text) throws Exception {
         Class<?> type = Class.forName(Http.class.getName() + "$ConnectionFactory");
         Object connections = Proxy.newProxyInstance(type.getClassLoader(), new Class<?>[]{type},
                 (proxy, method, args) -> factory.open((URL) args[0]));
@@ -297,7 +334,7 @@ public class ApiTesterTest {
                 .put(Config.KEY_API_URL, "https://fake.invalid/v1")
                 .put(Config.KEY_STREAMING, false));
         return new ApiTester.Call(new JsonApiEngine(config, http),
-                ApiTester.TestKind.TRANSLATION, "hello", config);
+                ApiTester.TestKind.TRANSLATION, text, config);
     }
 
     private static void assertCancelled(ApiTester.Result result, int status) {
@@ -311,9 +348,13 @@ public class ApiTesterTest {
     }
 
     private static FakeConnection successfulConnection() throws Exception {
-        return new FakeConnection(new ByteArrayInputStream(
-                "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":\"你好\"}}]}"
-                        .getBytes(StandardCharsets.UTF_8)));
+        return successfulConnection("你好");
+    }
+
+    private static FakeConnection successfulConnection(String translated) throws Exception {
+        String body = "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"content\":"
+                + org.json.JSONObject.quote(translated) + "}}]}";
+        return new FakeConnection(new ByteArrayInputStream(body.getBytes(StandardCharsets.UTF_8)));
     }
 
     private static void awaitIgnoringInterrupt(CountDownLatch latch) {
