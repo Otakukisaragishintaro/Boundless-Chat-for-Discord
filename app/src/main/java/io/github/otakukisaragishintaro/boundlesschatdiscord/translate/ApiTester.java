@@ -57,10 +57,15 @@ public final class ApiTester {
                 JsonApiEngine.DiagnosticException diagnostic =
                         error instanceof JsonApiEngine.DiagnosticException
                                 ? (JsonApiEngine.DiagnosticException) error : null;
+                String stage = diagnostic != null ? diagnostic.stage
+                        : error.reason() == TranslationException.Reason.SCOPE_CONTEXT_REQUIRED
+                                || error.reason() == TranslationException.Reason.SCOPE_DENIED
+                                ? "scope_filter"
+                        : error.reason() == TranslationException.Reason.NO_TRANSLATABLE_TEXT
+                                ? "language_detection" : "request_or_preflight";
                 return new Failure(error.kind(), error.reason(), error.httpStatus(),
                         cause.getClass().getSimpleName(), body,
-                        safeValidationDetail(error.getMessage()),
-                        diagnostic == null ? "request_or_preflight" : diagnostic.stage,
+                        safeValidationDetail(error.getMessage()), stage,
                         null, diagnostic == null ? null : diagnostic.requestPreview,
                         diagnostic == null ? null : diagnostic.translatedPreview);
             }
