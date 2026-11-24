@@ -59,6 +59,33 @@ public class LanguagePromptConfigTest {
         }
     }
 
+
+    @Test
+    public void configResolvesIncomingStyleFromChannelThenServerThenGlobal() {
+        IncomingPromptStyles styles = IncomingPromptStyles.defaults().addStyle("Formal");
+        String formal = styles.styles().get(1).id;
+        styles = styles.withPrompt(formal, "English", "Formal English translation.");
+        styles = styles.setDefault("English", formal);
+        TranslationScope scope = new TranslationScope(true,
+                java.util.Collections.singletonList(
+                        new TranslationScope.Rule("10", "Server", true, "default")),
+                java.util.Collections.singletonList(
+                        new TranslationScope.Rule("20", "Channel", true, formal)));
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_TARGET_LANG, "English")
+                .put(Config.KEY_INCOMING_STYLES, styles.toJson())
+                .put(Config.KEY_TRANSLATION_SCOPE, scope.toJson()));
+
+        assertEquals("Formal English translation.",
+                snapshot.forIncomingTranslation("10", "20").systemPrompt);
+        assertEquals(styles.resolve("English", "default"),
+                snapshot.forIncomingTranslation("10", "21").systemPrompt);
+        assertEquals("Formal English translation.",
+                snapshot.forIncomingTranslation("11", "21").systemPrompt);
+        assertNotEquals(snapshot.version(),
+                snapshot.forIncomingTranslation("10", "20").version());
+    }
+
     @Test
     public void defaultSendTestUsesTheButtonMatchingTheSelectedLanguage() {
         Map<String, String> prompts = new LinkedHashMap<>(LanguagePromptConfig.defaults());
