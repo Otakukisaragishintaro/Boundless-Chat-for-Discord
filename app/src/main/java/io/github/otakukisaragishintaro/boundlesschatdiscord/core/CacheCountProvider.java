@@ -33,6 +33,13 @@ public final class CacheCountProvider extends ContentProvider {
     private static final String METHOD_PUBLISH_COUNT = "publish_count";
     private static final String EXTRA_ENTRY_COUNT = "entry_count";
     private static final String EXTRA_PUBLISHED = "published";
+    private static final String METHOD_PUBLISH_LOG = "publish_log";
+    private static final String EXTRA_LOG_TIMESTAMP = "log_timestamp";
+    private static final String EXTRA_LOG_PROCESS = "log_process";
+    private static final String EXTRA_LOG_PRIORITY = "log_priority";
+    private static final String EXTRA_LOG_TAG = "log_tag";
+    private static final String EXTRA_LOG_MESSAGE = "log_message";
+    private static final String EXTRA_LOG_REQUEST_ID = "log_request_id";
     private static final String ALLOWED_CALLER_PACKAGE = "com.discord";
     private static final int MAX_ENTRY_COUNT = 1_000_000;
 
@@ -166,6 +173,25 @@ public final class CacheCountProvider extends ContentProvider {
         return published;
     }
 
+    /** Publish one diagnostic event from Discord through the same UID-checked Provider. */
+    public static boolean publishLog(@NonNull Context targetContext,
+                                     @NonNull String modulePackageName,
+                                     long timestamp, @NonNull String processName,
+                                     int priority, @NonNull String tag,
+                                     @NonNull String message, @Nullable String requestId) {
+        if (modulePackageName.isEmpty()) return false;
+        Bundle extras = new Bundle();
+        extras.putLong(EXTRA_LOG_TIMESTAMP, timestamp);
+        extras.putString(EXTRA_LOG_PROCESS, processName);
+        extras.putInt(EXTRA_LOG_PRIORITY, priority);
+        extras.putString(EXTRA_LOG_TAG, tag);
+        extras.putString(EXTRA_LOG_MESSAGE, message);
+        extras.putString(EXTRA_LOG_REQUEST_ID, requestId == null ? "" : requestId);
+        Bundle response = targetContext.getContentResolver().call(
+                modulePackageName + AUTHORITY_SUFFIX, METHOD_PUBLISH_LOG, null, extras);
+        return response != null && response.getBoolean(EXTRA_PUBLISHED, false);
+    }
+
     @NonNull
     private static String safeContextPackage(@NonNull Context context) {
         try {
@@ -202,6 +228,21 @@ public final class CacheCountProvider extends ContentProvider {
     @Nullable
     @Override
     public Bundle call(@NonNull String method, @Nullable String arg, @Nullable Bundle extras) {
+        if (METHOD_PUBLISH_LOG.equals(method)) {
+            if (!isDiscordCaller()) {
+                throw new SecurityException("Only the Discord package may publish diagnostic logs");
+            }
+            Context context = getContext();
+            if (context == null || extras == null) return publishResult(false);
+            boolean stored = DiagnosticLogStore.append(context,
+                    extras.getLong(EXTRA_LOG_TIMESTAMP, System.currentTimeMillis()),
+                    "discord", extras.getString(EXTRA_LOG_PROCESS, "unknown"),
+                    extras.getInt(EXTRA_LOG_PRIORITY, 0),
+                    extras.getString(EXTRA_LOG_TAG, "BoundlessChatDiscord"),
+                    extras.getString(EXTRA_LOG_MESSAGE, ""),
+                    extras.getString(EXTRA_LOG_REQUEST_ID, ""));
+            return publishResult(stored);
+        }
         if (!METHOD_PUBLISH_COUNT.equals(method)) {
             return null;
         }

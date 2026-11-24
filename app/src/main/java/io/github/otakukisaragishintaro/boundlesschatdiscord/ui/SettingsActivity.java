@@ -1,6 +1,7 @@
 package io.github.otakukisaragishintaro.boundlesschatdiscord.ui;
 
 import android.app.Activity;
+import android.app.Application;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.SharedPreferences;
@@ -2224,10 +2225,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             resultText.setText(getString(R.string.status_test_failed_detail,
                     failure == null ? getString(R.string.unknown_error)
                             : failure.getClass().getSimpleName()));
-            if (testDiagnosticLogText != null) {
-                testDiagnosticLogText.setText("stage=future_delivery\nstatus=FAILED\nerror="
-                        + (failure == null ? "unknown" : failure.getClass().getSimpleName()));
-            }
+            String failureLine = "stage=future_delivery status=FAILED error="
+                    + (failure == null ? "unknown" : failure.getClass().getSimpleName());
+            if (testDiagnosticLogText != null) testDiagnosticLogText.setText(failureLine);
+            persistTestFailure(failureLine);
             if (copyTestResultButton != null) {
                 copyTestResultButton.setEnabled(resultText.length() > 0);
             }
@@ -2333,11 +2334,51 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (testDiagnosticLogText != null) {
             testDiagnosticLogText.setText(ApiTester.formatDiagnostics(result));
         }
+        persistTestDiagnostics(result);
         if (copyTestResultButton != null) {
             copyTestResultButton.setEnabled(resultText.length() > 0);
         }
         updateStatus(getString(result.ok
                 ? R.string.status_test_passed : R.string.status_test_failed));
+    }
+
+    private void persistTestDiagnostics(ApiTester.Result result) {
+        final android.content.Context appContext = getApplicationContext();
+        final String processName = Application.getProcessName();
+        final int priority = result.ok ? android.util.Log.INFO : android.util.Log.WARN;
+        try {
+            saveExecutor.execute(() -> {
+                for (String line : result.diagnostics) {
+                    // Keep source and response previews in the live test panel only; persistent
+                    // history stores stages and error classifications, not message contents.
+                    if (line.startsWith("request_preview=")
+                            || line.startsWith("response_preview=")) continue;
+                    DiagnosticLogStore.append(appContext, System.currentTimeMillis(),
+                            "module_test", processName, priority, "ApiTester",
+                            line, result.requestId);
+                }
+                DiagnosticLogStore.append(appContext, System.currentTimeMillis(),
+                        "module_test", processName, priority, "ApiTester",
+                        "summary status=" + (result.ok ? "SUCCESS" : "FAILED")
+                                + " test=" + result.testKind
+                                + " elapsedMs=" + result.elapsedMs
+                                + (result.failure == null ? "" : " reason=" + result.failure.reason
+                                        + " httpStatus=" + result.failure.httpStatus
+                                        + " exception=" + result.failure.exceptionType),
+                        result.requestId);
+            });
+        } catch (RuntimeException ignored) {
+            // The live panel remains available even if the Activity is shutting down.
+        }
+    }
+
+    private void persistTestFailure(String detail) {
+        final android.content.Context appContext = getApplicationContext();
+        try {
+            saveExecutor.execute(() -> DiagnosticLogStore.append(appContext,
+                    System.currentTimeMillis(), "module_test", Application.getProcessName(),
+                    android.util.Log.ERROR, "ApiTester", detail, ""));
+        } catch (RuntimeException ignored) { }
     }
 
     private void updateStatus(String status) {

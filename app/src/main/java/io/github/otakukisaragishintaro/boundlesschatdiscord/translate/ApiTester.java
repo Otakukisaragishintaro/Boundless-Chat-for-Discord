@@ -5,6 +5,7 @@ import androidx.annotation.Nullable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.Callable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
@@ -105,14 +106,22 @@ public final class ApiTester {
         public final TestKind testKind;
         @Nullable public final Failure failure;
         public final List<String> diagnostics;
+        public final String requestId;
 
         private Result(TestKind testKind, @Nullable String translated, long elapsedMs,
                        @Nullable Failure failure) {
-            this(testKind, translated, elapsedMs, failure, Collections.emptyList());
+            this(testKind, translated, elapsedMs, failure, Collections.emptyList(),
+                    UUID.randomUUID().toString());
         }
 
         private Result(TestKind testKind, @Nullable String translated, long elapsedMs,
                        @Nullable Failure failure, List<String> diagnostics) {
+            this(testKind, translated, elapsedMs, failure, diagnostics,
+                    UUID.randomUUID().toString());
+        }
+
+        private Result(TestKind testKind, @Nullable String translated, long elapsedMs,
+                       @Nullable Failure failure, List<String> diagnostics, String requestId) {
             this.ok = failure == null;
             this.translated = failure == null
                     && (testKind == TestKind.TRANSLATION || testKind == TestKind.SEND_TRANSLATION)
@@ -121,6 +130,7 @@ public final class ApiTester {
             this.testKind = testKind;
             this.failure = failure;
             this.diagnostics = Collections.unmodifiableList(new ArrayList<>(diagnostics));
+            this.requestId = requestId;
         }
     }
 
@@ -152,6 +162,7 @@ public final class ApiTester {
         private final Config.Snapshot sourceConfig;
         private final String testGuildId;
         private final String testChannelId;
+        private final String requestId = UUID.randomUUID().toString();
         private boolean used;
         private boolean cancelled;
         @Nullable private Thread worker;
@@ -186,7 +197,7 @@ public final class ApiTester {
                 if (cancelled) {
                     diagnostics.add("stage=queue status=CANCELLED reason=cancelled_before_execution");
                     Result result = new Result(testKind, null, elapsed(start),
-                            Failure.cancelled(0), diagnostics);
+                            Failure.cancelled(0), diagnostics, requestId);
                     logResult(result);
                     return result;
                 }
@@ -226,20 +237,20 @@ public final class ApiTester {
                     String translated = engine.translateForTest(text);
                     diagnostics.add("stage=production_translation_pipeline status=SUCCESS"
                             + " translatedChars=" + (translated == null ? 0 : translated.length()));
-                    result = new Result(testKind, translated, elapsed(start), null, diagnostics);
+                    result = new Result(testKind, translated, elapsed(start), null, diagnostics, requestId);
                 } else if (testKind == TestKind.SEND_TRANSLATION) {
                     diagnostics.add("stage=outbound_prompt_pipeline status=STARTED");
                     String translated = engine.translateForTest(text);
                     diagnostics.add("stage=outbound_prompt_pipeline status=SUCCESS"
                             + " translatedChars=" + (translated == null ? 0 : translated.length()));
-                    result = new Result(testKind, translated, elapsed(start), null, diagnostics);
+                    result = new Result(testKind, translated, elapsed(start), null, diagnostics, requestId);
                 } else {
                     diagnostics.add("stage=connection_request status=STARTED");
                     JsonApiEngine.Exchange exchange = engine.execute(text, false);
                     responseStatus = exchange.httpStatus;
                     diagnostics.add("stage=connection_request status=SUCCESS httpStatus="
                             + responseStatus);
-                    result = new Result(testKind, exchange.translated, elapsed(start), null, diagnostics);
+                    result = new Result(testKind, exchange.translated, elapsed(start), null, diagnostics, requestId);
                 }
             } catch (Exception failure) {
                 Failure diagnostic = Failure.from(failure);
@@ -264,7 +275,7 @@ public final class ApiTester {
                     diagnostics.add("response_preview=" + DiagnosticLogStore.sanitizeMessage(
                             diagnostic.translatedPreview));
                 }
-                result = new Result(testKind, null, elapsed(start), diagnostic, diagnostics);
+                result = new Result(testKind, null, elapsed(start), diagnostic, diagnostics, requestId);
             } finally {
                 synchronized (this) {
                     // Always release ownership, including Errors handled by the Future boundary.
@@ -277,7 +288,7 @@ public final class ApiTester {
                     int status = result.failure == null ? responseStatus : result.failure.httpStatus;
                     diagnostics.add("stage=cancellation status=CANCELLED httpStatus=" + status);
                     result = new Result(testKind, null, elapsed(start),
-                            Failure.cancelled(status), diagnostics);
+                            Failure.cancelled(status), diagnostics, requestId);
                 }
             }
             logResult(result);
@@ -352,7 +363,7 @@ public final class ApiTester {
 
     /** Stable, copyable stage log shown directly below the settings test result. */
     public static String formatDiagnostics(Result result) {
-        StringBuilder output = new StringBuilder();
+        StringBuilder output = new StringBuilder("request_id=").append(result.requestId);
         for (String line : result.diagnostics) {
             if (output.length() > 0) output.append('\n');
             output.append(line);
