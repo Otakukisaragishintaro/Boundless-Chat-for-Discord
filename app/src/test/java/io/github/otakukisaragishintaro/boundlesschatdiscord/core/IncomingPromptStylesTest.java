@@ -64,6 +64,16 @@ public class IncomingPromptStylesTest {
     }
 
     @Test
+    public void legacyCustomLanguageLabelsKeepThePreviousGeneratedDefaultBehavior() {
+        IncomingPromptStyles styles = IncomingPromptStyles.defaults();
+        assertEquals(LanguagePromptConfig.defaultPrompt("Simplified Chinese"),
+                styles.resolve("Simplified Chinese", null));
+        String alternate = styles.addStyle("Alternate").styles().get(1).id;
+        assertEquals(LanguagePromptConfig.defaultPrompt("Simplified Chinese"),
+                styles.resolve("Simplified Chinese", alternate));
+    }
+
+    @Test
     public void malformedOrIncompleteStyleLibrariesAreRejected() {
         assertThrows(IllegalArgumentException.class,
                 () -> IncomingPromptStyles.read("{", null));
