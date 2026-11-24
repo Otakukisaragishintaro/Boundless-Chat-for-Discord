@@ -1455,13 +1455,17 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         // the ActionBar/system-bar insets before its first visible frame. Without this,
         // cold launches can lay out both submenus outside the viewport until the IME
         // causes another window-insets pass.
-        page.post(() -> {
-            if (destroyed || navigationHost == null || page.getParent() != navigationHost) {
+        // Capture the resolved page in a final local: the variable above is assigned
+        // both from the cached page and when a new page is created, so it cannot be
+        // referenced directly from a Java lambda.
+        final View pageToRefresh = page;
+        pageToRefresh.post(() -> {
+            if (destroyed || navigationHost == null || pageToRefresh.getParent() != navigationHost) {
                 return;
             }
             navigationHost.requestApplyInsets();
-            page.requestApplyInsets();
-            page.requestLayout();
+            pageToRefresh.requestApplyInsets();
+            pageToRefresh.requestLayout();
         });
     }
 
