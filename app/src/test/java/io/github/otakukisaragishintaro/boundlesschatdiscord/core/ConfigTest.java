@@ -48,7 +48,7 @@ public class ConfigTest {
         assertEquals(Config.DEF_MODEL, s.model);
         assertEquals(Config.DEF_TARGET_LANG, s.targetLang);
         assertEquals(Config.DEF_SEND_TARGET_LANG, s.sendTargetLang);
-        assertEquals(Config.DEF_SYSTEM_PROMPT, s.systemPrompt);
+        assertEquals(LanguagePromptConfig.defaultPrompt(Config.DEF_TARGET_LANG), s.systemPrompt);
         assertTrue(s.sendSystemPrompt.contains("into English"));
         assertFalse(s.sendSystemPrompt.contains("{{target_language}}"));
         assertEquals(LanguagePromptConfig.LANGUAGES.size(), s.incomingPrompts.size());
@@ -123,7 +123,7 @@ public class ConfigTest {
         assertEquals("English", defaults.sendTargetLang);
         assertEquals("日本語", sendJapanese.sendTargetLang);
         assertEquals(defaults.targetLang, sendJapanese.targetLang);
-        assertNotEquals(defaults.version(), sendEnglish.version());
+        assertEquals(defaults.version(), sendEnglish.version());
         assertNotEquals(defaults.version(), sendJapanese.version());
     }
 
@@ -167,6 +167,40 @@ public class ConfigTest {
         assertTrue(Config.defaultSystemPromptFor(japanese.targetLang).contains("into 日本語"));
         assertFalse(Config.defaultSystemPromptFor(japanese.targetLang)
                 .contains("Simplified Chinese"));
+    }
+
+    @Test
+    public void everyBooleanSettingHasAnIndependentPersistedSnapshotValue() {
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_ENABLED, false)
+                .put(Config.KEY_LOGGING_ENABLED, true)
+                .put(Config.KEY_CACHE_ENABLED, true)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_CHECK_WRAPPER, false)
+                .put(Config.KEY_STRIP_OUTER_WRAPPER, false)
+                .put(Config.KEY_CHECK_SEGMENT_MARKERS, false)
+                .put(Config.KEY_CHECK_PLACEHOLDERS, false)
+                .put(Config.KEY_CHECK_RETAINED_MARKERS, false)
+                .put(Config.KEY_CHECK_LENGTH, false)
+                .put(Config.KEY_PROTECT_MENTIONS, false)
+                .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, false)
+                .put(Config.KEY_PROTECT_URLS, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        assertTrue(snapshot.isUsable());
+        assertFalse(snapshot.enabled);
+        assertTrue(snapshot.loggingEnabled);
+        assertTrue(snapshot.cacheEnabled);
+        assertFalse(snapshot.streaming);
+        assertFalse(snapshot.checkWrapper);
+        assertFalse(snapshot.stripOuterWrapper);
+        assertFalse(snapshot.checkSegmentMarkers);
+        assertFalse(snapshot.checkPlaceholders);
+        assertFalse(snapshot.checkRetainedMarkers);
+        assertFalse(snapshot.checkLength);
+        assertFalse(snapshot.protectMentions);
+        assertFalse(snapshot.protectChannelsEmojis);
+        assertFalse(snapshot.protectUrls);
+        assertTrue(snapshot.experimentalLongMessageChunking);
     }
 
     @Test

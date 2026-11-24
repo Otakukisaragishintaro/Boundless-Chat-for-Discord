@@ -1166,6 +1166,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Switch retained = addDialogSwitch(form,
                 getString(R.string.validation_check_retained),
                 checkRetainedMarkersInput.isChecked());
+        TextView retainedWarning = new TextView(this);
+        retainedWarning.setTextSize(12f);
+        retainedWarning.setText("关闭此项会关闭普通保留节点的完整性校验，模型可能遗漏对应内容。Discord 提及、频道、链接及样式等程序保护标记仍会在恢复前强制检查是否完整、唯一且顺序正确，以避免静默丢失。建议保持开启。");
+        form.addView(retainedWarning, matchWrap());
         Switch length = addDialogSwitch(form,
                 getString(R.string.validation_check_length),
                 checkLengthInput.isChecked());

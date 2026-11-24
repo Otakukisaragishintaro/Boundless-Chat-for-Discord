@@ -36,13 +36,37 @@ public final class DiscordTokenMarkers {
             this.originals = originals;
         }
 
-        /** Restore only markers introduced by this protection pass. */
-        public String restore(String translated) {
+        /**
+         * Restore only markers introduced by this protection pass. Their presence, uniqueness,
+         * and order are a mandatory safety check even when the optional retained-node validator
+         * is disabled; otherwise a missing Discord mention or URL could be silently discarded.
+         */
+        public String restore(String translated) throws TranslationException {
+            if (!markers.isEmpty()) {
+                if (translated == null) {
+                    throw invalidRestoration();
+                }
+                int previousPosition = -1;
+                for (String marker : markers) {
+                    int position = translated.indexOf(marker);
+                    if (position < 0 || position <= previousPosition
+                            || translated.indexOf(marker, position + marker.length()) >= 0) {
+                        throw invalidRestoration();
+                    }
+                    previousPosition = position;
+                }
+            }
             String result = translated;
             for (int i = 0; i < markers.size(); i++) {
                 result = result.replace(markers.get(i), originals.get(i));
             }
             return result;
+        }
+
+        private static TranslationException invalidRestoration() {
+            return new TranslationException(TranslationException.Kind.PARSE,
+                    TranslationException.Reason.TRANSLATION_INVALID,
+                    "译文未完整保留 Discord 保护标记，已拒绝恢复以避免内容丢失");
         }
 
         public int tokenCount() {
