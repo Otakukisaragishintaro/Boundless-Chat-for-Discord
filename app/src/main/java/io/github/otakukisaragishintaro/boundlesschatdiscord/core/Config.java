@@ -258,8 +258,12 @@ public final class Config {
                     p.contains(KEY_INCOMING_STYLES) ? str(p, KEY_INCOMING_STYLES, "") : "",
                     incomingPrompts);
             incomingStylesJson = incomingStyles.toJson();
-            for (TranslationScope.Rule rule : translationScope.servers) incomingStyles.style(rule.promptStyleId);
-            for (TranslationScope.Rule rule : translationScope.channels) incomingStyles.style(rule.promptStyleId);
+            for (TranslationScope.Rule rule : translationScope.servers) {
+                if (rule.promptStyleId != null) incomingStyles.style(rule.promptStyleId);
+            }
+            for (TranslationScope.Rule rule : translationScope.channels) {
+                if (rule.promptStyleId != null) incomingStyles.style(rule.promptStyleId);
+            }
             outboundPromptsJson = LanguagePromptConfig.toJson(outboundPrompts);
             systemPrompt = incomingStyles.resolve(targetLang, incomingStyles.defaultStyleId(targetLang));
             sendSystemPrompt = LanguagePromptConfig.resolve(outboundPrompts, sendTargetLang);
