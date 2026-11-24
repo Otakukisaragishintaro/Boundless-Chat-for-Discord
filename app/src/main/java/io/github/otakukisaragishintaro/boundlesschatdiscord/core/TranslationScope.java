@@ -225,7 +225,7 @@ public final class TranslationScope {
         return false;
     }
 
-    /** Compare matching policy only: labels and rule order are display/serialization details. */
+    /** Compare translation decisions and style overrides; labels and rule order are display details. */
     public boolean sameMatchingPolicy(TranslationScope other) {
         return other != null && defaultTranslate == other.defaultTranslate
                 && sameRuleActions(servers, other.servers)
