@@ -4,6 +4,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.BlankLines;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
@@ -72,22 +73,27 @@ public final class JsonApiEngine implements Scheduler.Engine {
      */
     @Override
     public String translate(String text) throws Exception {
+        // Literal Discord syntax can also arrive inside ordinary text nodes or primitive
+        // StructurableText. Shield it before every provider request and restore it only
+        // after the same retained-marker integrity check used for native opaque nodes.
+        DiscordTokenMarkers.Protection protection = DiscordTokenMarkers.protect(text);
+        String requestText = protection.text;
         java.util.List<String> paragraphs = new java.util.ArrayList<>();
         java.util.List<String> separators = new java.util.ArrayList<>();
-        if (!cfg.experimentalLongMessageChunking || text == null
-                || text.length() <= cfg.experimentalLongMessageThreshold) {
-            return execute(text, true).translated;
+        if (!cfg.experimentalLongMessageChunking || requestText == null
+                || requestText.length() <= cfg.experimentalLongMessageThreshold) {
+            return protection.restore(execute(requestText, true).translated);
         }
-        splitParagraphs(text, paragraphs, separators);
+        splitParagraphs(requestText, paragraphs, separators);
 
         if (paragraphs.size() <= 1) {
             ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
-                    + " sourceChars=" + text.length());
-            return execute(text, true).translated;
+                    + " sourceChars=" + requestText.length());
+            return protection.restore(execute(requestText, true).translated);
         }
 
-        StringBuilder combined = new StringBuilder(text.length());
-        ProjectLog.info("translation.chunking start sourceChars=" + text.length()
+        StringBuilder combined = new StringBuilder(requestText.length());
+        ProjectLog.info("translation.chunking start sourceChars=" + requestText.length()
                 + " threshold=" + cfg.experimentalLongMessageThreshold
                 + " paragraphs=" + paragraphs.size());
         for (int i = 0; i < paragraphs.size(); i++) {
@@ -114,8 +120,9 @@ public final class JsonApiEngine implements Scheduler.Engine {
             combined.append(translated);
             if (i < separators.size()) combined.append(separators.get(i));
         }
-        ProjectLog.info("translation.chunking complete chunks=" + paragraphs.size());
-        return combined.toString();
+        ProjectLog.info("translation.chunking complete chunks=" + paragraphs.size()
+                + " protectedDiscordTokens=" + protection.tokenCount());
+        return protection.restore(combined.toString());
     }
 
     /** Split using the same whitespace-aware blank-line rules as Discord node alignment. */
