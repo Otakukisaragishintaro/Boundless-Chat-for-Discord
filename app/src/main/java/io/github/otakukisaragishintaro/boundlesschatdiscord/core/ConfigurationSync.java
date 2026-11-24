@@ -19,7 +19,8 @@ public final class ConfigurationSync {
             Config.KEY_MAX_CONCURRENCY, Config.KEY_CHECK_WRAPPER,
             Config.KEY_STRIP_OUTER_WRAPPER, Config.KEY_CHECK_SEGMENT_MARKERS,
             Config.KEY_CHECK_PLACEHOLDERS, Config.KEY_CHECK_RETAINED_MARKERS,
-            Config.KEY_CHECK_LENGTH, Config.KEY_MIN_LENGTH_PERCENT,
+            Config.KEY_CHECK_LENGTH, Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+            Config.KEY_MIN_LENGTH_PERCENT,
             Config.KEY_MAX_LENGTH_PERCENT));
     private static final String KEY_LOCAL_INITIALIZED = "settings_initialized";
     private static final String[] LOCAL_COMMIT_KEYS = localCommitKeys();
@@ -251,6 +252,9 @@ public final class ConfigurationSync {
                     Config.DEF_CHECK_RETAINED_MARKERS);
             putUnlessDefault(raw, Config.KEY_CHECK_LENGTH, snapshot.checkLength,
                     Config.DEF_CHECK_LENGTH);
+            putUnlessDefault(raw, Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+                    snapshot.experimentalLongMessageChunking,
+                    Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
             putUnlessDefault(raw, Config.KEY_MIN_LENGTH_PERCENT, snapshot.minLengthPercent,
                     Config.DEF_MIN_LENGTH_PERCENT);
             putUnlessDefault(raw, Config.KEY_MAX_LENGTH_PERCENT, snapshot.maxLengthPercent,
