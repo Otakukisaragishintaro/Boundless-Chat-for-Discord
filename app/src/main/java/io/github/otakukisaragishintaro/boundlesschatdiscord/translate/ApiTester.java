@@ -5,6 +5,7 @@ import androidx.annotation.Nullable;
 import java.util.concurrent.Callable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.EnglishDetector;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
@@ -178,8 +179,11 @@ public final class ApiTester {
             try {
                 if (testKind == TestKind.TRANSLATION) {
                     enforceTestScope(sourceConfig.translationScope, testGuildId, testChannelId);
+                    String detectionText = DiscordTokenMarkers.protect(text,
+                            sourceConfig.protectMentions, sourceConfig.protectChannelsEmojis,
+                            sourceConfig.protectUrls).text;
                     EnglishDetector.Verdict verdict = text == null || text.trim().isEmpty() ? null
-                            : EnglishDetector.evaluate(text, 1, sourceConfig.targetLang);
+                            : EnglishDetector.evaluate(detectionText, 1, sourceConfig.targetLang);
                     if (verdict != null && !verdict.shouldTranslate) {
                         throw new TranslationException(TranslationException.Kind.EMPTY,
                                 TranslationException.Reason.NO_TRANSLATABLE_TEXT,
