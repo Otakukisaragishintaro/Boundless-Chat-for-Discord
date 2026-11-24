@@ -143,7 +143,7 @@ public class ProtocolsTest {
     }
 
     private static String expectedPrompt(String prompt) {
-        return expectedPrompt(prompt) + "\n\n"
+        return prompt + "\n\n" + Protocols.WRAPPER_RULE + "\n\n"
                 + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG);
     }
 
