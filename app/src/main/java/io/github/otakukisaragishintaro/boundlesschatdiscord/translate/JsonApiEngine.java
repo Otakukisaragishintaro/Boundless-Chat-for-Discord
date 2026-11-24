@@ -146,6 +146,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             throw new IllegalStateException("Worker already owns a request");
         }
         String failureStage = "request_setup";
+        String diagnosticTranslated = null;
         try {
             // Registration precedes validation/body construction. A prior cancel interrupts
             // the worker; a concurrent cancel marks this handle before any connection exists.
@@ -157,6 +158,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             failureStage = "http_response_decode";
             Http.Response response = requestOnce(text, request, headers);
             failureStage = "translation_validation";
+            diagnosticTranslated = response.body;
             String translated = response.body;
             if (translated == null || translated.trim().isEmpty()) {
                 throw new TranslationException(TranslationException.Kind.EMPTY,
@@ -197,6 +199,11 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     + " errorKind=" + kind
                     + " errorReason=" + reason
                     + " httpStatus=" + status
+                    + " sourceChars=" + codePointLength(text)
+                    + " sourcePreview=" + safeDiagnosticPreview(text, 200)
+                    + " sourceTail=" + safeDiagnosticTail(text, 100)
+                    + " translatedChars=" + codePointLength(diagnosticTranslated)
+                    + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                     + " detail=" + detail);
             throw e;
         } finally {
@@ -209,6 +216,39 @@ public final class JsonApiEngine implements Scheduler.Engine {
         if (message == null || message.isEmpty()) return "none";
         String safe = message.replaceAll("[\\r\\n\\t]+", " ").trim();
         return safe.length() <= 160 ? safe : safe.substring(0, 160);
+    }
+
+    /** Counts Unicode code points so preview limits do not split surrogate pairs. */
+    private static int codePointLength(String value) {
+        return value == null ? 0 : value.codePointCount(0, value.length());
+    }
+
+    /** Escapes control characters and bounds diagnostic previews; never logs an entire message. */
+    private static String safeDiagnosticPreview(String value, int maxCodePoints) {
+        if (value == null) return "none";
+        StringBuilder out = new StringBuilder();
+        int count = 0;
+        for (int i = 0; i < value.length() && count < maxCodePoints;) {
+            int point = value.codePointAt(i);
+            i += Character.charCount(point);
+            count++;
+            if (point == '\\r') out.append("\\\\r");
+            else if (point == '\\n') out.append("\\\\n");
+            else if (point == '\\t') out.append("\\\\t");
+            else if (Character.isISOControl(point)) out.append('?');
+            else out.appendCodePoint(point);
+        }
+        if (codePointLength(value) > maxCodePoints) out.append("…");
+        return out.toString();
+    }
+
+    /** Keeps the final context of long messages, also with escaped control characters. */
+    private static String safeDiagnosticTail(String value, int maxCodePoints) {
+        if (value == null) return "none";
+        int count = codePointLength(value);
+        int start = count > maxCodePoints
+                ? value.offsetByCodePoints(0, count - maxCodePoints) : 0;
+        return (start > 0 ? "…" : "") + safeDiagnosticPreview(value.substring(start), maxCodePoints);
     }
 
     /** Sends exactly once and retains the decoded response status for post-request validation. */
