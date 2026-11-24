@@ -990,7 +990,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
 
-        EditText incomingPrompt = addField(form,
+        // User-editable prompts are separate from mandatory program-owned protection rules.
+        // Keep the large prompt editors collapsed until the user explicitly opens them.
+        LinearLayout incomingPromptSection = new LinearLayout(this);
+        incomingPromptSection.setOrientation(LinearLayout.VERTICAL);
+        EditText incomingPrompt = addField(incomingPromptSection,
                 getString(R.string.label_incoming_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
@@ -999,9 +1003,21 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Button resetIncoming = new Button(this);
         resetIncoming.setText(getString(R.string.button_restore_incoming_prompt));
         resetIncoming.setOnClickListener(v -> incomingPrompt.setText(Config.DEF_SYSTEM_PROMPT));
-        form.addView(resetIncoming, matchWrap());
+        incomingPromptSection.addView(resetIncoming, matchWrap());
+        incomingPromptSection.setVisibility(View.GONE);
+        Button toggleIncomingPrompt = new Button(this);
+        toggleIncomingPrompt.setText("显示默认提示词");
+        toggleIncomingPrompt.setOnClickListener(v -> {
+            boolean expanded = incomingPromptSection.getVisibility() != View.VISIBLE;
+            incomingPromptSection.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            toggleIncomingPrompt.setText(expanded ? "隐藏默认提示词" : "显示默认提示词");
+        });
+        form.addView(toggleIncomingPrompt, matchWrap());
+        form.addView(incomingPromptSection, matchWrap());
 
-        EditText newButtonPrompt = addField(form,
+        LinearLayout outboundPromptSection = new LinearLayout(this);
+        outboundPromptSection.setOrientation(LinearLayout.VERTICAL);
+        EditText newButtonPrompt = addField(outboundPromptSection,
                 getString(R.string.label_new_outbound_prompt),
                 getString(R.string.hint_default_outbound_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
@@ -1012,7 +1028,22 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resetOutbound.setText(getString(R.string.button_restore_outbound_prompt));
         resetOutbound.setOnClickListener(v ->
                 newButtonPrompt.setText(Config.DEF_SEND_SYSTEM_PROMPT));
-        form.addView(resetOutbound, matchWrap());
+        outboundPromptSection.addView(resetOutbound, matchWrap());
+        outboundPromptSection.setVisibility(View.GONE);
+        Button toggleOutboundPrompt = new Button(this);
+        toggleOutboundPrompt.setText("显示默认提示词");
+        toggleOutboundPrompt.setOnClickListener(v -> {
+            boolean expanded = outboundPromptSection.getVisibility() != View.VISIBLE;
+            outboundPromptSection.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            toggleOutboundPrompt.setText(expanded ? "隐藏默认提示词" : "显示默认提示词");
+        });
+        form.addView(toggleOutboundPrompt, matchWrap());
+        form.addView(outboundPromptSection, matchWrap());
+
+        TextView promptProtectionHint = new TextView(this);
+        promptProtectionHint.setTextSize(12f);
+        promptProtectionHint.setText("保护占位符及其完整性校验由程序单独管理，不属于可编辑提示词；修改或清空自定义提示词不会删除这些必要规则。");
+        form.addView(promptProtectionHint, matchWrap());
 
         TextView filterTitle = new TextView(this);
         filterTitle.setText(getString(R.string.label_translation_integrity));
