@@ -734,13 +734,18 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         experimentalChunkThresholdApplyButton = new Button(this);
         experimentalChunkThresholdApplyButton.setText(R.string.button_apply_experimental_threshold);
         experimentalChunkThresholdApplyButton.setOnClickListener(v -> {
+            String thresholdText = experimentalChunkThresholdInput.getText().toString().trim();
             int value;
-            try {
-                value = Integer.parseInt(experimentalChunkThresholdInput.getText().toString().trim());
-            } catch (NumberFormatException invalid) {
-                experimentalChunkThresholdInput.setError(getString(
-                        R.string.error_experimental_long_message_threshold));
-                return;
+            if (thresholdText.isEmpty()) {
+                value = Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD;
+            } else {
+                try {
+                    value = Integer.parseInt(thresholdText);
+                } catch (NumberFormatException invalid) {
+                    experimentalChunkThresholdInput.setError(getString(
+                            R.string.error_experimental_long_message_threshold));
+                    return;
+                }
             }
             if (value < Config.MIN_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
                     || value > Config.MAX_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD) {
