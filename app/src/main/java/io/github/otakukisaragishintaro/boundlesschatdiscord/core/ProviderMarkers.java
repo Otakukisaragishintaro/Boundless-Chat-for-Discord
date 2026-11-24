@@ -7,11 +7,14 @@ import java.util.regex.Pattern;
 
 /** Opaque placeholders for all registered internal structure tokens at the provider boundary. */
 public final class ProviderMarkers {
-    private static final Pattern INTERNAL = Pattern.compile(
-            "<keep[1-9][0-9]*/>|</?x[1-9][0-9]*>|"
-                    + "\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?"
+    private static final Pattern STRUCTURE =
+            Pattern.compile("<keep[1-9][0-9]*/>|</?x[1-9][0-9]*>");
+    private static final Pattern EMOJI = Pattern.compile(
+            "\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?"
                     + "(?:\\u200D\\p{So}(?:\\uFE0F)?(?:\\uD83C[\\uDFFB-\\uDFFF])?)*"
                     + "|[0-9#*]\\uFE0F?\\u20E3");
+    private static final Pattern INTERNAL = Pattern.compile(
+            STRUCTURE.pattern() + "|" + EMOJI.pattern());
     private ProviderMarkers() { }
 
     public static final class Protection {
@@ -43,10 +46,15 @@ public final class ProviderMarkers {
     }
 
     public static Protection protect(String source) {
+        return protect(source, true);
+    }
+
+    /** Emoji shielding follows the user's protect-channels/emojis setting. */
+    public static Protection protect(String source, boolean protectEmoji) {
         if (source == null) source = "";
         int n=0; String prefix;
         do { prefix = "⟦BCP" + n++ + "_"; } while (source.contains(prefix));
-        Matcher m=INTERNAL.matcher(source);
+        Matcher m=(protectEmoji ? INTERNAL : STRUCTURE).matcher(source);
         StringBuilder out=new StringBuilder(source.length());
         List<String> markers=new ArrayList<>(), originals=new ArrayList<>();
         int cursor=0;

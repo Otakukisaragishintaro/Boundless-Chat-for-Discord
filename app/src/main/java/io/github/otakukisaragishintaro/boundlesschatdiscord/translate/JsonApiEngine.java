@@ -386,7 +386,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
         } else {
             systemPrompt = cfg.systemPrompt;
         }
-        ProviderMarkers.Protection protection = ProviderMarkers.protect(text);
+        ProviderMarkers.Protection protection =
+                ProviderMarkers.protect(text, cfg.protectChannelsEmojis);
         String body = Protocols.requestBody(cfg.protocol, protection.text, systemPrompt, cfg.model,
                 sse);
         buildHeaders(headers);

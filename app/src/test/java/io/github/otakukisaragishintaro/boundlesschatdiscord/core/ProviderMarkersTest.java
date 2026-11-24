@@ -34,6 +34,13 @@ public class ProviderMarkersTest {
         ProviderMarkers.Protection p=ProviderMarkers.protect(source);
         assertEquals(source,p.text); assertEquals(source,p.restore(p.text));
     }
+    @Test public void emojiProtectionCanBeDisabledWithoutDisablingStructureTokens() throws Exception {
+        String source="emoji 😀 and <keep1/>";
+        ProviderMarkers.Protection p=ProviderMarkers.protect(source, false);
+        assertTrue(p.text.contains("😀"));
+        assertFalse(p.text.contains("<keep1/>"));
+        assertEquals(source,p.restore(p.text));
+    }
     private static void assertInvalid(ProviderMarkers.Protection p,String value) {
         try { p.restore(value); fail("invalid placeholder sequence"); }
         catch(TranslationException expected) { assertEquals(TranslationException.Kind.PARSE,expected.kind()); }
