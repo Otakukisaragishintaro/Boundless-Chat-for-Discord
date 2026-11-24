@@ -46,18 +46,22 @@ public class SegmentsTest {
 
     @Test
     public void stripOuterResponseWrapperRemovesOnlyOneExactOuterPair() {
-        assertEquals("你好", Segments.stripOuterResponseWrapper("<translate>你好</translate>"));
-        assertEquals("hello", Segments.stripOuterResponseWrapper(" <translate>hello</translate> "));
+        assertEquals("你好", Segments.stripOuterResponseWrapper("<translate>你好</translate>", "你好"));
+        assertEquals("hello", Segments.stripOuterResponseWrapper(" <translate>hello</translate> ", "hello"));
         assertEquals("prefix <translate>hello</translate>",
-                Segments.stripOuterResponseWrapper("prefix <translate>hello</translate>"));
-        assertEquals("<translate>hello", Segments.stripOuterResponseWrapper("<translate>hello"));
+                Segments.stripOuterResponseWrapper("prefix <translate>hello</translate>", "hello"));
+        assertEquals("<translate>hello", Segments.stripOuterResponseWrapper("<translate>hello", "hello"));
         assertEquals("<translate><translate>hello</translate></translate>",
-                Segments.stripOuterResponseWrapper("<translate><translate>hello</translate></translate>"));
-        assertEquals("hello</translate>", Segments.stripOuterResponseWrapper("hello</translate>"));
-        assertEquals("<keep1/>你好", Segments.stripOuterResponseWrapper("<keep1/>你好</translate>"));
+                Segments.stripOuterResponseWrapper("<translate><translate>hello</translate></translate>", "hello"));
+        assertEquals("hello", Segments.stripOuterResponseWrapper("hello</translate>", "hello"));
+        assertEquals("<keep1/>你好", Segments.stripOuterResponseWrapper("<keep1/>你好</translate>", "<keep1/>你好"));
         assertEquals("hello</translate></translate>",
-                Segments.stripOuterResponseWrapper("hello</translate></translate>"));
-        assertNull(Segments.stripOuterResponseWrapper(null));
+                Segments.stripOuterResponseWrapper("hello</translate></translate>", "hello"));
+        assertEquals("prefix </translate> middle</translate>",
+                Segments.stripOuterResponseWrapper("prefix </translate> middle</translate>", "hello"));
+        assertEquals("literal </translate>",
+                Segments.stripOuterResponseWrapper("literal </translate>", "literal </translate>"));
+        assertNull(Segments.stripOuterResponseWrapper(null, "hello"));
     }
 
     @Test
