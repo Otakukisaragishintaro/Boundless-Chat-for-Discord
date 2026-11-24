@@ -18,6 +18,7 @@
 - Configure server- and channel-level translation rules. Channel rules take precedence over server rules, followed by the default policy.
 - Add up to eight outbound translation buttons. Each button has its own display label, target language, and prompt. A button translates the current draft and uses Discord’s native send action; it does not change the incoming-message translation language.
 - Test configuration, connectivity, incoming translation, and outbound translation from the settings screen.
+- Optionally cache successful translations locally. Matching source text and the same translation configuration can reuse a cached result instead of making another API request.
 
 ## Supported Discord versions
 
@@ -50,6 +51,12 @@ See the [complete installation guide](docs/INSTALLATION_EN.md) for detailed setu
 Open **Manage send buttons** in the module settings. Add a button, choose its label and target language, and optionally edit its independent prompt. You can configure up to eight buttons. The outbound target language and prompt are independent from incoming-message translation settings.
 
 The `{{target_language}}` placeholder can be used in a prompt. The test button checks translation output but does not send a message. In Discord, the translation action appears only after Discord’s native send control is present; it stays hidden while that control is unavailable.
+
+## Local translation cache
+
+The cache is available under **Local translation cache** and is **disabled by default**. Enable it explicitly to store newly completed translations. When a later request has the same source text and the same complete translation-configuration version, the module can reuse the saved translation without another API request. The disk capacity can be set from 1 to 1,000,000 entries (100,000 by default); least-recently-used entries are evicted when the limit is exceeded. The settings page shows the persistent entry count and provides a manual clear action.
+
+The SQLite database stores only a SHA-256 key derived from the source text and the translated text. It does not store the source text, API key, or extra request headers. The database is kept in Discord’s private app storage and is removed when Discord app data is cleared or Discord is uninstalled. Translations shown before the cache was enabled are not backfilled. Disabling the cache does not delete existing entries; they can be reused if the cache is enabled again.
 
 ## Privacy
 
