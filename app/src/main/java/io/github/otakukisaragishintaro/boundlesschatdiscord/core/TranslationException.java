@@ -41,6 +41,9 @@ public class TranslationException extends Exception {
         RESPONSE_INCOMPLETE,
         GENERATION_STOPPED,
         TRANSLATION_INVALID,
+        NO_TRANSLATABLE_TEXT,
+        SCOPE_CONTEXT_REQUIRED,
+        SCOPE_DENIED,
         EMPTY_TEXT,
         CANCELLED,
         UNKNOWN_FAILURE
