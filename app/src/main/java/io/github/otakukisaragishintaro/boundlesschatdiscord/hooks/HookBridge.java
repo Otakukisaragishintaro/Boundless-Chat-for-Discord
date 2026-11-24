@@ -288,7 +288,7 @@ public final class HookBridge {
         StringBuilder identity = new StringBuilder();
         for (Object text : texts) {
             TextExtractor.Result ex = TextExtractor.extract(text);
-            String hash = ex == null || ex.text.trim().isEmpty() ? null : contentHashOf(ex, config);
+            String hash = ex == null || ex.text.trim().isEmpty() ? null : contentHashOf(ex, config, rowMessageId);
             hashes.add(hash);
             identity.append(hash == null ? "EMPTY" : hash).append('\u0000');
         }
@@ -315,7 +315,7 @@ public final class HookBridge {
     StateStore.Entry matchingState(String key, @Nullable TextExtractor.Result extracted) {
         StateStore.Entry entry = StateStore.get().peek(key);
         return entry != null && extracted != null
-                && contentHashOf(extracted, config).equals(entry.contentHash) ? entry : null;
+                && contentHashOf(extracted, config, key).equals(entry.contentHash) ? entry : null;
     }
 
     /** Poll question/answer slots share the same hash, scheduler and state pipeline. */
@@ -328,7 +328,7 @@ public final class HookBridge {
         TextExtractor.Result ex = TextExtractor.extract(structurable);
         return ex == null || ex.text.trim().isEmpty() ? null
                 : stateKey(rowMessageId, POLL_KEY_PREFIX + slot + "\u0000",
-                        contentHashOf(ex, config));
+                        contentHashOf(ex, config, rowMessageId));
     }
 
     static boolean isPollKey(@Nullable String key) {
@@ -378,9 +378,15 @@ public final class HookBridge {
     }
 
     /** 与 {@link #onMessageBound} 同口径的内容哈希（含多片段缓存命名空间）。 */
-    private static String contentHashOf(TextExtractor.Result ex, Config.Snapshot cfg) {
+    private Config.Snapshot configForMessage(String key, Config.Snapshot snapshot) {
+        MessageLocation location = messageLocations.get(cardRowOf(key));
+        return location == null ? snapshot
+                : snapshot.forIncomingTranslation(location.guildId, location.channelId);
+    }
+
+    private String contentHashOf(TextExtractor.Result ex, Config.Snapshot cfg, String messageKey) {
         String hashInput = ex.segmentCount >= 2 ? ex.text + SEGMENT_CACHE_SUFFIX : ex.text;
-        return Scheduler.contentHash(hashInput, cfg.version());
+        return Scheduler.contentHash(hashInput, configForMessage(messageKey, cfg).version());
     }
 
     /**
@@ -433,7 +439,8 @@ public final class HookBridge {
         // The single captured request keeps style ranges and retained-node anchors.
         // The segment suffix is only a cache namespace, not another request protocol.
         String requestText = ex.text;
-        String hash = contentHashOf(ex, cfg);
+        Config.Snapshot requestConfig = configForMessage(messageId, cfg);
+        String hash = contentHashOf(ex, requestConfig, messageId);
         StateStore.Entry entry = StateStore.get().obtain(messageId, hash);
         rememberCanonicalContent(messageId, structurableText);
         if (entry.status == StateStore.Status.TRANSLATING
@@ -480,7 +487,8 @@ public final class HookBridge {
         TranslationTaskId task = StateStore.get().begin(entry);
         if (task == null) return;
         refreshTranslation(messageId);
-        Scheduler.get().submit(task, requestText, engine,
+        Scheduler.Engine requestEngine = requestConfig == cfg ? engine : new JsonApiEngine(requestConfig);
+        Scheduler.get().submit(task, requestText, requestEngine,
                 identity -> HookRuntime.isActive() && translationAllowed(identity.messageId, config)
                         && StateStore.get().owns(identity),
                 (identity, accepted, translated, error) -> {
