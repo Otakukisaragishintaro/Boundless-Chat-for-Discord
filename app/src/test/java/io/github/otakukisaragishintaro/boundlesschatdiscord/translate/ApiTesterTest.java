@@ -103,7 +103,7 @@ public class ApiTesterTest {
                 ApiTester.TestKind.TRANSLATION, "hello", "", "456").call();
         assertFalse(denied.ok);
         assertEquals(TranslationException.Reason.SCOPE_DENIED, denied.failure.reason);
-        assertEquals("scope_denied", denied.failure.stage);
+        assertEquals("scope_filter", denied.failure.stage);
     }
 
     @Test
