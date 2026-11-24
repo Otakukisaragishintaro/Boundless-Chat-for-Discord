@@ -27,6 +27,9 @@ public final class EnglishDetector {
     private static final int MIN_LETTERS = 4;
     private static final float MIN_LETTER_RATIO = 0.5f;
     private static final float MIN_TARGET_SCRIPT_RATIO = 0.2f;
+    /** ASCII emoticons are presentation tokens, not prose or evidence of another script. */
+    private static final java.util.regex.Pattern EMOTICON = java.util.regex.Pattern.compile(
+            "(?i)(?:>\\\\.<|<\\\\.<|>_<|<_<|T_T|T\\\\.T|;_;|:\\\\)|:-\\\\)|:\\\\(|:-\\\\(|:D|:-D|:P|:-P|:3|:-3|XD|\\\\^_\\\\^|\\\\^\\\\^|\\\\._\\\\.|-_-|O_O|<3)");
 
     private EnglishDetector() {
     }
@@ -37,7 +40,8 @@ public final class EnglishDetector {
         if (rawText == null || rawText.trim().isEmpty()) {
             return new Verdict(false, Reason.EMPTY);
         }
-        String text = RetainedNodeMarkers.maskedForDetection(rawText).replaceAll("https?://\\S+", " ")
+        String text = EMOTICON.matcher(RetainedNodeMarkers.maskedForDetection(rawText))
+                .replaceAll(" ").replaceAll("https?://\\S+", " ")
                 .replaceAll("`[^`]*`", " ")
                 .replaceAll(":([A-Za-z0-9_]+):", " ");
 
