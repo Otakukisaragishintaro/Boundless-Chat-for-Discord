@@ -395,7 +395,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             systemPrompt = cfg.systemPrompt;
         }
         String body = Protocols.requestBody(cfg.protocol, text, systemPrompt, cfg.model,
-                sse);
+                sse, cfg.protectionPromptEnabled, cfg.targetLang);
         buildHeaders(headers);
 
         // Decoder selection is fixed for this request; no reparsing or mode detection.
