@@ -162,6 +162,10 @@ public final class Config {
     public static final String KEY_MAX_LENGTH_PERCENT = "max_translation_length_percent";
     public static final int DEF_MAX_LENGTH_PERCENT = 500;
 
+    // ---- Experimental features (opt-in; disabled by default) ----
+    public static final String KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING = "experimental_long_message_chunking";
+    public static final boolean DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING = false;
+
     private Config() {
     }
 
@@ -204,6 +208,7 @@ public final class Config {
         public final boolean checkPlaceholders;
         public final boolean checkRetainedMarkers;
         public final boolean checkLength;
+        public final boolean experimentalLongMessageChunking;
         public final int minLengthPercent;
         public final int maxLengthPercent;
 
@@ -236,6 +241,8 @@ public final class Config {
             checkPlaceholders = readBoolean(p, KEY_CHECK_PLACEHOLDERS, DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkers = readBoolean(p, KEY_CHECK_RETAINED_MARKERS, DEF_CHECK_RETAINED_MARKERS);
             checkLength = readBoolean(p, KEY_CHECK_LENGTH, DEF_CHECK_LENGTH);
+            experimentalLongMessageChunking = readBoolean(p, KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
+                    DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
             minLengthPercent = boundedPercent(p, KEY_MIN_LENGTH_PERCENT, DEF_MIN_LENGTH_PERCENT);
             maxLengthPercent = boundedPercent(p, KEY_MAX_LENGTH_PERCENT, DEF_MAX_LENGTH_PERCENT);
             if (minLengthPercent > maxLengthPercent) {
@@ -272,6 +279,7 @@ public final class Config {
             checkPlaceholders = DEF_CHECK_PLACEHOLDERS;
             checkRetainedMarkers = DEF_CHECK_RETAINED_MARKERS;
             checkLength = DEF_CHECK_LENGTH;
+            experimentalLongMessageChunking = DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING;
             minLengthPercent = DEF_MIN_LENGTH_PERCENT;
             maxLengthPercent = DEF_MAX_LENGTH_PERCENT;
             configError = error;
@@ -356,6 +364,7 @@ public final class Config {
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
                     + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
                     + encode(Boolean.toString(checkRetainedMarkers)) + encode(Boolean.toString(checkLength))
+                    + encode(Boolean.toString(experimentalLongMessageChunking))
                     + encode(Integer.toString(minLengthPercent)) + encode(Integer.toString(maxLengthPercent))
                     + encode(configError == null ? "" : "invalid")
                     + encode(credentialFingerprint());
@@ -419,6 +428,7 @@ public final class Config {
             checkPlaceholders = source.checkPlaceholders;
             checkRetainedMarkers = source.checkRetainedMarkers;
             checkLength = source.checkLength;
+            experimentalLongMessageChunking = source.experimentalLongMessageChunking;
             minLengthPercent = source.minLengthPercent;
             maxLengthPercent = source.maxLengthPercent;
             outboundButtonsJson = source.outboundButtonsJson;
