@@ -9,7 +9,7 @@ public class ProviderMarkersTest {
         ProviderMarkers.Protection p=ProviderMarkers.protect(source);
         assertFalse(p.text.contains("<keep1/>")); assertFalse(p.text.contains("<x1>"));
         assertFalse(p.text.contains("😀")); assertEquals(source,p.restore(p.text));
-        String translated=p.text.replace("Visit ","访问").replace("the site ","网站 ")
+        String translated=p.text.replace("Visit ","访问 ").replace("the site ","网站 ")
                 .replace(" for details"," 获取详情").replace(" now"," 现在");
         assertEquals("访问 <x1>网站 <keep1/> 😀 获取详情</x1> 现在",p.restore(translated));
     }
