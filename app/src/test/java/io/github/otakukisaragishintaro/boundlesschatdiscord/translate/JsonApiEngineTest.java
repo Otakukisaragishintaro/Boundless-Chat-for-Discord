@@ -217,12 +217,19 @@ public class JsonApiEngineTest {
         assertTrue(defaults.protectUrls);
 
         String source = "<@403924274437685248> <#1570408648533082167> "
-                + "<:openhouse:123456789012345678> @everyone https://example.com/path";
+                + "<:openhouse:123456789012345678> 😀 @everyone https://example.com/path";
         DiscordTokenMarkers.Protection selected = DiscordTokenMarkers.protect(
                 source, false, true, false);
-        assertEquals("<@403924274437685248> <keep1/> <keep2/> @everyone https://example.com/path",
+        assertEquals("<@403924274437685248> <keep1/> <keep2/> <keep3/> @everyone https://example.com/path",
                 selected.text);
         assertEquals(source, selected.restore(selected.text));
+        DiscordTokenMarkers.Protection emojiDisabled = DiscordTokenMarkers.protect(
+                "😀", true, false, true);
+        assertEquals("😀", emojiDisabled.text);
+        DiscordTokenMarkers.Protection emojiEnabled = DiscordTokenMarkers.protect(
+                "😀", true, true, true);
+        assertEquals("<keep1/>", emojiEnabled.text);
+        assertEquals("😀", emojiEnabled.restore(emojiEnabled.text));
 
         Config.Snapshot disabled = Config.read(new MemoryPrefs()
                 .put(Config.KEY_PROTECT_MENTIONS, false)
