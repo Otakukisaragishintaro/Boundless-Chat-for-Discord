@@ -212,9 +212,12 @@ public final class TranslationCache {
     }
 
     /** 修改持久化 LRU 容量；仅淘汰超出新上限的最久未使用条目。 */
-    public synchronized void setMaxDiskEntries(int maxEntries) {
+    public synchronized void setMaxDiskEntries(int maxEntries, boolean cacheEnabled) {
         int bounded = Math.max(1, Math.min(maxEntries, 1000000));
         maxDiskEntries = bounded;
+        // A disabled cache may remember the next capacity, but must not open SQLite or
+        // prune existing entries. Apply the new limit only when the cache is enabled.
+        if (!cacheEnabled) return;
         SQLiteDatabase db = database();
         if (db != null) {
             prune(db);
