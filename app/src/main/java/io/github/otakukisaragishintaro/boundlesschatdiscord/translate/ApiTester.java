@@ -127,6 +127,10 @@ public final class ApiTester {
         private boolean cancelled;
         @Nullable private Thread worker;
 
+        Call(JsonApiEngine engine, TestKind testKind, String text, Config.Snapshot cfg) {
+            this(engine, testKind, text, cfg, "", "");
+        }
+
         Call(JsonApiEngine engine, TestKind testKind, String text, Config.Snapshot cfg,
              String testGuildId, String testChannelId) {
             if (testKind != TestKind.CONNECTION && testKind != TestKind.TRANSLATION
@@ -164,9 +168,9 @@ public final class ApiTester {
             try {
                 if (testKind == TestKind.TRANSLATION) {
                     enforceTestScope(sourceConfig.translationScope, testGuildId, testChannelId);
-                    EnglishDetector.Verdict verdict = EnglishDetector.evaluate(
-                            text, 1, sourceConfig.targetLang);
-                    if (!verdict.shouldTranslate) {
+                    EnglishDetector.Verdict verdict = text.trim().isEmpty() ? null
+                            : EnglishDetector.evaluate(text, 1, sourceConfig.targetLang);
+                    if (verdict != null && !verdict.shouldTranslate) {
                         throw new TranslationException(TranslationException.Kind.EMPTY,
                                 TranslationException.Reason.NO_TRANSLATABLE_TEXT,
                                 "语言检测跳过：" + verdict.reason.name());
@@ -174,7 +178,7 @@ public final class ApiTester {
                     // Same production entry point used by Scheduler.Engine: Discord token
                     // protection, paragraph chunking, request/decoder handling, integrity
                     // validation, and protected-token restoration all run here.
-                    result = new Result(testKind, engine.translate(text), elapsed(start), null);
+                    result = new Result(testKind, engine.translateForTest(text), elapsed(start), null);
                 } else if (testKind == TestKind.SEND_TRANSLATION) {
                     result = new Result(testKind, engine.translate(text), elapsed(start), null);
                 } else {
@@ -239,8 +243,8 @@ public final class ApiTester {
 
     private static String preview(String value, int max) {
         if (value == null) return null;
-        String safe = value.replace("\\r", "\\\\r").replace("\\n", "\\\\n")
-                .replace("\\t", "\\\\t");
+        String safe = value.replace("\r", "\\\\r").replace("\n", "\\\\n")
+                .replace("\t", "\\\\t");
         return safe.length() <= max ? safe : safe.substring(0, max) + "…";
     }
 
