@@ -75,7 +75,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
     public String translate(String text) throws Exception {
         java.util.List<String> paragraphs = new java.util.ArrayList<>();
         java.util.List<String> separators = new java.util.ArrayList<>();
-        if (text == null || text.length() <= MAX_PARAGRAPH_CHARS) {
+        if (!cfg.experimentalLongMessageChunking || text == null
+                || text.length() <= MAX_PARAGRAPH_CHARS) {
             return execute(text, true).translated;
         }
         splitParagraphs(text, paragraphs, separators);
