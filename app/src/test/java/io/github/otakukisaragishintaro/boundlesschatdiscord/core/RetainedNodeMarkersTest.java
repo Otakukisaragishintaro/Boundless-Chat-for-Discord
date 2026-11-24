@@ -142,7 +142,8 @@ public class RetainedNodeMarkersTest {
                     ? body.getJSONArray("messages").getJSONObject(0).getString("content")
                     : body.getString(Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol) ? "instructions" : "system");
             assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE, prompt);
-            assertTrue(prompt.contains("⟦BCP"));
+            assertTrue(prompt.contains("<keepN/>"));
+            assertFalse(prompt.contains("⟦BCP"));
             assertTrue(prompt.contains("exactly once"));
             assertTrue(prompt.contains("same order"));
         }
