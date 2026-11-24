@@ -10,6 +10,9 @@ import android.os.Bundle;
 import android.os.Binder;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ProviderInfo;
+import android.os.Process;
+import android.os.UserHandle;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -48,9 +51,112 @@ public final class CacheCountProvider extends ContentProvider {
         extras.putInt(EXTRA_ENTRY_COUNT, entryCount);
         ProjectLog.infoOnce("cache.count.publish.endpoint",
                 "local translation cache count provider endpoint authority=" + authority);
+
+        // Capture what the Discord process itself can see before making the IPC call.
+        // This is diagnostic only and does not change provider visibility or permissions.
+        int processUid = Process.myUid();
+        int processUserId = UserHandle.getUserId(processUid);
+        String contextPackage = safeContextPackage(targetContext);
+        String opPackage = safeContextOpPackage(targetContext);
+        PackageManager packageManager = targetContext.getPackageManager();
+        try {
+            ProviderInfo provider = packageManager.resolveContentProvider(authority, 0);
+            if (provider == null) {
+                ProjectLog.warnOnce("cache.count.provider.resolve.missing",
+                        "local translation cache provider resolution result=NOT_FOUND"
+                                + " authority=" + authority
+                                + " contextPackage=" + contextPackage
+                                + " opPackage=" + opPackage
+                                + " processUid=" + processUid
+                                + " processUserId=" + processUserId);
+            } else {
+                int providerUid = provider.applicationInfo == null
+                        ? -1 : provider.applicationInfo.uid;
+                ProjectLog.infoOnce("cache.count.provider.resolve.found",
+                        "local translation cache provider resolution result=FOUND"
+                                + " authority=" + authority
+                                + " providerPackage=" + provider.packageName
+                                + " providerClass=" + provider.name
+                                + " exported=" + provider.exported
+                                + " enabled=" + provider.enabled
+                                + " providerUid=" + providerUid
+                                + " contextPackage=" + contextPackage
+                                + " opPackage=" + opPackage
+                                + " processUid=" + processUid
+                                + " processUserId=" + processUserId);
+            }
+        } catch (Throwable failure) {
+            ProjectLog.warnOnce("cache.count.provider.resolve.error",
+                    "local translation cache provider resolution threw"
+                            + " errorClass=" + failure.getClass().getSimpleName()
+                            + " errorMessage=" + safeMessage(failure)
+                            + " authority=" + authority
+                            + " contextPackage=" + contextPackage
+                            + " opPackage=" + opPackage
+                            + " processUid=" + processUid
+                            + " processUserId=" + processUserId);
+        }
+
+        try {
+            ApplicationInfo moduleInfo = packageManager.getApplicationInfo(modulePackageName, 0);
+            ProjectLog.infoOnce("cache.count.module.package.visible",
+                    "local translation cache module package visibility result=FOUND"
+                            + " modulePackage=" + modulePackageName
+                            + " moduleUid=" + moduleInfo.uid
+                            + " processUid=" + processUid
+                            + " processUserId=" + processUserId);
+        } catch (Throwable failure) {
+            ProjectLog.warnOnce("cache.count.module.package.missing",
+                    "local translation cache module package visibility result=NOT_FOUND"
+                            + " modulePackage=" + modulePackageName
+                            + " errorClass=" + failure.getClass().getSimpleName()
+                            + " errorMessage=" + safeMessage(failure)
+                            + " contextPackage=" + contextPackage
+                            + " opPackage=" + opPackage
+                            + " processUid=" + processUid
+                            + " processUserId=" + processUserId);
+        }
+
         Bundle response = targetContext.getContentResolver().call(
                 authority, METHOD_PUBLISH_COUNT, null, extras);
-        return response != null && response.getBoolean(EXTRA_PUBLISHED, false);
+        boolean published = response != null
+                && response.getBoolean(EXTRA_PUBLISHED, false);
+        ProjectLog.infoOnce(published
+                        ? "cache.count.provider.call.success"
+                        : "cache.count.provider.call.empty",
+                "local translation cache provider call result="
+                        + (published ? "PUBLISHED" : "NO_CONFIRMATION")
+                        + " authority=" + authority
+                        + " responsePresent=" + (response != null));
+        return published;
+    }
+
+    @NonNull
+    private static String safeContextPackage(@NonNull Context context) {
+        try {
+            String value = context.getPackageName();
+            return value == null ? "null" : value;
+        } catch (Throwable failure) {
+            return "error:" + failure.getClass().getSimpleName();
+        }
+    }
+
+    @NonNull
+    private static String safeContextOpPackage(@NonNull Context context) {
+        try {
+            String value = context.getOpPackageName();
+            return value == null ? "null" : value;
+        } catch (Throwable failure) {
+            return "error:" + failure.getClass().getSimpleName();
+        }
+    }
+
+    @NonNull
+    private static String safeMessage(@NonNull Throwable failure) {
+        String message = failure.getMessage();
+        if (message == null || message.isEmpty()) return "none";
+        message = message.replace('\\n', ' ').replace('\\r', ' ');
+        return message.length() > 160 ? message.substring(0, 160) : message;
     }
 
     @Override
