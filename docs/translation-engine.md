@@ -18,6 +18,8 @@
 
 请求按所选协议构造，使用系统 `org.json` 和 `HttpURLConnection`。配置校验解析一次额外请求头，实际请求复用并追加协议认证头。默认提示词按目标语言生成；自定义提示词不随目标语言改写。协议层去除提示词首尾空白后，统一附加行段及保留标记规则。
 
+内部节点定位标记 `<keepN/>` 只存在于模块内部。每次 API 请求前，引擎将其编码为 `⟦BC_KEEP_N⟧` 形式的非标签占位符；收到响应后先验证占位符的完整性、数量和顺序，再恢复内部标记，随后执行原有译文校验与节点重建。缺失、重复、乱序、损坏的占位符，以及 API 返回的旧 `<keepN/>` 标签都会被拒绝，不会作为正常译文交给 Discord。
+
 每次请求只创建一个协议 decoder，不切换解析模式。`SseReader` 以空行提交完整事件，支持多行 data、event、注释和 CR/LF/CRLF。Compatible 必须收到 `[DONE]`，Responses 必须收到 `response.completed`，Anthropic 必须收到 `message_stop`；结束后不等待 EOF。缺结束事件、已识别的错误帧、异常停止原因、所读取文本字段类型错误会失败，不返回该请求已收集的部分译文。这些检查不构成完整响应 schema 校验。包装标签回显属于 `Segments` 译文防损坏校验：实际翻译及翻译测试拒绝，连接测试不执行该内容校验。
 
 非流式 Chat 必须显式返回 `finish_reason:"stop"`，并拒绝非 null 的 `message.refusal`、`tool_calls` 和 `function_call`；Anthropic 必须返回字符串 `stop_reason:"end_turn"` 或 `"stop_sequence"`，只拼接 text 内容块，跳过非对象及非 text 项。
