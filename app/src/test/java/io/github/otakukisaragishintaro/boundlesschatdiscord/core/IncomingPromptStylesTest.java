@@ -68,7 +68,8 @@ public class IncomingPromptStylesTest {
         IncomingPromptStyles styles = IncomingPromptStyles.defaults();
         assertEquals(LanguagePromptConfig.defaultPrompt("Simplified Chinese"),
                 styles.resolve("Simplified Chinese", null));
-        String alternate = styles.addStyle("Alternate").styles().get(1).id;
+        styles = styles.addStyle("Alternate");
+        String alternate = styles.styles().get(1).id;
         assertEquals(LanguagePromptConfig.defaultPrompt("Simplified Chinese"),
                 styles.resolve("Simplified Chinese", alternate));
     }
