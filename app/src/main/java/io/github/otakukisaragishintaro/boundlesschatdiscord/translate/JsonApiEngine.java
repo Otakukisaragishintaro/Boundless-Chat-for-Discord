@@ -89,6 +89,15 @@ public final class JsonApiEngine implements Scheduler.Engine {
      */
     @Override
     public String translate(String text) throws Exception {
+        return translateInternal(text, true);
+    }
+
+    /** Same production pipeline for the settings test, with details returned to UI, not logcat. */
+    String translateForTest(String text) throws Exception {
+        return translateInternal(text, false);
+    }
+
+    private String translateInternal(String text, boolean logFailureDiagnostics) throws Exception {
         // Literal Discord syntax can also arrive inside ordinary text nodes or primitive
         // StructurableText. Shield it before every provider request and restore it only
         // after the same retained-marker integrity check used for native opaque nodes.
@@ -99,7 +108,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         java.util.List<String> separators = new java.util.ArrayList<>();
         if (!cfg.experimentalLongMessageChunking || requestText == null
                 || requestText.length() <= cfg.experimentalLongMessageThreshold) {
-            return protection.restore(execute(requestText, true, true).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics).translated);
         }
         splitParagraphs(requestText, paragraphs, separators);
 
@@ -131,7 +140,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     + " sourceChars=" + group.length()
                     + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
             try {
-                String translated = execute(separatorProtection.text, true, true).translated;
+                String translated = execute(separatorProtection.text, true, logFailureDiagnostics).translated;
                 combined.append(separatorProtection.restore(translated));
             } catch (Exception failure) {
                 ProjectLog.warn("translation.chunking failed index=" + (i + 1)
@@ -307,14 +316,14 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         + " translatedChars=" + codePointLength(diagnosticTranslated)
                         + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                         + " detail=" + detail);
-                if (!(e instanceof DiagnosticException)) {
-                    TranslationException classified = e instanceof TranslationException
-                            ? (TranslationException) e
-                            : new TranslationException(TranslationException.Kind.UNKNOWN,
-                                    TranslationException.Reason.UNKNOWN_FAILURE,
-                                    e.getClass().getSimpleName(), 0, e);
-                    throw new DiagnosticException(classified, failureStage, text, diagnosticTranslated);
-                }
+            }
+            if (!(e instanceof DiagnosticException)) {
+                TranslationException classified = e instanceof TranslationException
+                        ? (TranslationException) e
+                        : new TranslationException(TranslationException.Kind.UNKNOWN,
+                                TranslationException.Reason.UNKNOWN_FAILURE,
+                                e.getClass().getSimpleName(), 0, e);
+                throw new DiagnosticException(classified, failureStage, text, diagnosticTranslated);
             }
             throw e;
         } finally {
