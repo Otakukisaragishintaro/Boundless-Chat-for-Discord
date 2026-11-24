@@ -1032,8 +1032,18 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         TextView explanation = new TextView(this);
         explanation.setTextSize(12f);
-        explanation.setText("普通提示词与必要保护提示词完全分开。普通提示词可编辑；必要保护提示词由程序按当前语言生成，只读查看。必要保护提示词是否发送由高级设置中的独立开关控制，默认开启。切换语言或翻译方向时会保留本次对话中的修改。发送按钮若单独设置了自定义提示词，会优先使用按钮专属提示词。");
+        explanation.setText("普通提示词与必要保护提示词完全分开。普通提示词可编辑；必要保护提示词由程序按当前语言生成，只读查看，并在这里通过独立开关控制是否发送（默认开启）。切换语言或翻译方向时会保留本次对话中的修改。发送按钮若单独设置了自定义提示词，会优先使用按钮专属提示词。");
         form.addView(explanation, matchWrap());
+
+        Switch protectionPromptToggle = new Switch(this);
+        protectionPromptToggle.setText("启用必要保护提示词（默认开启）");
+        protectionPromptToggle.setShowText(false);
+        protectionPromptToggle.setChecked(protectionPromptEnabledInput.isChecked());
+        form.addView(protectionPromptToggle, matchWrap());
+        final boolean[] protectionPromptEnabledDraft = {
+                protectionPromptEnabledInput.isChecked()};
+        protectionPromptToggle.setOnCheckedChangeListener((button, checked) ->
+                protectionPromptEnabledDraft[0] = checked);
 
         Button togglePrompt = new Button(this);
         togglePrompt.setText("显示当前语言提示词");
@@ -1139,6 +1149,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         String outboundJson = LanguagePromptConfig.toJson(outboundDraft);
                         systemPromptInput.setText(incomingJson);
                         sendSystemPromptInput.setText(outboundJson);
+                        protectionPromptEnabledInput.setChecked(
+                                protectionPromptEnabledDraft[0]);
                         markDirty();
                         saveSelectedTextFields(Arrays.asList(systemPromptInput, sendSystemPromptInput));
                         dialog.dismiss();
@@ -1163,7 +1175,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         TextView promptProtectionHint = new TextView(this);
         promptProtectionHint.setTextSize(12f);
-        promptProtectionHint.setText("普通提示词与必要保护提示词分开管理。普通提示词可按语言编辑；必要保护提示词按目标语言单独生成，可在“管理语言提示词”中展开只读查看，并由下面的独立开关控制是否随请求发送。关闭此开关不会关闭程序对内部保护标记的强制完整性检查。");
+        promptProtectionHint.setText("普通提示词与必要保护提示词分开管理。普通提示词可按语言编辑；必要保护提示词按目标语言单独生成，可在“管理语言提示词”中展开只读查看。必要保护提示词的启用开关也位于该管理页面；关闭它不会关闭程序对内部保护标记的强制完整性检查。");
         form.addView(promptProtectionHint, matchWrap());
 
         TextView filterTitle = new TextView(this);
@@ -1176,8 +1188,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         filterHint.setText(getString(R.string.hint_translation_integrity));
         form.addView(filterHint, matchWrap());
 
-        Switch protectionPrompt = addDialogSwitch(form,
-                "启用必要保护提示词（默认开启）", protectionPromptEnabledInput.isChecked());
         Switch wrapper = addDialogSwitch(form, getString(R.string.validation_check_wrapper),
                 checkWrapperInput.isChecked());
         Switch strip = addDialogSwitch(form,
@@ -1236,7 +1246,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         Toast.makeText(this, R.string.error_length_range, Toast.LENGTH_LONG).show();
                         return;
                     }
-                    protectionPromptEnabledInput.setChecked(protectionPrompt.isChecked());
                     checkWrapperInput.setChecked(wrapper.isChecked());
                     stripOuterWrapperInput.setChecked(strip.isChecked());
                     checkSegmentMarkersInput.setChecked(segments.isChecked());
