@@ -164,6 +164,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Button apiSettingsButton;
     private Button experimentalSettingsButton;
     private Switch experimentalChunkingInput;
+    private EditText experimentalChunkThresholdInput;
+    private Button experimentalChunkThresholdApplyButton;
     private Button cacheApplyButton;
     private Button apiApplyButton;
     private LinearLayout cacheBacking;
@@ -316,6 +318,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("check_length", checkLengthInput.isChecked());
         draft.putBoolean("experimental_long_message_chunking",
                 experimentalChunkingInput.isChecked());
+        draft.putString("experimental_long_message_threshold",
+                experimentalChunkThresholdInput.getText().toString());
         draft.putInt("protocol", protocolSpinner.getSelectedItemPosition());
         draft.putString("language", selectedTargetLanguage());
         draft.putString("send_language", selectedSendTargetLanguage());
@@ -358,6 +362,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkLengthInput.setChecked(draft.getBoolean("check_length", Config.DEF_CHECK_LENGTH));
             experimentalChunkingInput.setChecked(draft.getBoolean("experimental_long_message_chunking",
                     Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING));
+            experimentalChunkThresholdInput.setText(draft.getString(
+                    "experimental_long_message_threshold",
+                    String.valueOf(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD)));
             String language = draft.getString("language");
             ensureTargetLanguageAvailable(language);
             targetLanguageSpinner.setSelection(targetLanguagePosition(language));
@@ -720,6 +727,31 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         experimentalChunkingHint.setTextSize(12f);
         experimentalChunkingHint.setText(R.string.hint_experimental_long_message_chunking);
         experimentalBacking.addView(experimentalChunkingHint, matchWrap());
+        experimentalChunkThresholdInput = addField(experimentalBacking,
+                getString(R.string.label_experimental_long_message_threshold),
+                getString(R.string.hint_experimental_long_message_threshold),
+                InputType.TYPE_CLASS_NUMBER);
+        experimentalChunkThresholdApplyButton = new Button(this);
+        experimentalChunkThresholdApplyButton.setText(R.string.button_apply_experimental_threshold);
+        experimentalChunkThresholdApplyButton.setOnClickListener(v -> {
+            int value;
+            try {
+                value = Integer.parseInt(experimentalChunkThresholdInput.getText().toString().trim());
+            } catch (NumberFormatException invalid) {
+                experimentalChunkThresholdInput.setError(getString(
+                        R.string.error_experimental_long_message_threshold));
+                return;
+            }
+            if (value < Config.MIN_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
+                    || value > Config.MAX_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD) {
+                experimentalChunkThresholdInput.setError(getString(
+                        R.string.error_experimental_long_message_threshold));
+                return;
+            }
+            experimentalChunkThresholdInput.setError(null);
+            saveSingleField(experimentalChunkThresholdInput);
+        });
+        experimentalBacking.addView(experimentalChunkThresholdApplyButton, matchWrap());
         experimentalChunkingInput.setOnCheckedChangeListener((button, checked) -> {
             markDirty();
             if (!loadingUi) saveOptionsOnly();
@@ -1295,6 +1327,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkPlaceholdersInput.setChecked(Config.DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkersInput.setChecked(Config.DEF_CHECK_RETAINED_MARKERS);
             checkLengthInput.setChecked(Config.DEF_CHECK_LENGTH);
+            experimentalChunkingInput.setChecked(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_CHUNKING);
+            experimentalChunkThresholdInput.setText("");
             protocolSpinner.setSelection(AdapterView.INVALID_POSITION);
             targetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
             sendTargetLanguageSpinner.setSelection(AdapterView.INVALID_POSITION);
@@ -1404,6 +1438,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkRetainedMarkersInput.setChecked(snapshot.checkRetainedMarkers);
             checkLengthInput.setChecked(snapshot.checkLength);
             experimentalChunkingInput.setChecked(snapshot.experimentalLongMessageChunking);
+            setTextOrPlaceholder(experimentalChunkThresholdInput,
+                    String.valueOf(snapshot.experimentalLongMessageThreshold),
+                    String.valueOf(Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD));
             setTextOrPlaceholder(minLengthPercentInput, String.valueOf(snapshot.minLengthPercent),
                     String.valueOf(Config.DEF_MIN_LENGTH_PERCENT));
             setTextOrPlaceholder(maxLengthPercentInput, String.valueOf(snapshot.maxLengthPercent),
@@ -1580,7 +1617,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private List<EditText> persistedTextFields() {
         return Arrays.asList(urlInput, keyInput, modelInput, headersInput,
                 systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
-                minLengthPercentInput, maxLengthPercentInput, cacheLimitInput);
+                minLengthPercentInput, maxLengthPercentInput, cacheLimitInput,
+                experimentalChunkThresholdInput);
     }
 
     /** 将已提交快照转换为输入框实际显示的基线文本（默认值继续显示为提示文字）。 */
@@ -1604,6 +1642,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 snapshot.maxLengthPercent == Config.DEF_MAX_LENGTH_PERCENT ? ""
                         : String.valueOf(snapshot.maxLengthPercent));
         committedTextValues.put(cacheLimitInput, String.valueOf(snapshot.cacheLimit));
+        committedTextValues.put(experimentalChunkThresholdInput,
+                snapshot.experimentalLongMessageThreshold == Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD
+                        ? "" : String.valueOf(snapshot.experimentalLongMessageThreshold));
     }
 
     private Map<EditText, String> captureTextDrafts() {
@@ -1885,6 +1926,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (manageOutboundButtonsButton != null) manageOutboundButtonsButton.setEnabled(formAvailable);
         if (experimentalSettingsButton != null) experimentalSettingsButton.setEnabled(formAvailable);
         if (experimentalChunkingInput != null) experimentalChunkingInput.setEnabled(formAvailable);
+        if (experimentalChunkThresholdInput != null) experimentalChunkThresholdInput.setEnabled(formAvailable);
+        if (experimentalChunkThresholdApplyButton != null) {
+            experimentalChunkThresholdApplyButton.setEnabled(formAvailable && available);
+        }
         if (advancedSettingsButton != null) advancedSettingsButton.setEnabled(formAvailable);
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
@@ -1959,6 +2004,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_CHECK_LENGTH, checkLengthInput.isChecked());
         memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING,
                 experimentalChunkingInput.isChecked());
+        memoryPrefs.put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD,
+                parseIntInput(experimentalChunkThresholdInput,
+                        Config.DEF_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD));
         memoryPrefs.put(Config.KEY_MIN_LENGTH_PERCENT,
                 parseIntInput(minLengthPercentInput, Config.DEF_MIN_LENGTH_PERCENT));
         memoryPrefs.put(Config.KEY_MAX_LENGTH_PERCENT,
