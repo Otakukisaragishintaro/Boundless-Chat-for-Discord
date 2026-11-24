@@ -56,6 +56,7 @@ public class ConfigTest {
         assertEquals(Config.DEF_PROTOCOL, s.protocol);
         assertEquals(Config.DEF_TIMEOUT_MS, s.timeoutMs);
         assertEquals(Config.DEF_MAX_CONCURRENCY, s.maxConcurrency);
+        assertTrue(s.protectionPromptEnabled);
     }
 
     @Test
@@ -176,6 +177,7 @@ public class ConfigTest {
                 .put(Config.KEY_LOGGING_ENABLED, true)
                 .put(Config.KEY_CACHE_ENABLED, true)
                 .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false)
                 .put(Config.KEY_CHECK_WRAPPER, false)
                 .put(Config.KEY_STRIP_OUTER_WRAPPER, false)
                 .put(Config.KEY_CHECK_SEGMENT_MARKERS, false)
@@ -191,6 +193,7 @@ public class ConfigTest {
         assertTrue(snapshot.loggingEnabled);
         assertTrue(snapshot.cacheEnabled);
         assertFalse(snapshot.streaming);
+        assertFalse(snapshot.protectionPromptEnabled);
         assertFalse(snapshot.checkWrapper);
         assertFalse(snapshot.stripOuterWrapper);
         assertFalse(snapshot.checkSegmentMarkers);
