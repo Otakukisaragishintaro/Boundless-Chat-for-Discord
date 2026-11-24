@@ -221,4 +221,10 @@
     <string name="label_experimental_long_message_chunking">长消息分段请求</string>
     <string name="hint_experimental_long_message_chunking">开启后，超过 400 个字符且包含空行分段的消息会按段分别请求翻译服务，再合并译文。默认关闭；这只改变 API 请求方式，不会分段写入 Discord。属于实验性功能，可能增加请求次数和 Token 消耗。</string>
 
+
+    <string name="label_experimental_long_message_threshold">分段触发字数</string>
+    <string name="hint_experimental_long_message_threshold">当整条消息超过此字数时，才尝试按空行分段请求。范围：100–10000，默认 400。不会在单个段落内部强行切开。</string>
+    <string name="button_apply_experimental_threshold">应用触发字数</string>
+    <string name="error_experimental_long_message_threshold">请输入 100 到 10000 之间的整数</string>
+
 </resources>
