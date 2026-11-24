@@ -1,6 +1,8 @@
 # 架构与生命周期
 
-用户功能及支持版本见 [README](../README.md)，协作要求见 [AGENTS.md](../AGENTS.md)。具体宿主类、字段、参数和构造器以 `app/src/main/assets/hook-config/<versionCode>.json` 为唯一配置来源。
+用户功能及支持版本见 [README](../README.md)，协作要求见 [AGENTS.md](../AGENTS.md)。具体宿主类、字段、参数和构造器以 `app/src/main/assets/hook-config/<versionCode>.json` 为唯一配置来源。跨聊天软件适配目录及职责边界见 [宿主适配层说明](platform-adaptation.md)。
+
+当前 `core/`、`translate/` 和 `ui/` 承载通用业务；现有 Discord Hook 仍位于 `hooks/`。`platform/common/` 与 `platform/discord/` 已建立为未来适配契约和 Discord 专属实现的目标目录，本轮只准备目录和备注，不搬迁 Hook 类或改变运行调用链。
 
 ## 唯一处理链
 
@@ -35,7 +37,7 @@
 
 `TranslationTaskId` 贯穿消息/段键、内容 hash、generation 和唯一 attempt。编辑替换对应状态；派发、完成、丢弃回调及主线程交付均核对所有权，旧任务不得迁移新 attempt，也不得复活被淘汰状态。
 
-`StateStore` 最多保留 512 条 LRU 状态，规范 Source 与编辑版本随条目失效。所有权检查不改变 LRU。译文缓存另有 512 条上限，调度等待队列也独立限制为 512；三者不是同一个仓库。等待不占工作线程，并发限制为 1–8；去重持续到主线程交付结束。
+`StateStore` 最多保留 512 条 LRU 状态，规范 Source 与编辑版本随条目失效。所有权检查不改变 LRU。译文缓存采用 512 条内存 LRU 与 1–1,000,000 条 SQLite 持久化 LRU（容量由设置页配置），调度等待队列也独立限制为 512；三者不是同一个仓库。等待不占工作线程，并发限制为 1–8；去重持续到主线程交付结束。
 
 Embed 段键隔离正文，并包含整张卡片的段序列 hash 及当前段内容 hash；同一消息中共享部分文字的不同卡片仍独立。Poll 段键包含问题/答案稳定 ID。两者的整卡显示选择与当前成员统一由 `CardState` 拥有，合计最多 512 卡。回复不建立预览译文缓存、不创建翻译状态或独立请求。
 

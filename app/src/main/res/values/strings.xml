@@ -199,11 +199,19 @@
 
     <string name="label_translation_cache">Local translation cache</string>
     <string name="label_cache_enabled">Enable local translation cache</string>
-    <string name="hint_translation_cache">When disabled, every translation follows the normal API path. No cache entries are read or written. Disabling preserves existing entries; re-enabling can reuse them.</string>
+    <string name="hint_translation_cache">When enabled, existing local translations are checked first. A cache hit reuses the translation without an API request or Token usage. When disabled, the cache is bypassed and the normal API path is used; existing entries are preserved.</string>
     <string name="label_cache_limit">Maximum saved translations</string>
-    <string name="cache_limit_100k">100,000 entries</string>
-    <string name="cache_limit_1m">1,000,000 entries</string>
-    <string name="button_clear_translation_cache">Clear local translation cache</string>
+    <string name="hint_cache_limit">Enter a whole number from 1 to 1,000,000. You can change the capacity while the cache is disabled.</string>
+    <string name="hint_cache_recommended">Recommended capacity: 100,000 to 1,000,000 entries. Actual storage depends on translation length and SQLite overhead.</string>
+    <string name="label_cache_entry_count">Saved translations: %1$d</string>
+    <string name="label_cache_count_unavailable">Discord is not connected; the cache count is unavailable.</string>
+    <string name="error_cache_limit">Enter a whole number from 1 to 1,000,000.</string>
+    <string name="button_apply_cache_limit">Apply capacity</string>
+    <string name="menu_translation_cache">Local translation cache…</string>
+    <string name="menu_api_settings">API and request settings…</string>
+    <string name="button_apply_api_settings">Apply API and request settings</string>
+    <string name="button_apply_field">Apply this field</string>
+        <string name="button_clear_translation_cache">Clear local translation cache</string>
     <string name="confirm_clear_translation_cache">Permanently delete all locally saved translations? This does not change API settings or chat messages.</string>
     <string name="status_cache_clear_requested">Cache clear request sent to Discord. It will be processed by the Discord module.</string>
     <string name="status_cache_clear_unavailable">Unable to contact the Discord module. Open Discord and reconnect LSPosed, then try again.</string>
