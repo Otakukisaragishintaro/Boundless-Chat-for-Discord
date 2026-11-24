@@ -194,7 +194,7 @@ public final class ApiTester {
                     // validation, and protected-token restoration all run here.
                     result = new Result(testKind, engine.translateForTest(text), elapsed(start), null);
                 } else if (testKind == TestKind.SEND_TRANSLATION) {
-                    result = new Result(testKind, engine.translate(text), elapsed(start), null);
+                    result = new Result(testKind, engine.translateForTest(text), elapsed(start), null);
                 } else {
                     JsonApiEngine.Exchange exchange = engine.execute(text, false);
                     responseStatus = exchange.httpStatus;
