@@ -112,6 +112,23 @@ public class JsonApiEngineTest {
         assertEquals(repeat("a", 250) + "\n\n" + repeat("b", 250),
                 chunked.translate(source));
         assertEquals(2, chunkedOpens.get());
+
+        AtomicInteger raisedThresholdOpens = new AtomicInteger();
+        FakeConnection raisedThresholdConnection =
+                new FakeConnection(chatJson(repeat("q", 502)));
+        Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_PROTOCOL, Config.PROTOCOL_OPENAI_COMPATIBLE)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_THRESHOLD, 600));
+        JsonApiEngine raisedThreshold = new JsonApiEngine(raisedThresholdConfig, http(url -> {
+            raisedThresholdOpens.incrementAndGet();
+            return raisedThresholdConnection;
+        }));
+        assertEquals(repeat("q", 502), raisedThreshold.translate(source));
+        assertEquals(1, raisedThresholdOpens.get());
     }
 
     private static String repeat(String value, int count) {
