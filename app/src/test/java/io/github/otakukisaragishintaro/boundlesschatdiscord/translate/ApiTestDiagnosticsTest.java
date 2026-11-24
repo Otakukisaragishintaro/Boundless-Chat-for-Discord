@@ -715,7 +715,8 @@ public class ApiTestDiagnosticsTest {
             fields.add(field.getName());
         }
         assertEquals(new HashSet<>(Arrays.asList("kind", "reason", "httpStatus", "exceptionType",
-                "upstreamErrorBody", "detail")), fields);
+                "upstreamErrorBody", "detail", "stage", "sourcePreview",
+                "requestPreview", "translatedPreview")), fields);
     }
 
     private static void assertResponseFailure(String protocol, boolean streaming, String response,
