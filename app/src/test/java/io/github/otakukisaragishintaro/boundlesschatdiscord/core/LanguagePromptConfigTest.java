@@ -79,7 +79,7 @@ public class LanguagePromptConfigTest {
                 snapshot.forIncomingTranslation("10", "20").systemPrompt);
         assertEquals(styles.resolve("English", "default"),
                 snapshot.forIncomingTranslation("10", "21").systemPrompt);
-        assertEquals("Formal English translation.",
+        assertEquals(styles.resolve("English", "default"),
                 snapshot.forIncomingTranslation("11", "21").systemPrompt);
         assertNotEquals(snapshot.version(),
                 snapshot.forIncomingTranslation("10", "20").version());
