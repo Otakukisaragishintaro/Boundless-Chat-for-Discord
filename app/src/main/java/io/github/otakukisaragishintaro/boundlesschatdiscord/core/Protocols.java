@@ -57,8 +57,7 @@ public final class Protocols {
     public static final String WRAPPER_RULE =
             "Translate only the text between the <translate> and </translate> boundaries. "
             + "Copy every <keepN/> marker exactly once, unchanged, and in the same order. "
-            + "Never translate, remove, duplicate, reorder, or alter these markers. "
-            + "Preserve any <xN> and </xN> formatting boundaries exactly. Output only the translation.";
+            + "Never translate, remove, duplicate, reorder, or alter these markers. Output only the translation.";
 
     private static final String SUFFIX_CHAT_COMPLETIONS = "/chat/completions";
     private static final String SUFFIX_RESPONSES = "/responses";
