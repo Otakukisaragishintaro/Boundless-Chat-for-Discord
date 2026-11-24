@@ -221,4 +221,10 @@
     <string name="label_experimental_long_message_chunking">Chunk long-message API requests</string>
     <string name="hint_experimental_long_message_chunking">When enabled, messages longer than 400 characters with blank-line paragraph breaks are sent as separate translation requests and then recombined. Off by default. This changes API request behavior only; it does not split writes back into Discord. Experimental: it may increase request count and token usage.</string>
 
+
+    <string name="label_experimental_long_message_threshold">Chunking trigger length</string>
+    <string name="hint_experimental_long_message_threshold">Paragraph chunking is attempted only when the whole message exceeds this length. Range: 100–10000; default: 400. A single paragraph is never forcibly split.</string>
+    <string name="button_apply_experimental_threshold">Apply threshold</string>
+    <string name="error_experimental_long_message_threshold">Enter a whole number from 100 to 10000</string>
+
 </resources>
