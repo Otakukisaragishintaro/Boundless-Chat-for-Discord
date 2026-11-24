@@ -151,7 +151,7 @@ public final class HookBridge {
         this.config = c;
         ProjectLog.info("local translation cache configured enabled=" + c.cacheEnabled
                 + " diskLimit=" + c.cacheLimit);
-        TranslationCache.get().setMaxDiskEntries(c.cacheLimit);
+        TranslationCache.get().setMaxDiskEntries(c.cacheLimit, c.cacheEnabled);
 
         // 并发上限即时生效（需求 §5.7 普通配置变更尽量即时生效）。
         Scheduler.get().setMaxConcurrency(c.maxConcurrency);
