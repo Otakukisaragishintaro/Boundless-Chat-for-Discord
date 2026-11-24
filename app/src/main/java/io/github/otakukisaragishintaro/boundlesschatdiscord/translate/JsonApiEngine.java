@@ -93,39 +93,44 @@ public final class JsonApiEngine implements Scheduler.Engine {
             return protection.restore(execute(requestText, true, true).translated);
         }
 
+        ParagraphGroups groups = groupParagraphs(paragraphs, separators,
+                cfg.experimentalLongMessageThreshold);
+        if (groups.chunks.size() <= 1) {
+            ProjectLog.info("translation.chunking skipped reason=paragraphs_fit_one_request"
+                    + " sourceChars=" + requestText.length()
+                    + " paragraphs=" + paragraphs.size());
+            return protection.restore(execute(requestText, true, true).translated);
+        }
+
         StringBuilder combined = new StringBuilder(requestText.length());
         ProjectLog.info("translation.chunking start sourceChars=" + requestText.length()
                 + " threshold=" + cfg.experimentalLongMessageThreshold
-                + " paragraphs=" + paragraphs.size());
-        for (int i = 0; i < paragraphs.size(); i++) {
-            String paragraph = paragraphs.get(i);
-            // Do not cut through a single paragraph: inline style/retained-node markers
-            // may span arbitrary text positions. Such a paragraph remains one request.
-            // Preserve empty/whitespace-only paragraphs without making an invalid API request.
-            String translated;
-            if (paragraph.trim().isEmpty()) {
-                translated = paragraph;
-            } else {
-                ProjectLog.info("translation.chunking request index=" + (i + 1)
-                        + " sourceChars=" + paragraph.length());
-                try {
-                    translated = execute(paragraph, true, true).translated;
-                } catch (Exception failure) {
-                    ProjectLog.warn("translation.chunking failed index=" + (i + 1)
-                            + " errorClass=" + failure.getClass().getSimpleName()
-                            + " errorKind=" + (failure instanceof TranslationException
-                                    ? ((TranslationException) failure).kind().name() : "none")
-                            + " errorReason=" + (failure instanceof TranslationException
-                                    ? ((TranslationException) failure).reason().name() : "UNKNOWN_FAILURE")
-                            + " httpStatus=" + (failure instanceof TranslationException
-                                    ? ((TranslationException) failure).httpStatus() : 0));
-                    throw failure;
-                }
+                + " paragraphs=" + paragraphs.size()
+                + " requests=" + groups.chunks.size());
+        for (int i = 0; i < groups.chunks.size(); i++) {
+            String group = groups.chunks.get(i);
+            DiscordTokenMarkers.Protection separatorProtection =
+                    DiscordTokenMarkers.protectBlankLineSeparators(group);
+            ProjectLog.info("translation.chunking request index=" + (i + 1)
+                    + " sourceChars=" + group.length()
+                    + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
+            try {
+                String translated = execute(separatorProtection.text, true, true).translated;
+                combined.append(separatorProtection.restore(translated));
+            } catch (Exception failure) {
+                ProjectLog.warn("translation.chunking failed index=" + (i + 1)
+                        + " errorClass=" + failure.getClass().getSimpleName()
+                        + " errorKind=" + (failure instanceof TranslationException
+                                ? ((TranslationException) failure).kind().name() : "none")
+                        + " errorReason=" + (failure instanceof TranslationException
+                                ? ((TranslationException) failure).reason().name() : "UNKNOWN_FAILURE")
+                        + " httpStatus=" + (failure instanceof TranslationException
+                                ? ((TranslationException) failure).httpStatus() : 0));
+                throw failure;
             }
-            combined.append(translated);
-            if (i < separators.size()) combined.append(separators.get(i));
+            if (i < groups.separators.size()) combined.append(groups.separators.get(i));
         }
-        ProjectLog.info("translation.chunking complete chunks=" + paragraphs.size()
+        ProjectLog.info("translation.chunking complete chunks=" + groups.chunks.size()
                 + " protectedDiscordTokens=" + protection.tokenCount());
         return protection.restore(combined.toString());
     }
@@ -136,6 +141,74 @@ public final class JsonApiEngine implements Scheduler.Engine {
         BlankLines.Split split = BlankLines.split(source);
         paragraphs.addAll(split.chunks);
         separators.addAll(split.separators);
+    }
+
+    /** A request-sized group of whole paragraphs plus the exact separators between requests. */
+    static final class ParagraphGroups {
+        final java.util.List<String> chunks;
+        final java.util.List<String> separators;
+        final java.util.List<Integer> paragraphCounts;
+
+        ParagraphGroups(java.util.List<String> chunks, java.util.List<String> separators,
+                        java.util.List<Integer> paragraphCounts) {
+            this.chunks = chunks;
+            this.separators = separators;
+            this.paragraphCounts = paragraphCounts;
+        }
+    }
+
+    /**
+     * Groups only complete paragraphs. A final undersized group is folded into its
+     * predecessor so a short URL/code/formatting tail is never sent without context.
+     * No character-level splitting is performed, even when one paragraph exceeds threshold.
+     */
+    static ParagraphGroups groupParagraphs(java.util.List<String> paragraphs,
+                                           java.util.List<String> separators, int threshold) {
+        java.util.List<String> chunks = new java.util.ArrayList<>();
+        java.util.List<String> boundaries = new java.util.ArrayList<>();
+        java.util.List<Integer> counts = new java.util.ArrayList<>();
+        if (paragraphs == null || paragraphs.isEmpty()) {
+            return new ParagraphGroups(chunks, boundaries, counts);
+        }
+        if (separators == null || separators.size() != paragraphs.size() - 1) {
+            throw new IllegalArgumentException("Paragraph separators do not match paragraph count");
+        }
+
+        StringBuilder current = new StringBuilder();
+        int currentCount = 0;
+        for (int i = 0; i < paragraphs.size(); i++) {
+            if (i > 0) {
+                String boundary = separators.get(i - 1);
+                if (current.length() >= Math.max(1, threshold)) {
+                    chunks.add(current.toString());
+                    counts.add(currentCount);
+                    boundaries.add(boundary);
+                    current.setLength(0);
+                    currentCount = 0;
+                } else {
+                    current.append(boundary);
+                }
+            }
+            current.append(paragraphs.get(i));
+            currentCount++;
+        }
+        chunks.add(current.toString());
+        counts.add(currentCount);
+
+        // A short trailing paragraph is more likely to be a URL, code fragment, or
+        // continuation than an independent translation unit. Keep it with prior context.
+        if (chunks.size() > 1
+                && chunks.get(chunks.size() - 1).codePointCount(
+                        0, chunks.get(chunks.size() - 1).length()) < Math.max(1, threshold)) {
+            int last = chunks.size() - 1;
+            String merged = chunks.get(last - 1) + boundaries.get(last - 1) + chunks.get(last);
+            chunks.set(last - 1, merged);
+            counts.set(last - 1, counts.get(last - 1) + counts.get(last));
+            chunks.remove(last);
+            counts.remove(last);
+            boundaries.remove(last - 1);
+        }
+        return new ParagraphGroups(chunks, boundaries, counts);
     }
 
     /** Connection probes share all request/decoder ownership, but do not judge translation safety. */
