@@ -136,7 +136,7 @@ public final class ContentNodes {
 
     /**
      * 统一换行符并去掉首尾空白：模型常以换行收尾（开头偶尔也会多一行），
-     * 直接渲染就会在译文上下方留下多余空行。正文中间的空行保持不变。
+     * 直接渲染就会在译文上下方留下多余空行。正文内部的段落布局交由原生节点重建处理。
      */
     static String normalize(String translated) {
         return translated.replace("\r\n", "\n").replace('\r', '\n').trim();
@@ -709,7 +709,7 @@ public final class ContentNodes {
 
     /**
      * 译文 interval 的段落块：仅剔除空白块。源 URL 已由定位 token 消费，
-     * 剩余 URL 块也是输出，必须参与段落数量校验，不能静默丢弃。
+     * 剩余 URL 块也是输出，必须参与文本对齐，不能静默丢弃。
      */
     private static List<String> translatableChunks(String translated) {
         List<String> chunks = new ArrayList<>();
