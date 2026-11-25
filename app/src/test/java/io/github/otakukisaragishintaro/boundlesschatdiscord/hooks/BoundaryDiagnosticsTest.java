@@ -36,6 +36,19 @@ public class BoundaryDiagnosticsTest {
         return rejection;
     }
 
+    private ContentNodes.Rejection ambiguousTranslation(List<?> nodes, String translated) {
+        ContentTree tree = ContentTree.compileForTranslation(nodes);
+        assertNotNull(tree);
+        ContentNodes.Rejection rejection = assertThrows(ContentNodes.Rejection.class,
+                () -> ContentNodes.replaceChecked(tree, translated));
+        assertEquals(ContentNodes.RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS, rejection.reason);
+        assertEquals("SOURCE_BOUNDARY_AMBIGUOUS", rejection.getMessage());
+        assertNull(rejection.getCause());
+        assertFalse(rejection.structure.isEmpty());
+        assertNull(ContentNodes.replacePlanned(tree, translated));
+        return rejection;
+    }
+
     @Test public void rootSameLineReportsZeroSourceLfAndNoContainers() {
         String structure = ambiguous(Arrays.asList(new TextContentNode("private-source-a"),
                 new TextContentNode(" "), new TextContentNode("private-source-b")),
@@ -185,7 +198,7 @@ public class BoundaryDiagnosticsTest {
     @Test public void listSameLineSlotsKeepCapturedListPathAndDepth() {
         BulletListContentNode list = new BulletListContentNode(null, false,
                 Arrays.asList(Arrays.asList(new TextContentNode("first"), new TextContentNode("second"))));
-        String structure = ambiguous(Arrays.asList(list), "• <x1>译文</x1>").structure;
+        String structure = ambiguousTranslation(Arrays.asList(list), "• <x1>译文</x1>").structure;
         assertTrue(structure.contains("leftPath=BulletListContentNode"));
         assertTrue(structure.contains("rightListDepth=1"));
         assertTrue(structure.contains("leftGapItemStarts=1"));
@@ -209,7 +222,7 @@ public class BoundaryDiagnosticsTest {
     }
 
     @Test public void structuralMarkerKeepsHeadingBoundaryExplicitWithoutTextInDiagnostics() {
-        ContentTree tree = ContentTree.compile(Arrays.asList(
+        ContentTree tree = ContentTree.compileForTranslation(Arrays.asList(
                 new ContentNodesTest.HeadingContentNode(Arrays.asList(new TextContentNode("private-title")), 1),
                 new TextContentNode("private-body")));
         ContentNodes.Rejection rejection = assertThrows(ContentNodes.Rejection.class,
