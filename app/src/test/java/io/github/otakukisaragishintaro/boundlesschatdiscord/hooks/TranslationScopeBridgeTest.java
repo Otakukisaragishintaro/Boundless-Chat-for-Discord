@@ -471,6 +471,8 @@ public class TranslationScopeBridgeTest {
         bridge.onTranslateResult(task, true, "completed after display-only edit", null);
         assertEquals(StateStore.Status.TRANSLATED, entry.status);
         assertEquals("completed after display-only edit", entry.translatedText);
+        assertNull(TranslationCache.get().get("hash"));
+        bridge.onTranslationRendered(ROW, "completed after display-only edit");
         assertEquals("completed after display-only edit", TranslationCache.get().get("hash"));
     }
 
