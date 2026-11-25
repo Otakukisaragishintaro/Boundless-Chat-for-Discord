@@ -722,7 +722,7 @@ public final class ContentNodes {
                 }
                 if (remainingStructuralBoundary) {
                     int runEnd = connectedRunEnd(segment, segments, groups,
-                            lineBreakBefore, hardBoundaries);
+                            listPrefixes, lineBreakBefore, hardBoundaries);
                     if (runEnd <= segment) runEnd = Math.min(segments, segment + 1);
                     Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
                             expectedSourceLines(segment, runEnd, sourceLineCounts, boundaryLineCounts), 0);
@@ -750,7 +750,7 @@ public final class ContentNodes {
                         end++;
                     } else {
                         int runEnd = connectedRunEnd(end, segments, groups,
-                                lineBreakBefore, hardBoundaries);
+                                listPrefixes, lineBreakBefore, hardBoundaries);
                         Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
                                 expectedSourceLines(segment, runEnd,
                                         sourceLineCounts, boundaryLineCounts), availableLines);
