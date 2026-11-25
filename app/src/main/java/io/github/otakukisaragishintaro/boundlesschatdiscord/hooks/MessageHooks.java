@@ -365,6 +365,9 @@ public final class MessageHooks {
                                 "message.textConversion Discord callers="
                                         + discordCallers());
                         boolean replyTranslationApplied = false;
+                        boolean translationReplacementApplied = false;
+                        String acceptedTranslationId = null;
+                        String acceptedTranslation = null;
                         TextExtractor.Result extracted = null;
                         try {
                             String messageId = resolvedMessageId;
@@ -391,6 +394,9 @@ public final class MessageHooks {
                                                 + " replacementClass=" + replacement.getClass().getName());
                                         renderArgs[contentArgument] = replacement;
                                         replyTranslationApplied = replyConversion;
+                                        translationReplacementApplied = true;
+                                        acceptedTranslationId = messageId;
+                                        acceptedTranslation = translated;
                                     } else {
                                         ProjectLog.info("message translation replacement rejected"
                                                 + " sourceClass=" + source.getClass().getName());
@@ -409,6 +415,11 @@ public final class MessageHooks {
 
                         // 宿主渲染只执行一次；图标注入失败时保留原始渲染结果。
                         Object rendered = chain.proceed(renderArgs);
+                        if (translationReplacementApplied && acceptedTranslationId != null
+                                && acceptedTranslation != null) {
+                            HookBridge.get().onTranslationRendered(
+                                    acceptedTranslationId, acceptedTranslation);
+                        }
                         if (replyTranslationApplied) {
                             // Native singleLine mode does not remove embedded LF or NewLine
                             // nodes. Project only after canonical alignment and rendering,
