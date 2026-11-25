@@ -18,7 +18,7 @@ public final class ConfigurationSync {
             Config.KEY_INCOMING_PROMPTS, Config.KEY_INCOMING_STYLES, Config.KEY_OUTBOUND_PROMPTS, Config.KEY_PROTOCOL, Config.KEY_STREAMING,
             Config.KEY_PROTECTION_PROMPT_ENABLED, Config.KEY_TIMEOUT_MS,
             Config.KEY_MAX_CONCURRENCY, Config.KEY_CHECK_WRAPPER,
-            Config.KEY_STRIP_OUTER_WRAPPER, Config.KEY_CHECK_SEGMENT_MARKERS,
+            Config.KEY_STRIP_OUTER_WRAPPER,
             Config.KEY_CHECK_PLACEHOLDERS, Config.KEY_CHECK_RETAINED_MARKERS,
             Config.KEY_CHECK_LENGTH, Config.KEY_PROTECT_MENTIONS,
             Config.KEY_PROTECT_CHANNELS_EMOJIS, Config.KEY_PROTECT_URLS,
@@ -253,8 +253,6 @@ public final class ConfigurationSync {
                     Config.DEF_CHECK_WRAPPER);
             putUnlessDefault(raw, Config.KEY_STRIP_OUTER_WRAPPER, snapshot.stripOuterWrapper,
                     Config.DEF_STRIP_OUTER_WRAPPER);
-            putUnlessDefault(raw, Config.KEY_CHECK_SEGMENT_MARKERS, snapshot.checkSegmentMarkers,
-                    Config.DEF_CHECK_SEGMENT_MARKERS);
             putUnlessDefault(raw, Config.KEY_CHECK_PLACEHOLDERS, snapshot.checkPlaceholders,
                     Config.DEF_CHECK_PLACEHOLDERS);
             putUnlessDefault(raw, Config.KEY_CHECK_RETAINED_MARKERS, snapshot.checkRetainedMarkers,
