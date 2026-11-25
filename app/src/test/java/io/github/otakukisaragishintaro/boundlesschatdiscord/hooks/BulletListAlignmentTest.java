@@ -354,10 +354,10 @@ public class BulletListAlignmentTest {
                 Arrays.asList(list(new TextContentNode("Read"), lf,
                         new TextContentNode("1. important\n\n2. still literal")),
                         list(new TextContentNode("Next"))))),
-                "\n• <x1>Read</x1>\n1. important\n\n2. still literal\n• <x2>Next</x2>");
+                "\n• <x1>Read</x1>\n1. important\n\n<x2>2. still literal</x2>\n• <x3>Next</x3>");
 
         List<Object> out = ContentNodes.replacePlanned(source.tree,
-                "<x1>阅读</x1>\n1. 重要事项\n\n2. 仍是正文\n2. <x2>接着</x2>");
+                "<x1>阅读</x1>\n1. 重要事项\n\n<x2>2. 仍是正文</x2>\n2. <x3>接着</x3>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -366,7 +366,7 @@ public class BulletListAlignmentTest {
         assertEquals("1. 重要事项\n\n2. 仍是正文",
                 ((TextContentNode) rebuilt.getItems().get(0).get(2)).getContent());
         assertEquals("接着", ((TextContentNode) rebuilt.getItems().get(1).get(0)).getContent());
-        assertEquals("\n• <x1>阅读</x1>\n1. 重要事项\n\n2. 仍是正文\n• <x2>接着</x2>", extracted(out));
+        assertEquals("\n• <x1>阅读</x1>\n1. 重要事项\n\n<x2>2. 仍是正文</x2>\n• <x3>接着</x3>", extracted(out));
     }
     @Test
     public void retainedFirstItemsConsumePrefixOnceAndKeepLaterLiteralNumbering() {
