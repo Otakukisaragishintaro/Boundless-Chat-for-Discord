@@ -2512,33 +2512,83 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         try {
             saveExecutor.execute(() -> {
                 List<DiagnosticLogStore.Entry> entries = DiagnosticLogStore.read(appContext,
-                        DiagnosticLogStore.DEFAULT_READ_LIMIT);
-                StringBuilder output = new StringBuilder();
+                        DiagnosticLogStore.MAX_ENTRIES);
+                List<String> pages = new ArrayList<>();
+                StringBuilder page = new StringBuilder();
+                int pageEntries = 0;
                 for (DiagnosticLogStore.Entry entry : entries) {
-                    output.append(new Date(entry.timestamp)).append(" [")
+                    StringBuilder line = new StringBuilder();
+                    line.append(new Date(entry.timestamp)).append(" [")
                             .append(entry.source).append("] ")
                             .append(entry.tag).append(" priority=").append(entry.priority);
-                    if (!entry.processName.isEmpty()) output.append(" process=").append(entry.processName);
-                    if (!entry.requestId.isEmpty()) output.append(" request=").append(entry.requestId);
-                    output.append('\n').append(entry.message).append('\n').append('\n');
+                    if (!entry.processName.isEmpty()) line.append(" process=").append(entry.processName);
+                    if (!entry.requestId.isEmpty()) line.append(" request=").append(entry.requestId);
+                    line.append('\n').append(entry.message).append("\n\n");
+                    page.append(line);
+                    pageEntries++;
+                    if (pageEntries >= 100) {
+                        pages.add(page.toString());
+                        page.setLength(0);
+                        pageEntries = 0;
+                    }
                 }
-                if (output.length() == 0) {
-                    output.append("暂无诊断日志。请运行一次测试，或开启项目日志后触发 Discord 翻译。");
+                if (page.length() > 0 || pages.isEmpty()) {
+                    pages.add(page.length() == 0
+                            ? "暂无诊断日志。请运行一次测试，或开启项目日志后触发 Discord 翻译。"
+                            : page.toString());
                 }
-                String logText = output.toString();
+                final List<String> logPages = pages;
                 mainHandler.post(() -> {
                     if (destroyed || isFinishing()) return;
+                    final int[] currentPage = {0};
+                    LinearLayout content = new LinearLayout(this);
+                    content.setOrientation(LinearLayout.VERTICAL);
+                    int pad = (int) (12 * getResources().getDisplayMetrics().density);
+                    content.setPadding(pad, pad, pad, 0);
+                    TextView pageLabel = new TextView(this);
+                    EditText logView = new EditText(this);
+                    logView.setTextIsSelectable(true);
+                    logView.setFocusable(true);
+                    logView.setFocusableInTouchMode(true);
+                    logView.setTextSize(12);
+                    logView.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+                    logView.setInputType(InputType.TYPE_CLASS_TEXT
+                            | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                    logView.setText(logPages.get(0));
+                    ScrollView scroll = new ScrollView(this);
+                    scroll.addView(logView, new ScrollView.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                    content.addView(pageLabel);
+                    content.addView(scroll, new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+                    LinearLayout controls = new LinearLayout(this);
+                    controls.setOrientation(LinearLayout.HORIZONTAL);
+                    Button previous = new Button(this);
+                    previous.setText("上一页");
+                    Button next = new Button(this);
+                    next.setText("下一页");
+                    Button copyPage = new Button(this);
+                    copyPage.setText("复制本页");
+                    controls.addView(previous, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    controls.addView(next, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    controls.addView(copyPage, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    content.addView(controls);
+                    Runnable updatePage = () -> {
+                        pageLabel.setText("第 " + (currentPage[0] + 1) + " / "
+                                + logPages.size() + " 页（每页最多 100 条；可长按选择文本手动复制）");
+                        logView.setText(logPages.get(currentPage[0]));
+                        logView.setSelection(0);
+                        previous.setEnabled(currentPage[0] > 0);
+                        next.setEnabled(currentPage[0] + 1 < logPages.size());
+                        scroll.scrollTo(0, 0);
+                    };
                     AlertDialog dialog = new AlertDialog.Builder(this)
-                            .setTitle("诊断日志（最近 " + entries.size() + " 条）")
-                            .setMessage(logText)
-                            .setPositiveButton("复制全部", (ignored, which) -> {
-                                ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
-                                if (clipboard != null) {
-                                    clipboard.setPrimaryClip(ClipData.newPlainText(
-                                            "Boundless Chat diagnostic logs", logText));
-                                    Toast.makeText(this, "诊断日志已复制", Toast.LENGTH_SHORT).show();
-                                }
-                            })
+                            .setTitle("诊断日志（共 " + entries.size() + " 条）")
+                            .setView(content)
                             .setNeutralButton("清空诊断日志", (ignored, which) -> {
                                 try {
                                     saveExecutor.execute(() -> {
@@ -2553,7 +2603,30 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                             })
                             .setNegativeButton("关闭", null)
                             .create();
+                    previous.setOnClickListener(v -> {
+                        if (currentPage[0] > 0) { currentPage[0]--; updatePage.run(); }
+                    });
+                    next.setOnClickListener(v -> {
+                        if (currentPage[0] + 1 < logPages.size()) { currentPage[0]++; updatePage.run(); }
+                    });
+                    copyPage.setOnClickListener(v -> {
+                        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        if (clipboard == null) {
+                            Toast.makeText(this, "剪贴板不可用，请长按日志文本手动复制",
+                                    Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        clipboard.setPrimaryClip(ClipData.newPlainText(
+                                "Boundless Chat diagnostic logs page " + (currentPage[0] + 1),
+                                logPages.get(currentPage[0])));
+                        Toast.makeText(this, "当前页已复制；也可长按文本手动选择复制",
+                                Toast.LENGTH_SHORT).show();
+                    });
                     dialog.show();
+                    dialog.getWindow().setLayout(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            (int) (getResources().getDisplayMetrics().heightPixels * 0.82f));
+                    updatePage.run();
                 });
             });
         } catch (RuntimeException rejected) {
