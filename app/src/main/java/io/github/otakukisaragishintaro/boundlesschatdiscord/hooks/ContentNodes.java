@@ -1182,8 +1182,8 @@ public final class ContentNodes {
         // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
         // Do not turn the latter into a line boundary or list lines get merged with following body text.
         boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
-        boolean sameListPath = !w.plan.boundaries.isEmpty()
-                && w.plan.boundaries.get(w.plan.boundaries.size() - 1).event.containers
+        boolean sameListPath = w.plan.boundaries.size() > 1
+                && w.plan.boundaries.get(w.plan.boundaries.size() - 2).event.containers
                 .equals(event.containers);
         boolean listItemLineBoundary = w.forceLineBoundary
                 && (sameListPath || separatorNewlines - 1 < 2);
