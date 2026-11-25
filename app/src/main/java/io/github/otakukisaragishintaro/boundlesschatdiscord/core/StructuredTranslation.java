@@ -34,6 +34,9 @@ public final class StructuredTranslation {
         public String restore(String responseJson) throws TranslationException {
             try {
                 JSONObject root = new JSONObject(responseJson);
+                if (root.length() != 1 || !root.has("segments")) {
+                    throw invalid("返回对象包含未知字段");
+                }
                 JSONArray returned = root.optJSONArray("segments");
                 if (returned == null || returned.length() != ids.size()) {
                     throw invalid("返回片段数量不匹配");
@@ -41,7 +44,10 @@ public final class StructuredTranslation {
                 Map<String, String> translated = new HashMap<>();
                 for (int i = 0; i < returned.length(); i++) {
                     JSONObject item = returned.optJSONObject(i);
-                    if (item == null) throw invalid("返回片段不是对象");
+                    if (item == null || item.length() != 2
+                            || !item.has("id") || !item.has("text")) {
+                        throw invalid("返回片段字段不符合要求");
+                    }
                     Object idValue = item.opt("id");
                     Object textValue = item.opt("text");
                     if (!(idValue instanceof String) || !(textValue instanceof String)) {
