@@ -128,7 +128,7 @@ public final class IconClickSpanFactory {
                 String callbackMethod = argument.optString("method", "");
                 if (callbackInterface == null || !callbackInterface.isInterface()
                         || callbackMethod.isEmpty()
-                        || !action.equals(argument.optString("action", ""))) {
+                        || !"toggleTranslation".equals(argument.optString("action", ""))) {
                     return INVALID_ARGUMENT;
                 }
                 return Proxy.newProxyInstance(hostCl, new Class<?>[]{callbackInterface},
