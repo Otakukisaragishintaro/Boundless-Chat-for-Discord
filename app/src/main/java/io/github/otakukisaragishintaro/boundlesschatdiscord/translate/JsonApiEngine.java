@@ -292,7 +292,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     translated = Segments.stripOuterResponseWrapper(translated, text);
                 }
                 String violation = Segments.plainTextViolation(translated, text,
-                        cfg.checkWrapper, cfg.checkSegmentMarkers, cfg.checkPlaceholders,
+                        cfg.checkWrapper, cfg.checkPlaceholders,
                         cfg.checkRetainedMarkers, cfg.checkLength,
                         cfg.minLengthPercent, cfg.maxLengthPercent);
                 if (violation != null) {
