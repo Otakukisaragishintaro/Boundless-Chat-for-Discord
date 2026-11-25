@@ -77,15 +77,11 @@ public class ContentRejectionTest {
         rejected(source, "额外文字<x1>标题</x1>", UNASSIGNED_TEXT);
     }
 
-    @Test public void paragraphCountReasonsPreserveOldWholeTreeRejection() {
+    @Test public void mergedParagraphsAreAcceptedWithoutChangingSourceNodes() {
         List<?> source = Arrays.asList(new TextContentNode("First"), new TextContentNode("\n\n"),
                 new TextContentNode("Second"));
-        ContentNodes.Rejection missing = rejected(source, "一", PARAGRAPH_MISSING);
-        assertEquals(2, missing.expected);
-        assertEquals(1, missing.actual);
-        ContentNodes.Rejection extra = rejected(source, "一\n\n二\n\n三", PARAGRAPH_EXTRA);
-        assertEquals(2, extra.expected);
-        assertEquals(3, extra.actual);
+        List<Object> output = ContentNodes.replaceChecked(ContentTree.compile(source), "合并后的译文");
+        assertEquals("合并后的译文", io.github.otakukisaragishintaro.boundlesschatdiscord.core.TextExtractor.extractTree(ContentTree.compile(output)).text);
         assertEquals("First", ((TextContentNode) source.get(0)).getContent());
     }
 
