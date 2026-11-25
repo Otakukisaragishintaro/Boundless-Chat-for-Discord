@@ -113,38 +113,6 @@ public final class DiscordTokenMarkers {
         }
     }
 
-    /**
-     * Protect blank-line separators as ordered structural anchors. They are restored
-     * verbatim after translation and must not be moved or normalized by the provider.
-     */
-    public static Protection protectBlankLineSeparators(String source) {
-        if (source == null || source.isEmpty()) {
-            return empty(source);
-        }
-        BlankLines.Split split = BlankLines.split(source);
-        if (split.separators.isEmpty()) {
-            return empty(source);
-        }
-
-        int next = nextKeepId(source);
-        if (next < 0) return empty(source);
-
-        StringBuilder protectedText = new StringBuilder(source.length());
-        List<String> markers = new ArrayList<>();
-        List<String> originals = new ArrayList<>();
-        for (int i = 0; i < split.chunks.size(); i++) {
-            protectedText.append(split.chunks.get(i));
-            if (i < split.separators.size()) {
-                String marker = "<keep" + next++ + "/>";
-                markers.add(marker);
-                originals.add(split.separators.get(i));
-                protectedText.append(marker);
-            }
-        }
-        return new Protection(protectedText.toString(), new ArrayList<>(),
-                new ArrayList<>(), markers, originals, false);
-    }
-
     /** Replace selected literal Discord syntax with movable identity placeholders. */
     public static Protection protect(String source) {
         return protect(source, true, true, true);
