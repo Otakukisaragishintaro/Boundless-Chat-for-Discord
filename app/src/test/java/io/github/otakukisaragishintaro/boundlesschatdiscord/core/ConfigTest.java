@@ -180,7 +180,6 @@ public class ConfigTest {
                 .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false)
                 .put(Config.KEY_CHECK_WRAPPER, false)
                 .put(Config.KEY_STRIP_OUTER_WRAPPER, false)
-                .put(Config.KEY_CHECK_SEGMENT_MARKERS, false)
                 .put(Config.KEY_CHECK_PLACEHOLDERS, false)
                 .put(Config.KEY_CHECK_RETAINED_MARKERS, false)
                 .put(Config.KEY_CHECK_LENGTH, false)
@@ -196,7 +195,6 @@ public class ConfigTest {
         assertFalse(snapshot.protectionPromptEnabled);
         assertFalse(snapshot.checkWrapper);
         assertFalse(snapshot.stripOuterWrapper);
-        assertFalse(snapshot.checkSegmentMarkers);
         assertFalse(snapshot.checkPlaceholders);
         assertFalse(snapshot.checkRetainedMarkers);
         assertFalse(snapshot.checkLength);
