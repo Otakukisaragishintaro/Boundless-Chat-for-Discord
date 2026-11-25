@@ -10,6 +10,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMar
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.MemoryPrefs;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
 
 import org.json.JSONArray;
@@ -29,6 +30,8 @@ import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -91,6 +94,36 @@ public class JsonApiEngineTest {
         Field field = JsonApiEngine.class.getDeclaredField("active");
         field.setAccessible(true);
         return (Map<Thread, Http.Request>) field.get(engine);
+    }
+
+    @Test
+    public void productionDiagnosticsIncludeBoundedSourceAndRestoredTranslationContent() throws Exception {
+        List<String> messages = new ArrayList<>();
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_LOGGING_ENABLED, true));
+        ProjectLog.attach((priority, tag, message) -> messages.add(message));
+        ProjectLog.configure(snapshot);
+        try {
+            JsonApiEngine engine = new JsonApiEngine(snapshot,
+                    http(url -> new FakeConnection(chatJson("你好 <3"))));
+            assertEquals("你好 <3", engine.translate("hello <3"));
+            boolean sourceLogged = false;
+            boolean translatedLogged = false;
+            for (String message : messages) {
+                sourceLogged |= message.contains("translation.content type=source")
+                        && message.contains("hello <3");
+                translatedLogged |= message.contains("translation.content type=translated")
+                        && message.contains("你好 <3");
+            }
+            assertTrue("Original source must be present in production diagnostics", sourceLogged);
+            assertTrue("Restored translation must be present in production diagnostics", translatedLogged);
+        } finally {
+            ProjectLog.configure(Config.read(new MemoryPrefs()));
+            ProjectLog.attach(null);
+        }
     }
 
     @Test
