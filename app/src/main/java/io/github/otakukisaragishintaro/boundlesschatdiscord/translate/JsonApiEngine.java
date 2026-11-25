@@ -345,7 +345,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
     private static String safeDiagnosticDetail(String message) {
         if (message == null || message.isEmpty()) return "none";
         String safe = message.replaceAll("[\\r\\n\\t]+", " ").trim();
-        return safe.length() <= 160 ? safe : safe.substring(0, 160);
+        return safe.length() <= 4096 ? safe : safe.substring(0, 4096);
     }
 
     /** Counts Unicode code points so preview limits do not split surrogate pairs. */
