@@ -75,7 +75,7 @@ public class BoundaryDiagnosticsTest {
         TextContentNode first = new TextContentNode("first");
         ParagraphContentNode nested = new ParagraphContentNode(Arrays.asList(first,
                 new StrongContentNode(Arrays.asList(new TextContentNode("second")))));
-        ContentTree tree = ContentTree.compile(Arrays.asList(nested));
+        ContentTree tree = ContentTree.compileForTranslation(Arrays.asList(nested));
         assertNotNull(tree);
         assertEquals(2, tree.events.size());
         assertEquals(ContentTree.EventKind.NODE, tree.events.get(0).kind);
