@@ -330,9 +330,11 @@ public class ContentTreeTest {
         // Ten paragraphs put the outer list at depth 10 and the nested list at depth 11.
         // Its text is at MAX_DEPTH (12); Java items/item lists must not add semantic depth.
         List<Object> source = wrapParagraphs(10, outer);
-        ContentTree tree = compiled(source);
+        ContentTree tree = ContentTree.compileForTranslation(source);
+        assertNotNull(tree);
         assertEquals(3, tree.segmentCount);
-        assertEquals("\n• <x1>outer</x1>\n• <x2>inner</x2>\n• <x3>last</x3>", extracted(tree).text);
+        assertEquals("\n• <x1>outer</x1>\n• <x2>inner</x2>\n• <x3>last</x3>",
+                TextExtractor.extractTree(tree).requestText);
         assertEquals(3, extracted(tree).textNodeCount);
         assertEquals(0, extracted(tree).opaqueNodeCount);
         assertEventKinds(tree, ContentTree.EventKind.LIST_START, ContentTree.EventKind.ITEM_START,
