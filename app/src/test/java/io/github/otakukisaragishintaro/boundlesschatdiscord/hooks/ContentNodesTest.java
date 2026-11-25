@@ -982,6 +982,19 @@ public class ContentNodesTest {
     }
 
     @Test
+    public void separateParagraphNodesCanBeMergedWithoutLeavingTrailingBlankLines() {
+        List<Object> nodes = list(new TextContentNode("hello"),
+                new TextContentNode("\n\n"),
+                new TextContentNode("world"));
+
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好世界");
+
+        assertNotNull(out);
+        assertEquals(1, out.size());
+        assertEquals("你好世界", ((TextContentNode) out.get(0)).getContent());
+    }
+
+    @Test
     public void blankLineInsideOneTextNodeMayBeMergedByTranslation() {
         // Source paragraphs may be translated as one continuous paragraph.
         List<Object> nodes = list(new TextContentNode("hello\n\nworld"));
