@@ -264,6 +264,7 @@ public final class RerenderRegistry {
                         () -> isCurrentRegistration(messageId, target));
             }
             if (list.isEmpty()) {
+                unindexMessage(messageId, list);
                 TARGETS.remove(messageId, list);
             }
         }
@@ -310,6 +311,7 @@ public final class RerenderRegistry {
                     }
                 }
                 if (list.isEmpty()) {
+                    unindexMessage(entry.getKey(), list);
                     TARGETS.remove(entry.getKey(), list);
                 }
             }
