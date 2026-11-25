@@ -106,6 +106,11 @@ public final class StructurableTextFactory {
         // 1) 原始是 Annotated：尝试保留 Markdown 结构。
         if (ContentNodes.isAnnotated(original)) {
             if (extracted.tree == null) return rejectFactory("MISSING_TREE");
+            // A structure containing no translatable text (for example, emoji-only content)
+            // must never be overwritten by an unrelated model response.
+            if (extracted.tree.segmentCount == 0 || extracted.textNodeCount == 0) {
+                return rejectFactory("NO_TRANSLATABLE_TEXT");
+            }
             List<Object> replaced = ContentNodes.replacePlanned(extracted.tree, translated);
             if (replaced != null) {
                 Object out = annotated(replaced);
@@ -116,7 +121,13 @@ public final class StructurableTextFactory {
             }
             // Translation visibility takes priority over preserving Markdown when native
             // node alignment cannot represent the model output.
-            Object plain = primitive(translated);
+            // Structural anchors belong to Discord's native node tree, not visible text.
+            // Remove only the exact internal anchor grammars before using the plain-text
+            // representation; never expose <keepN/> or <xN> tokens to the user.
+            String visibleText = translated
+                    .replaceAll("</?x[0-9]+>", "")
+                    .replaceAll("<keep[0-9]+/>", "");
+            Object plain = primitive(visibleText);
             return plain == null ? rejectFactory("PRIMITIVE_CONSTRUCTOR") : plain;
         }
 
