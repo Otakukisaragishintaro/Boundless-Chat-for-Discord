@@ -198,7 +198,7 @@ public class BoundaryDiagnosticsTest {
     @Test public void listSameLineSlotsKeepCapturedListPathAndDepth() {
         BulletListContentNode list = new BulletListContentNode(null, false,
                 Arrays.asList(Arrays.asList(new TextContentNode("first"), new TextContentNode("second"))));
-        String structure = ambiguousTranslation(Arrays.asList(list), "• <x1>译文</x1>").structure;
+        String structure = ambiguousTranslation(Arrays.asList(list), "• <x1>译文</x1>后续").structure;
         assertTrue(structure.contains("leftPath=BulletListContentNode"));
         assertTrue(structure.contains("rightListDepth=1"));
         assertTrue(structure.contains("leftGapItemStarts=1"));
