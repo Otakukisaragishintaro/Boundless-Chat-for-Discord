@@ -11,14 +11,24 @@ import org.json.JSONObject;
 import org.junit.Test;
 
 public class RetainedNodeMarkersTest {
-    @Test public void exactSyntaxOrderAndMultiplicityAreRequired() {
-        assertTrue(RetainedNodeMarkers.matchesExpected("a<keep1/>b<keep2/>c", Arrays.asList("<keep1/>", "<keep2/>")));
-        for (String value : new String[]{"<keep1/><keep1/>", "<keep2/><keep1/>", "<keep1 />",
-                "<keep01/>", "<KEEP1/>", "<keep1>", "<keep", "</keep1/>", "< keep1/>", "<keep1/><keep999/>"}) {
-            assertFalse(value, RetainedNodeMarkers.matchesExpected(value, Collections.singletonList("<keep1/>")));
+    @Test public void exactIdentityAndMultiplicityAreRequiredButOrderMayChange() {
+        assertTrue(RetainedNodeMarkers.matchesExpected(
+                "a<keep1/>b<keep2/>c", Arrays.asList("<keep1/>", "<keep2/>")));
+        assertTrue("distinct native markers may follow translated phrase order",
+                RetainedNodeMarkers.matchesExpected(
+                        "译文乙<keep2/>译文甲<keep1/>",
+                        Arrays.asList("<keep1/>", "<keep2/>")));
+        for (String value : new String[]{"<keep1/><keep1/>", "<keep2/>", "<keep1 />",
+                "<keep01/>", "<KEEP1/>", "<keep1>", "<keep", "</keep1/>",
+                "< keep1/>", "<keep1/><keep999/>", "<keep2/><keep2/>"}) {
+            assertFalse(value, RetainedNodeMarkers.matchesExpected(
+                    value, Arrays.asList("<keep1/>", "<keep2/>")));
         }
         assertTrue(RetainedNodeMarkers.matchesExpected("hello", Collections.emptyList()));
         assertFalse(RetainedNodeMarkers.matchesExpected("<keep1/>", Collections.emptyList()));
+        assertFalse("duplicate source identities are invalid",
+                RetainedNodeMarkers.matchesExpected("<keep1/>",
+                        Arrays.asList("<keep1/>", "<keep1/>")));
     }
 
     @Test public void sourceAndTranslationShareOneGrammar() {
@@ -150,7 +160,7 @@ public class RetainedNodeMarkersTest {
             assertTrue(prompt.contains("<keepN/>"));
             assertFalse(prompt.contains("⟦BCP"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("same order"));
+            assertTrue(prompt.contains("may move with the same source phrase"));
         }
     }
 }
