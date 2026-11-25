@@ -982,17 +982,16 @@ public class ContentNodesTest {
     }
 
     @Test
-    public void blankLineInsideOneTextNodeIsPreserved() {
-        // 一条纯文本消息 "hello\n\nworld" 整体是一个节点，但有两个段落。
-        // 空行必须留在标记外，重建时按原位置拼回。
+    public void blankLineInsideOneTextNodeMayBeMergedByTranslation() {
+        // Source paragraphs may be translated as one continuous paragraph.
         List<Object> nodes = list(new TextContentNode("hello\n\nworld"));
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好\n\n世界");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好世界");
 
         assertNotNull(out);
         assertEquals(1, out.size());
-        assertEquals("段落结构必须保留",
-                "你好\n\n世界", ((TextContentNode) out.get(0)).getContent());
+        assertEquals("合并后的译文必须完整显示",
+                "你好世界", ((TextContentNode) out.get(0)).getContent());
     }
 
     @Test
@@ -1056,9 +1055,13 @@ public class ContentNodesTest {
     }
 
     @Test
-    public void alignSpanRejectsExtraLinesWhenStructureMismatches() {
-        // 行数多于片段数且段落也对不上：必须拒绝，保留原文。
-        assertNull(ContentPlanTestSupport.align("a\nb\nc\nd", groups(0, 1), null, null));
+    public void alignSpanAcceptsMergedParagraphText() {
+        // Paragraph boundaries are presentation, not required translation structure.
+        List<String> parts = ContentPlanTestSupport.align(
+                "a\nb\nc\nd", groups(0, 1), null, null);
+        assertEquals(2, parts.size());
+        assertEquals("a\nb\nc\nd", parts.get(0));
+        assertEquals("", parts.get(1));
     }
 
     @Test
@@ -1080,9 +1083,14 @@ public class ContentNodesTest {
     }
 
     @Test
-    public void alignSpanRejectsBlankLineWhenLineCountMatches() {
-        // 三个独立片段只回两块：跨段落合并 = 内容丢失，必须拒绝。
-        assertNull(ContentPlanTestSupport.align("甲\n\n乙", groups(0, 1, 2), null, null));
+    public void alignSpanAcceptsFewerParagraphBlocksThanSourceSlots() {
+        // Keep all returned text and leave unmatched source paragraph slots empty.
+        List<String> parts = ContentPlanTestSupport.align(
+                "甲\n\n乙", groups(0, 1, 2), null, null);
+        assertEquals(3, parts.size());
+        assertEquals("甲", parts.get(0));
+        assertEquals("乙", parts.get(1));
+        assertEquals("", parts.get(2));
     }
 
     @Test
@@ -1096,10 +1104,13 @@ public class ContentNodesTest {
     }
 
     @Test
-    public void alignSpanRejectsWhenMoreParagraphBlocksThanTargets() {
-        // 译文段落块多于片段数 = 模型新增/复读内容：拒绝回填（null），
-        // 不得把多出的块堆进最后一个节点。
-        assertNull(ContentPlanTestSupport.align("A\n\nB\n\nC", groups(0, 1), null, null));
+    public void alignSpanKeepsExtraTranslatedParagraphBlocks() {
+        // Do not discard translated text when the model creates more paragraphs.
+        List<String> parts = ContentPlanTestSupport.align(
+                "A\n\nB\n\nC", groups(0, 1), null, null);
+        assertEquals(2, parts.size());
+        assertEquals("A", parts.get(0));
+        assertEquals("B\n\nC", parts.get(1));
     }
 
     @Test
