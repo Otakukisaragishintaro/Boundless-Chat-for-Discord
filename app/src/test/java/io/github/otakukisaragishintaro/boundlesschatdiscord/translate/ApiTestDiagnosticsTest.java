@@ -282,10 +282,14 @@ public class ApiTestDiagnosticsTest {
                     if ("<translate>你好</translate>".equals(text)
                             || "你好</translate>".equals(text)) {
                         // The exact outer pair and one unmatched terminal boundary are normalized.
-                        // Embedded/partial wrappers and unrelated placeholders remain invalid.
                         assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, "你好");
+                    } else if ("<s1>你好</s1>".equals(text)) {
+                        // Legacy segment-looking angle text is ordinary content, not a protocol marker.
+                        assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
+                                ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, text);
                     } else {
+                        // Partial wrapper tags and placeholder hallucinations remain invalid.
                         assertFailure(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION,
                                 TranslationException.Kind.PARSE,
