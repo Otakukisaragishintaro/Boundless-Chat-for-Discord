@@ -215,12 +215,8 @@ public final class ContentNodes {
                         String right = replacement.parts.get(next);
                         if (left.isEmpty() || right.isEmpty()) return null;
                         String separator = replacement.separatorBetween(left, right);
-                        if (separator != null && !separator.contains("\n\n")) {
-                            if (replacement.isHeadingBoundary(next) || separator.isEmpty()) return null;
-                            Object adjusted = createTextNode(node, separator);
-                            if (adjusted == null) throw reject(RejectionReason.TEXT_CONSTRUCTOR);
-                            return adjusted;
-                        }
+                        if (replacement.isHeadingBoundary(next) && separator != null
+                                && !separator.contains("\n\n")) return null;
                     }
                 }
                 return node;
@@ -590,6 +586,12 @@ public final class ContentNodes {
 
     /** One interval operation; decoration consumes captured structure only, never the response. */
     private static List<String> alignInterval(String span, AlignmentPlan plan, int start, int end) {
+        for (String url : plan.urls) {
+            if (span.contains(url)) throw reject(RejectionReason.ANCHOR_ORDER);
+        }
+        for (String emoji : plan.emojiAnchors) {
+            if (!emoji.isEmpty() && span.contains(emoji)) throw reject(RejectionReason.ANCHOR_ORDER);
+        }
         try {
             return alignSpanToParts(span, plan.groupIds.subList(start, end),
                     plan.listPrefixesIn(start, end), plan.lineBreakFlagsIn(start, end),
@@ -1109,10 +1111,11 @@ public final class ContentNodes {
         w.plan.groupIds.add(w.group);
         w.plan.lineBreakBefore.add(lineBoundary);
         w.plan.sourceLineCounts.add(sourceLines);
+        boolean currentHeading = containsHeading(event.containers);
+        boolean previousHeading = w.plan.boundaries.size() > 1
+                && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 2).event.containers);
         boolean headingBoundary = w.headingBreaks > 0
-                || containsHeading(event.containers)
-                || (w.plan.boundaries.size() > 1
-                && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 2).event.containers));
+                || (w.plan.boundaries.size() > 1 && currentHeading != previousHeading);
         w.plan.headingBoundaries.add(headingBoundary);
         boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
         w.plan.hardBoundaries.add(headingBoundary || nativeBreakBoundary);
