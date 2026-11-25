@@ -66,6 +66,8 @@ public final class ContentNodes {
         /** Interval-local failing connected line run, source slot ordinals only. */
         int blockStart = -1;
         int blockEnd = -1;
+        int actualChunkIndex = -1;
+        int paragraphGroups = -1;
         String structure = "";
 
         Rejection(RejectionReason reason, int expected, int actual) {
@@ -621,6 +623,8 @@ public final class ContentNodes {
                     rejection.structure = " intervalSlots=" + (end - start)
                             + " runSlots=" + (last - first + 1)
                             + " firstSlot=" + first + " lastSlot=" + last
+                            + " chunkIndex=" + Math.max(0, rejection.actualChunkIndex)
+                            + " paragraphGroups=" + rejection.paragraphGroups
                             + plan.boundaries.get(first).describe("first")
                             + plan.boundaries.get(last).describe("last");
                 }
@@ -736,6 +740,8 @@ public final class ContentNodes {
                     Rejection rejection = new Rejection(RejectionReason.LINE_COUNT, expectedLines, lines.length);
                     rejection.blockStart = segment;
                     rejection.blockEnd = end;
+                    rejection.actualChunkIndex = chunk - 1;
+                    rejection.paragraphGroups = paragraphGroups;
                     throw rejection;
                 }
                 for (String line : lines) {
