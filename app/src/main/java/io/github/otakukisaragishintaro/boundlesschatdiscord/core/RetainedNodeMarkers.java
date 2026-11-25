@@ -71,8 +71,10 @@ public final class RetainedNodeMarkers {
                     ? expectedCounts.get(entry.getKey()) : 0;
             if (entry.getValue() > expectedCount) {
                 unexpected.add(entry.getKey() + "x" + (entry.getValue() - expectedCount));
-                if (expectedCount > 0) duplicated.add(entry.getKey()
-                        + "x" + (entry.getValue() - expectedCount));
+            }
+            int duplicateCount = entry.getValue() - Math.max(expectedCount, 1);
+            if (duplicateCount > 0) {
+                duplicated.add(entry.getKey() + "x" + duplicateCount);
             }
         }
         List<String> malformed = malformedMarkers(translated);
