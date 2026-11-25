@@ -316,7 +316,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 // The wrapper is transport framing. Decode it before parsing the JSON segment
                 // envelope; marker positions are then rebuilt from the source, never the model.
                 translated = Segments.stripOuterResponseWrapper(translated, text);
-                translated = structuredSource.restore(translated);
+                translated = structuredSource.restore(translated, response.status);
             }
             if (validateTranslation) {
                 // Optional normalization for ordinary text responses.
