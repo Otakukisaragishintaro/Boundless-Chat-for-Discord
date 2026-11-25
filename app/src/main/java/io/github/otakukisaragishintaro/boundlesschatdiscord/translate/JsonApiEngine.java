@@ -415,11 +415,13 @@ public final class JsonApiEngine implements Scheduler.Engine {
 
     /** Sends exactly once and retains the decoded response status for post-request validation. */
     private static final String STRUCTURED_SEGMENT_INSTRUCTIONS =
-            "Translate each text field in the user's JSON segments array. Return only one JSON object "
-            + "with a segments array. Each item must contain exactly the original id and its translated "
-            + "text. Include every id exactly once; do not add, remove, rename, duplicate, or combine ids. "
-            + "Never output protected marker tokens. Segment order in your response may differ; the "
-            + "application restores source order.";
+            "Translate each text field in the user's JSON segments array. Output the required "
+            + "<translate> and </translate> wrapper tags with exactly one JSON object between them. "
+            + "The object must contain a segments array. Each item must contain exactly the original id "
+            + "and its translated text. Include every id exactly once; do not add, remove, rename, "
+            + "duplicate, or combine ids. The source marker tokens are intentionally absent; never "
+            + "create any <keepN/> token. Segment order in your response may differ; the application "
+            + "restores source order.";
 
     private Http.Response requestOnce(String text, Http.Request request, Http.Headers headers)
             throws Exception {
