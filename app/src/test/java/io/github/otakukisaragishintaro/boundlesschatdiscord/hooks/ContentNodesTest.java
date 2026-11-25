@@ -730,9 +730,9 @@ public class ContentNodesTest {
                 new AnnotatedStructurableText(nodes));
         assertNotNull(extracted);
         assertTrue("标题前必须有内部边界标记",
-                extracted.text.contains("<x2>Important</x2>"));
+                extracted.requestText.contains("<x2>Important</x2>"));
 
-        String mergedTranslation = extracted.text
+        String mergedTranslation = extracted.requestText
                 .replace("Install the driver", "安装驱动")
                 .replace("Important", "重要");
         List<Object> out = ContentNodes.replacePlanned(extracted.tree, mergedTranslation);
