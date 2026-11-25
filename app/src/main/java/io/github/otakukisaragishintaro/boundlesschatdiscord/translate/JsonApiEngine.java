@@ -154,7 +154,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
             try {
                 String translated = execute(separatorProtection.text, true, logFailureDiagnostics,
-                        !logFailureDiagnostics, true).translated;
+                        !logFailureDiagnostics,
+                        StructuredTranslation.hasMarkers(separatorProtection.text)).translated;
                 combined.append(separatorProtection.restore(translated));
             } catch (Exception failure) {
                 ProjectLog.warn("translation.chunking failed index=" + (i + 1)
@@ -180,7 +181,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         DiscordTokenMarkers.Protection separators =
                 DiscordTokenMarkers.protectBlankLineSeparators(source);
         Exchange exchange = execute(separators.text, true, logFailureDiagnostics,
-                !logFailureDiagnostics, true);
+                !logFailureDiagnostics, StructuredTranslation.hasMarkers(separators.text));
         return new Exchange(separators.restore(exchange.translated), exchange.httpStatus);
     }
 
