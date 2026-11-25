@@ -830,6 +830,7 @@ public final class ContentNodes {
                     w.itemStarts++;
                     w.pendingListPrefix = true;
                     if (!w.plan.groupIds.isEmpty()) w.forceNewGroup = true;
+                    w.forceLineBoundary = true;
                     w.separatorNewlines++; // Native list-item line boundary, not opaque text.
                     w.listLevel++;
                     continue;
@@ -907,6 +908,7 @@ public final class ContentNodes {
         int headingBreaks;
         int listLevel;
         boolean forceNewGroup;
+        boolean forceLineBoundary;
         boolean pendingListPrefix;
         final int[] gapKinds = new int[ContentTree.Kind.values().length];
         int whitespaceNodes;
@@ -960,8 +962,10 @@ public final class ContentNodes {
         w.pendingListPrefix = false;
         w.plan.boundaries.add(new BoundaryContext(event, w, sourceLines));
         int separatorNewlines = w.separatorNewlines;
+        // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
+        // Do not turn the latter into a line boundary or list lines get merged with following body text.
         boolean lineBoundary = separatorNewlines < 2
-                && (w.forceNewGroup || separatorNewlines == 1);
+                && (w.forceLineBoundary || separatorNewlines == 1);
         if (w.forceNewGroup) {
             w.group++;
             w.forceNewGroup = false;
@@ -973,6 +977,7 @@ public final class ContentNodes {
         w.plan.sourceLineCounts.add(sourceLines);
         w.separatorNewlines = 0;
         w.headingBreaks = 0;
+        w.forceLineBoundary = false;
         java.util.Arrays.fill(w.gapKinds, 0);
         w.whitespaceNodes = 0;
         w.itemStarts = 0;
