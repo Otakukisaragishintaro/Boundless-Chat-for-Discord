@@ -130,7 +130,10 @@ public final class Protocols {
         }
         String wrapped = WRAPPER_OPEN + text + WRAPPER_CLOSE;
         String prompt = systemPrompt.trim() + "\n\n" + WRAPPER_RULE;
-        if (protectionPromptEnabled) {
+        // Structured segment mode does not expose marker tokens to the model; the
+        // structured instructions replace the ordinary marker-copying prompt for that request.
+        if (protectionPromptEnabled
+                && (additionalInstructions == null || additionalInstructions.trim().isEmpty())) {
             prompt += "\n\n" + protectionPromptFor(targetLanguage);
         }
         if (additionalInstructions != null && !additionalInstructions.trim().isEmpty()) {
