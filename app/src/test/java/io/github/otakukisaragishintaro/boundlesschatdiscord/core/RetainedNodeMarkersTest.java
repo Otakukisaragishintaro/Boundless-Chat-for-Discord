@@ -177,7 +177,7 @@ public class RetainedNodeMarkersTest {
             assertTrue(prompt.contains("<keepN/>"));
             assertFalse(prompt.contains("⟦BCP"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("same order"));
+            assertTrue(prompt.contains("original relative order"));
         }
     }
 }
