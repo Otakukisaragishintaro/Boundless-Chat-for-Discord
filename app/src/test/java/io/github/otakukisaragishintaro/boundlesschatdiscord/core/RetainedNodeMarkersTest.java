@@ -57,7 +57,9 @@ public class RetainedNodeMarkersTest {
     }
 
     @Test public void lengthRatioDoesNotCountRetainedCodeMarkersAsNaturalLanguage() {
-        String markers = String.join("", Collections.nCopies(20, "<keep1/>"));
+        StringBuilder markerBuilder = new StringBuilder();
+        for (int i = 1; i <= 20; i++) markerBuilder.append("<keep").append(i).append("/>");
+        String markers = markerBuilder.toString();
         assertNull(Segments.plainTextViolation("你好" + markers, "hello" + markers));
         String source = String.join("", Collections.nCopies(50, "a")) + "<keep1/>";
         assertNotNull(Segments.plainTextViolation("短<keep1/>", source));
