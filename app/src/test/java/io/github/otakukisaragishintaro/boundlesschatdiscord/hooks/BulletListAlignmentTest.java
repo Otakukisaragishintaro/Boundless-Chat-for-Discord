@@ -89,7 +89,7 @@ public class BulletListAlignmentTest {
 
         assertNotNull(r);
         assertEquals(10, r.segmentCount);
-        assertTrue("列表符号进入请求正文", r.text.contains("• <x1>Support for Codex CLI"));
+        assertTrue("列表符号进入请求正文", r.requestText.contains("• <x1>Support for Codex CLI"));
     }
 
     @Test
@@ -105,7 +105,7 @@ public class BulletListAlignmentTest {
         t.append("\n<x6>你可以在花任何钱之前先用免费额度试用。</x6>\n\n")
                 .append("在此注册：").append(URL);
 
-        List<Object> out = ContentPlanTestSupport.replace(reportedTree(), t.toString());
+        List<Object> out = replaceTranslation(reportedTree(), t.toString());
 
         assertNotNull("结构完整的列表译文必须能回填", out);
         BulletListContentNode bullets = (BulletListContentNode) out.get(6);
@@ -404,11 +404,11 @@ public class BulletListAlignmentTest {
     }
 
     private static TextExtractor.Result capture(List<Object> nodes, String expected) {
-        ContentTree tree = ContentTree.compile(nodes);
+        ContentTree tree = ContentTree.compileForTranslation(nodes);
         assertNotNull("valid synthetic fixture must compile", tree);
         TextExtractor.Result result = TextExtractor.extractTree(tree);
         assertNotNull("compiled source must be extractable", result);
-        assertEquals("fixture extraction must match its declared source", expected, result.text);
+        assertEquals("fixture extraction must match its declared source", expected, result.requestText);
         return result;
     }
 
@@ -417,7 +417,11 @@ public class BulletListAlignmentTest {
         assertNotNull("rebuilt nodes must compile", tree);
         TextExtractor.Result result = TextExtractor.extractTree(tree);
         assertNotNull("rebuilt nodes must be extractable", result);
-        return result.text;
+        return result.requestText;
+    }
+
+    private static List<Object> replaceTranslation(List<?> nodes, String translated) {
+        return ContentNodes.replacePlanned(ContentTree.compileForTranslation(nodes), translated);
     }
 
 }
