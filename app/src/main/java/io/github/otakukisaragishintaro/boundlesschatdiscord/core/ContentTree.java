@@ -181,7 +181,7 @@ public final class ContentTree {
 
     private static int countLf(String text, int start, int end) {
         int count = 0;
-        for (int i = start; i < end; i++) if (text.charAt(i) == '\\n') count++;
+        for (int i = start; i < end; i++) if (text.charAt(i) == '\n') count++;
         return count;
     }
 
