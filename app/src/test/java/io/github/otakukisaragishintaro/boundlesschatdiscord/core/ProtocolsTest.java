@@ -157,7 +157,7 @@ public class ProtocolsTest {
                     ? body.getString("instructions") : body.getString("system");
             assertTrue(system.contains("You MUST copy every marker verbatim"));
             assertTrue(system.contains(expectedManifest));
-            assertTrue(system.contains("Do not skip a marker because the target-language"));
+            assertTrue(system.contains("Do not omit a marker because the target-language"));
         }
     }
 
