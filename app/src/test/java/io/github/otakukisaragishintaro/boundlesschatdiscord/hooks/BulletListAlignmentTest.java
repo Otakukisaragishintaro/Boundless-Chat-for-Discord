@@ -100,7 +100,7 @@ public class BulletListAlignmentTest {
                 .append("<x2>它提供：</x2>\n\n");
         for (int i = 0; i < ZH_BULLETS.length; i++) {
             t.append("- <x").append(i + 3).append('>')
-                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\\n");
+                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\n");
         }
         t.append("\n<x8>你可以在花任何钱之前先用免费额度试用。</x8>\n\n")
                 .append("<x9>在此注册：</x9>").append(URL);
@@ -128,10 +128,10 @@ public class BulletListAlignmentTest {
                 .append("<x2>它提供：</x2>\n\n");
         for (int i = 0; i < ZH_BULLETS.length; i++) {
             t.append("• <x").append(i + 3).append('>')
-                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\\n");
+                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\n");
         }
-        t.append("\n你可以在花任何钱之前先用免费额度试用。\n\n")
-                .append("在此注册：").append(URL);
+        t.append("\n<x8>你可以在花任何钱之前先用免费额度试用。</x8>\n\n")
+                .append("<x9>在此注册：</x9>").append(URL);
 
         List<Object> out = ContentPlanTestSupport.replace(reportedTree(), t.toString());
 
@@ -145,19 +145,21 @@ public class BulletListAlignmentTest {
     }
 
     @Test
-    public void missingListLeadParagraphBoundaryIsRejected() {
+    public void explicitListMarkerAllowsMissingLeadBlankLine() {
         StringBuilder t = new StringBuilder();
         t.append("Codex Relay — 面向编程的 AI API\n\n")
                 .append("<x1>如果你正在为 AI 编程工具寻找 API 提供商，可以看看 Codex Relay。</x1>\n\n")
                 .append("<x2>它提供：</x2>\n");
-        for (String b : ZH_BULLETS) {
-            t.append("- ").append(b).append('\n');
+        for (int i = 0; i < ZH_BULLETS.length; i++) {
+            t.append("- <x").append(i + 3).append('>')
+                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\n");
         }
-        t.append("\n你可以在花任何钱之前先用免费额度试用。\n\n")
-                .append("在此注册：").append(URL);
+        t.append("\n<x8>你可以在花任何钱之前先用免费额度试用。</x8>\n\n")
+                .append("<x9>在此注册：</x9>").append(URL);
 
-        assertNull("源树中的段落边界缺失时不得重新猜测分段",
-                ContentPlanTestSupport.replace(reportedTree(), t.toString()));
+        List<Object> out = ContentPlanTestSupport.replace(reportedTree(), t.toString());
+        assertNotNull("显式边界标记允许模型省略普通空行", out);
+        assertEquals(5, ((BulletListContentNode) out.get(6)).getItems().size());
     }
 
     @Test
@@ -169,8 +171,9 @@ public class BulletListAlignmentTest {
         List<Object> nodes = list(new BulletListContentNode(null, false, items));
 
         StringBuilder t = new StringBuilder();
-        for (String b : ZH_BULLETS) {
-            t.append(b).append('\n');
+        for (int i = 0; i < ZH_BULLETS.length; i++) {
+            t.append("<x").append(i + 1).append('>')
+                    .append(ZH_BULLETS[i]).append("</x").append(i + 1).append(">\n");
         }
         List<Object> out = ContentPlanTestSupport.replace(nodes, t.toString());
 
@@ -209,13 +212,14 @@ public class BulletListAlignmentTest {
     public void urlStaysIntactNextToTranslatedSignupLine() {
         StringBuilder t = new StringBuilder();
         t.append("Codex Relay — 面向编程的 AI API\n\n")
-                .append("如果你正在为 AI 编程工具寻找 API 提供商，可以看看 Codex Relay。\n\n")
-                .append("它提供：\n\n");
-        for (String b : ZH_BULLETS) {
-            t.append("- ").append(b).append('\n');
+                .append("<x1>如果你正在为 AI 编程工具寻找 API 提供商，可以看看 Codex Relay。</x1>\n\n")
+                .append("<x2>它提供：</x2>\n\n");
+        for (int i = 0; i < ZH_BULLETS.length; i++) {
+            t.append("- <x").append(i + 3).append('>')
+                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\n");
         }
-        t.append("\n你可以在花任何钱之前先用免费额度试用。\n\n")
-                .append("在此注册：").append(URL);
+        t.append("\n<x8>你可以在花任何钱之前先用免费额度试用。</x8>\n\n")
+                .append("<x9>在此注册：</x9>").append(URL);
 
         List<Object> nodes = reportedTree();
         Object link = nodes.get(11);
@@ -230,20 +234,22 @@ public class BulletListAlignmentTest {
     }
 
     @Test
-    public void listItemsSeparatedByBlankParagraphsAreRejected() {
+    public void listItemsSeparatedByBlankParagraphsStillAlignByMarkers() {
         // 原结构要求列表项逐行对应。模型在项目之间另插空段落，结构不再一致。
         StringBuilder t = new StringBuilder();
         t.append("Codex Relay — 面向编程的 AI API\n\n")
-                .append("如果你正在为 AI 编程工具寻找 API 提供商，可以看看 Codex Relay。\n\n")
-                .append("它提供：\n\n");
-        for (String b : ZH_BULLETS) {
-            t.append("- ").append(b).append("\n\n");
+                .append("<x1>如果你正在为 AI 编程工具寻找 API 提供商，可以看看 Codex Relay。</x1>\n\n")
+                .append("<x2>它提供：</x2>\n\n");
+        for (int i = 0; i < ZH_BULLETS.length; i++) {
+            t.append("- <x").append(i + 3).append('>')
+                    .append(ZH_BULLETS[i]).append("</x").append(i + 3).append(">\n\n");
         }
-        t.append("你可以在花任何钱之前先用免费额度试用。\n\n")
-                .append("在此注册：").append(URL);
+        t.append("<x8>你可以在花任何钱之前先用免费额度试用。</x8>\n\n")
+                .append("<x9>在此注册：</x9>").append(URL);
 
-        assertNull("原始列表项之间是单换行，模型插入空段落后不再逐项对应",
-                ContentPlanTestSupport.replace(reportedTree(), t.toString()));
+        List<Object> out = ContentPlanTestSupport.replace(reportedTree(), t.toString());
+        assertNotNull("各列表项已有独立标记，额外空行不应破坏回填", out);
+        assertEquals(5, ((BulletListContentNode) out.get(6)).getItems().size());
     }
 
     @Test
@@ -344,11 +350,11 @@ public class BulletListAlignmentTest {
         List<Object> nodes = list(original, blank, new TextContentNode("After"));
         TextExtractor.Result source = capture(nodes,
                 "\n• \n  <x1>Read</x1>\n\n<x2>1. guide</x2>  \n• <x3>Next</x3>"
-                        + " 1. literal continuation\n\nAfter");
+                        + " 1. literal continuation\n\n<x4>After</x4>");
 
         List<Object> out = ContentNodes.replacePlanned(source.tree,
                 "• \n<x1>阅读</x1>\n\n<x2>1. 指南</x2>\n• <x3>接着</x3>"
-                        + " 1. 字面编号\n\n之后");
+                        + " 1. 字面编号\n\n<x4>之后</x4>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -369,10 +375,10 @@ public class BulletListAlignmentTest {
                 Arrays.asList(list(new TextContentNode("Read"), lf,
                         new TextContentNode("1. important\n\n2. still literal")),
                         list(new TextContentNode("Next"))))),
-                "\n• Read\n1. important\n\n2. still literal\n• Next");
+                "\n• <x1>Read</x1>\n<x2>1. important</x2>\n\n<x3>2. still literal</x3>\n• <x4>Next</x4>");
 
         List<Object> out = ContentNodes.replacePlanned(source.tree,
-                "1. 阅读\n1. 重要事项\n\n2. 仍是正文\n2. 接着");
+                "<x1>阅读</x1>\n<x2>1. 重要事项</x2>\n\n<x3>2. 仍是正文</x3>\n2. <x4>接着</x4>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -381,7 +387,7 @@ public class BulletListAlignmentTest {
         assertEquals("1. 重要事项\n\n2. 仍是正文",
                 ((TextContentNode) rebuilt.getItems().get(0).get(2)).getContent());
         assertEquals("接着", ((TextContentNode) rebuilt.getItems().get(1).get(0)).getContent());
-        assertEquals("\n• 阅读\n1. 重要事项\n\n2. 仍是正文\n• 接着", extracted(out));
+        assertEquals("\n• <x1>阅读</x1>\n<x2>1. 重要事项</x2>\n\n<x3>2. 仍是正文</x3>\n• <x4>接着</x4>", extracted(out));
     }
 
     @Test
@@ -392,11 +398,11 @@ public class BulletListAlignmentTest {
             Object last = styled ? new StrongContentNode(list(body)) : body;
             TextExtractor.Result source = capture(list(new BulletListContentNode(null, false,
                     Arrays.asList(list(new TextContentNode("Earlier")), list(code, last)))),
-                    "\n• Earlier\n• <keep1/> "
-                            + (styled ? "<x1>1. important thing</x1>" : "1. important thing"));
+                    "\n• <x1>Earlier</x1>\n• <keep1/> <x2>
+                            + (styled ? "1. important thing</x2>" : "1. important thing</x2>"));
 
             List<Object> out = ContentNodes.replacePlanned(source.tree,
-                    "• 前项\n• <keep1/> " + (styled ? "<x1>1. 重要事项</x1>" : "1. 重要事项"));
+                    "• <x1>前项</x1>\n• <keep1/> <x2> + (styled ? "<x2>1. 重要事项</x2>" : "<x2>1. 重要事项</x2>"));
 
             assertNotNull(out);
             BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -406,7 +412,7 @@ public class BulletListAlignmentTest {
             if (styled) translated = ((StrongContentNode) translated).getContent().get(0);
             assertEquals(" 1. 重要事项", ((TextContentNode) translated).getContent());
             assertEquals("\n• 前项\n• <keep1/> "
-                    + (styled ? "<x1>1. 重要事项</x1>" : "1. 重要事项"), extracted(out));
+                    + (styled ? "<x2>1. 重要事项</x2>" : "<x2>1. 重要事项</x2>"), extracted(out));
             assertEquals(" 1. important thing", body.getContent());
         }
     }
