@@ -701,7 +701,20 @@ public final class ContentNodes {
             // A provider may merge adjacent source paragraphs. Keep the returned
             // text in the corresponding leading slots and leave the remaining
             // source slots empty; native reconstruction then omits their separators.
-            if (chunk >= chunks.size()) break;
+            if (chunk >= chunks.size()) {
+                boolean remainingStructuralBoundary = false;
+                for (int i = segment; i < segments; i++) {
+                    if (isLineBreakBefore(lineBreakBefore, i)
+                            || isHardBoundaryBefore(hardBoundaries, i)) {
+                        remainingStructuralBoundary = true;
+                        break;
+                    }
+                }
+                if (remainingStructuralBoundary) {
+                    throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
+                }
+                break;
+            }
             String block = chunks.get(chunk);
             int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
