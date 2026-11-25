@@ -593,7 +593,8 @@ public final class ContentNodes {
         try {
             return alignSpanToParts(span, plan.groupIds.subList(start, end),
                     plan.listPrefixesIn(start, end), plan.lineBreakFlagsIn(start, end),
-                    plan.sourceLinesIn(start, end), plan.hardBoundariesIn(start, end));
+                    plan.sourceLinesIn(start, end), plan.hardBoundariesIn(start, end),
+                    plan.boundaryLinesIn(start, end));
         } catch (Rejection rejection) {
             if (rejection.reason == RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS) {
                 int right = start + rejection.boundary;
@@ -649,6 +650,16 @@ public final class ContentNodes {
                                          @Nullable List<Boolean> lineBreakBefore,
                                          List<Integer> sourceLineCounts,
                                          @Nullable List<Boolean> hardBoundaries) {
+        return alignSpanToParts(span, groups, listPrefixes, lineBreakBefore,
+                sourceLineCounts, hardBoundaries, null);
+    }
+
+    private static List<String> alignSpanToParts(String span, List<Integer> groups,
+                                         @Nullable List<Boolean> listPrefixes,
+                                         @Nullable List<Boolean> lineBreakBefore,
+                                         List<Integer> sourceLineCounts,
+                                         @Nullable List<Boolean> hardBoundaries,
+                                         @Nullable List<Integer> boundaryLineCounts) {
         int segments = groups.size();
         if (segments == 0) {
             if (!span.trim().isEmpty()) throw reject(RejectionReason.UNASSIGNED_TEXT);
@@ -671,9 +682,6 @@ public final class ContentNodes {
         }
         if (lineBreakBefore != null) {
             for (Boolean boundary : lineBreakBefore) hasLineBoundary |= Boolean.TRUE.equals(boundary);
-        }
-        if (chunks.size() < paragraphGroups && hasHardBoundary) {
-            throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
         }
         List<String> parts = new ArrayList<>(
                 java.util.Collections.nCopies(segments, ""));
@@ -702,7 +710,13 @@ public final class ContentNodes {
             if (end - segment > 1) {
                 String[] lines = block.split("\n", -1);
                 int expectedLines = 0;
-                for (int i = segment; i < end; i++) expectedLines += sourceLineCounts.get(i);
+                for (int i = segment; i < end; i++) {
+                    expectedLines += sourceLineCounts.get(i);
+                    if (i > segment && boundaryLineCounts != null
+                            && i < boundaryLineCounts.size()) {
+                        expectedLines += boundaryLineCounts.get(i);
+                    }
+                }
                 if (lines.length != expectedLines) {
                     Rejection rejection = new Rejection(RejectionReason.LINE_COUNT, expectedLines, lines.length);
                     rejection.blockStart = segment;
@@ -802,6 +816,8 @@ public final class ContentNodes {
         final List<Boolean> lineBreakBefore = new ArrayList<>();
         /** Boundaries that must not be merged: heading transitions and native break nodes. */
         final List<Boolean> hardBoundaries = new ArrayList<>();
+        /** Extra source line separators contributed by native BREAK nodes. */
+        final List<Integer> boundaryLineCounts = new ArrayList<>();
         /** Heading boundaries render their own line break; an intervening blank node is redundant. */
         final List<Boolean> headingBoundaries = new ArrayList<>();
         /** 与片段平行：该片段的源文本内部行数，不能假定每个槽只占一行。 */
@@ -833,6 +849,10 @@ public final class ContentNodes {
 
         List<Boolean> hardBoundariesIn(int segStart, int segEnd) {
             return hardBoundaries.subList(segStart, segEnd);
+        }
+
+        List<Integer> boundaryLinesIn(int segStart, int segEnd) {
+            return boundaryLineCounts.subList(segStart, segEnd);
         }
 
         /** [segStart, segEnd) 范围片段对应的列表项起始前缀。 */
@@ -1093,8 +1113,10 @@ public final class ContentNodes {
                 || (!w.plan.boundaries.isEmpty()
                 && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 1).event.containers));
         w.plan.headingBoundaries.add(headingBoundary);
-        w.plan.hardBoundaries.add(headingBoundary
-                || w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0);
+        boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
+        w.plan.hardBoundaries.add(headingBoundary || nativeBreakBoundary);
+        w.plan.boundaryLineCounts.add(nativeBreakBoundary && !headingBoundary
+                ? Math.max(0, w.separatorNewlines - 1) : 0);
         w.separatorNewlines = 0;
         w.headingBreaks = 0;
         w.forceLineBoundary = false;
