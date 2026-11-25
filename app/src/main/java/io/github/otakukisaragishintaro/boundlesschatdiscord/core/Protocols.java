@@ -72,8 +72,9 @@ public final class Protocols {
         return "When translating into " + language + ", treat every token matching "
                 + "<keepN/> (where N is a positive integer, for example <keep1/>) as an "
                 + "opaque protected marker, not text, HTML, or markup. Copy each exact marker "
-                + "unchanged, exactly once, and in the same order. Never add, remove, rename, "
-                + "duplicate, reorder, or translate a protected marker.";
+                + "unchanged exactly once. A marker may move with the same source phrase or item "
+                + "when translation changes word or sentence order; never detach it from that "
+                + "source item. Never add, remove, rename, duplicate, or translate a marker.";
     }
 
     private static final String SUFFIX_CHAT_COMPLETIONS = "/chat/completions";
