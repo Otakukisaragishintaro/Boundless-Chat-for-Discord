@@ -203,9 +203,10 @@ public final class InlineIconInjector {
             Drawable source = iconFor(context, status);
             Drawable tinted = InlineIconSpan.tintForState(source, status, showingOriginal);
             String sourceLanguage = sourceLanguageLabel(messageId);
+            boolean formattingWarning = card == null && entry != null && entry.renderDegraded;
             InlineIconSpan icon = InlineIconSpan.create(
                     tinted, context.getResources().getDisplayMetrics().density,
-                    status, sourceLanguage);
+                    status, sourceLanguage, formattingWarning);
             if (icon == null) {
                 ProjectLog.warnOnce("icon.spanCreation", "icon injection skipped: icon span creation failed");
                 return rendered;
