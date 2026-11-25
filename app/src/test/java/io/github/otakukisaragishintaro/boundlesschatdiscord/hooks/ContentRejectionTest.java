@@ -65,11 +65,14 @@ public class ContentRejectionTest {
         rejected(source, "一 " + second + " 二 " + first, ANCHOR_ORDER);
     }
 
-    @Test public void styleOpeningClosingAndEmptyContentHaveDistinctReasons() {
+    @Test public void emptyStyledContentPreservesItsSourceSlotWithoutRejectingWholeTree() {
         List<?> source = Arrays.asList(new StrongContentNode(Arrays.asList(new TextContentNode("Title"))));
         rejected(source, "标题", STYLE_OPEN);
         rejected(source, "<x1>标题", STYLE_CLOSE);
-        rejected(source, "<x1> </x1>", STYLE_EMPTY);
+        List<Object> rebuilt = ContentNodes.replaceChecked(ContentTree.compile(source), "<x1> </x1>");
+        assertNotNull(rebuilt);
+        assertEquals("Title", ((TextContentNode) ((StrongContentNode) rebuilt.get(0))
+                .getContent().get(0)).getContent());
     }
 
     @Test public void modelExtraTextOutsideStyledSpanHasNoAssignedSourceSlot() {
