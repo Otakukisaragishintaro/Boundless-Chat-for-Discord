@@ -55,7 +55,7 @@ public class SourceNewlineAlignmentTest {
         // separate. A global chunks<paragraphGroups check must not greedily absorb all
         // four slots into the first one-line chunk.
         List<String> parts = ContentNodes.alignSpanToParts(
-                "标题\\n\\n正文\\n变化\\n• 项目",
+                "标题\n\n正文\n变化\n• 项目",
                 Arrays.asList(0, 1, 2, 3),
                 Arrays.asList(false, false, false, true),
                 Arrays.asList(false, false, false, false),
