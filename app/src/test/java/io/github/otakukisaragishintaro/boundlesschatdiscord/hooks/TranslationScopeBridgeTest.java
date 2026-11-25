@@ -410,7 +410,8 @@ public class TranslationScopeBridgeTest {
         assertEquals("text conversion alone must not replace the retained cache entry",
                 "retained API result", TranslationCache.get().get(hash));
         bridge.onMessageRenderCompleted(ROW, false);
-        assertNull("detached message views must not commit pending cache", TranslationCache.get().get(hash));
+        assertEquals("detached message views must not overwrite the retained cache",
+                "retained API result", TranslationCache.get().get(hash));
         bridge.onMessageRenderCompleted(ROW, true);
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
