@@ -286,10 +286,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
             }
             translated = translated.trim();
             if (validateTranslation) {
-                // Optional normalization: remove only one exact outer wrapper pair.
-                // Embedded, partial, and nested markers remain available to the checks below.
+                // Normalize only protocol framing that can be distinguished from source text.
+                // Any embedded, repeated, partial, or source-authored wrapper remains invalid.
                 if (cfg.stripOuterWrapper) {
-                    translated = Segments.stripOuterResponseWrapper(translated);
+                    translated = Segments.stripOuterResponseWrapper(translated, text);
                 }
                 String violation = Segments.plainTextViolation(translated, text,
                         cfg.checkWrapper, cfg.checkSegmentMarkers, cfg.checkPlaceholders,
