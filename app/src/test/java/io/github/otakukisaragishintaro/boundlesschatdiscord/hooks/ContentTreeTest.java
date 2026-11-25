@@ -371,7 +371,7 @@ public class ContentTreeTest {
                 rebuiltNested.getItems().get(0).get(0)).getContent());
         assertEquals("末项", ((ContentNodesTest.TextContentNode)
                 rebuiltOuter.getItems().get(1).get(0)).getContent());
-        assertEquals("\n• outer\n• inner\n• last", extracted(tree).text);
+        assertEquals("\n• <x1>outer</x1>\n• <x2>inner</x2>\n• <x3>last</x3>", extracted(tree).text);
         assertNull(ContentNodes.replacePlanned(tree, "外层\n内层"));
     }
 
