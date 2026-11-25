@@ -70,7 +70,8 @@ public class InlineCodeMarkerTest {
                 new InlineCodeContentNode("two"), text("C"));
         for (String response : new String[]{"甲乙丙", "甲<keep1/>乙丙", "甲<keep1/>乙<keep1/>丙",
                 "甲<keep2/>乙<keep1/>丙", "甲<keep1/>乙<keep3/>丙", "甲<keep1 />乙<keep2/>丙",
-                "甲<keep1>乙<keep2/>丙", "甲<KEEP1/>乙<keep2/>丙", "甲<keep01/>乙<keep2/>丙"}) {
+                "甲<keep1>乙<keep2/>丙", "甲<KEEP1/>乙<keep2/>丙", "甲<keep01/>乙<keep2/>丙",
+                "甲<keep1/>乙<keep2/>丙<keep", "甲<keep1/>乙<keep2/>丙</keep9>"}) {
             reject(tree, response, ContentNodes.RejectionReason.RETAINED_MARKER);
         }
     }
@@ -174,26 +175,19 @@ public class InlineCodeMarkerTest {
         assertEquals("第二", content(out.get(2)));
     }
 
-    @Test public void onlyExactReservedNamespaceIsRejectedBeforeSending() {
-        String exact = "<keep1/>";
-        assertNull(ContentTree.compile(list(text(exact), new InlineCodeContentNode("one"))));
-        assertNull(TextExtractor.extract(new PrimitiveStructurableText(exact)));
-        for (String ordinary : new String[]{"literal </keep", "< KEEP2 />", "<keeping>", "<keep"}) {
-            assertNotNull(ContentTree.compile(list(text(ordinary), new InlineCodeContentNode("one"))));
-            assertNotNull(TextExtractor.extract(new PrimitiveStructurableText(ordinary)));
+    @Test public void sourceReservedNamespaceRejectsBeforeSendingAndSplitCollisionRejectsExtraction() {
+        for (String source : new String[]{"<keep1/>", "literal </keep", "< KEEP2 />", "<keeping>"}) {
+            assertNull(ContentTree.compile(list(text(source), new InlineCodeContentNode("one"))));
+            assertNull(TextExtractor.extract(new PrimitiveStructurableText(source)));
         }
         ContentTree split = tree(text("<"), text("keep1/>"), new InlineCodeContentNode("one"), text("Body"));
         assertNull(TextExtractor.extractTree(split));
         ContentTree styledSplit = tree(new StrongContentNode(list(text("<ke"))),
                 new EmphasisContentNode(list(text("ep9/>"))), new InlineCodeContentNode("one"));
-        assertNotNull(TextExtractor.extractTree(styledSplit));
-    }
-
-    @Test public void incompleteKeepLikeTextAfterRealMarkersRemainsOrdinaryText() {
-        ContentTree tree = tree(text("A"), new InlineCodeContentNode("one"), text("B"),
-                new InlineCodeContentNode("two"), text("C"));
-        assertNotNull(ContentNodes.replacePlanned(tree, "甲<keep1/>乙<keep2/>丙<keep"));
-        assertNotNull(ContentNodes.replacePlanned(tree, "甲<keep1/>乙<keep2/>丙</keep9>"));
+        assertNull(TextExtractor.extractTree(styledSplit));
+        ContentTree styled = tree(new StrongContentNode(list(text("First"))),
+                new EmphasisContentNode(list(text("Second"))));
+        reject(styled, "<x1><ke</x1><x2>ep9/></x2>", ContentNodes.RejectionReason.RETAINED_MARKER);
     }
 
     public static final class GetterFixture {

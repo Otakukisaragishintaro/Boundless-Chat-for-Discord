@@ -146,6 +146,8 @@ public final class Config {
     public static final boolean DEF_CHECK_WRAPPER = true;
     public static final String KEY_STRIP_OUTER_WRAPPER = "strip_outer_wrapper";
     public static final boolean DEF_STRIP_OUTER_WRAPPER = true;
+    public static final String KEY_CHECK_SEGMENT_MARKERS = "check_segment_markers";
+    public static final boolean DEF_CHECK_SEGMENT_MARKERS = true;
     public static final String KEY_CHECK_PLACEHOLDERS = "check_placeholders";
     public static final boolean DEF_CHECK_PLACEHOLDERS = true;
     public static final String KEY_CHECK_RETAINED_MARKERS = "check_retained_markers";
@@ -218,6 +220,7 @@ public final class Config {
         public final int maxConcurrency;
         public final boolean checkWrapper;
         public final boolean stripOuterWrapper;
+        public final boolean checkSegmentMarkers;
         public final boolean checkPlaceholders;
         public final boolean checkRetainedMarkers;
         public final boolean checkLength;
@@ -276,6 +279,7 @@ public final class Config {
             maxConcurrency = positiveInt(p, KEY_MAX_CONCURRENCY, DEF_MAX_CONCURRENCY);
             checkWrapper = readBoolean(p, KEY_CHECK_WRAPPER, DEF_CHECK_WRAPPER);
             stripOuterWrapper = readBoolean(p, KEY_STRIP_OUTER_WRAPPER, DEF_STRIP_OUTER_WRAPPER);
+            checkSegmentMarkers = readBoolean(p, KEY_CHECK_SEGMENT_MARKERS, DEF_CHECK_SEGMENT_MARKERS);
             checkPlaceholders = readBoolean(p, KEY_CHECK_PLACEHOLDERS, DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkers = readBoolean(p, KEY_CHECK_RETAINED_MARKERS, DEF_CHECK_RETAINED_MARKERS);
             checkLength = readBoolean(p, KEY_CHECK_LENGTH, DEF_CHECK_LENGTH);
@@ -325,6 +329,7 @@ public final class Config {
             maxConcurrency = DEF_MAX_CONCURRENCY;
             checkWrapper = DEF_CHECK_WRAPPER;
             stripOuterWrapper = DEF_STRIP_OUTER_WRAPPER;
+            checkSegmentMarkers = DEF_CHECK_SEGMENT_MARKERS;
             checkPlaceholders = DEF_CHECK_PLACEHOLDERS;
             checkRetainedMarkers = DEF_CHECK_RETAINED_MARKERS;
             checkLength = DEF_CHECK_LENGTH;
@@ -432,7 +437,7 @@ public final class Config {
                     + encode(incomingStylesJson) + encode(outboundPromptsJson) + encode(systemPrompt) + encode(sendSystemPrompt)
                     + encode(outboundButtonsJson)
                     + encode(Boolean.toString(checkWrapper)) + encode(Boolean.toString(stripOuterWrapper))
-                    + encode(Boolean.toString(checkPlaceholders))
+                    + encode(Boolean.toString(checkSegmentMarkers)) + encode(Boolean.toString(checkPlaceholders))
                     + encode(Boolean.toString(checkRetainedMarkers)) + encode(Boolean.toString(checkLength))
                     + encode(Boolean.toString(protectMentions))
                     + encode(Boolean.toString(protectChannelsEmojis))
@@ -527,6 +532,7 @@ public final class Config {
             maxConcurrency = source.maxConcurrency;
             checkWrapper = source.checkWrapper;
             stripOuterWrapper = source.stripOuterWrapper;
+            checkSegmentMarkers = source.checkSegmentMarkers;
             checkPlaceholders = source.checkPlaceholders;
             checkRetainedMarkers = source.checkRetainedMarkers;
             checkLength = source.checkLength;

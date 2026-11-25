@@ -156,6 +156,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private EditText maxLengthPercentInput;
     private Switch checkWrapperInput;
     private Switch stripOuterWrapperInput;
+    private Switch checkSegmentMarkersInput;
     private Switch checkPlaceholdersInput;
     private Switch checkRetainedMarkersInput;
     private Switch protectionPromptEnabledInput;
@@ -325,6 +326,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("protection_prompt_enabled", protectionPromptEnabledInput.isChecked());
         draft.putBoolean("check_wrapper", checkWrapperInput.isChecked());
         draft.putBoolean("strip_outer_wrapper", stripOuterWrapperInput.isChecked());
+        draft.putBoolean("check_segments", checkSegmentMarkersInput.isChecked());
         draft.putBoolean("check_placeholders", checkPlaceholdersInput.isChecked());
         draft.putBoolean("check_retained", checkRetainedMarkersInput.isChecked());
         draft.putBoolean("check_length", checkLengthInput.isChecked());
@@ -370,6 +372,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             checkWrapperInput.setChecked(draft.getBoolean("check_wrapper", Config.DEF_CHECK_WRAPPER));
             stripOuterWrapperInput.setChecked(draft.getBoolean("strip_outer_wrapper",
                     Config.DEF_STRIP_OUTER_WRAPPER));
+            checkSegmentMarkersInput.setChecked(draft.getBoolean("check_segments",
+                    Config.DEF_CHECK_SEGMENT_MARKERS));
             checkPlaceholdersInput.setChecked(draft.getBoolean("check_placeholders",
                     Config.DEF_CHECK_PLACEHOLDERS));
             checkRetainedMarkersInput.setChecked(draft.getBoolean("check_retained",
@@ -828,6 +832,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         stripOuterWrapperInput = addValidationSwitch(advancedBacking,
                 getString(R.string.validation_strip_wrapper),
                 Config.DEF_STRIP_OUTER_WRAPPER);
+        checkSegmentMarkersInput = addValidationSwitch(advancedBacking,
+                getString(R.string.validation_check_segments),
+                Config.DEF_CHECK_SEGMENT_MARKERS);
         checkPlaceholdersInput = addValidationSwitch(advancedBacking,
                 getString(R.string.validation_check_placeholders),
                 Config.DEF_CHECK_PLACEHOLDERS);
@@ -1333,6 +1340,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Switch strip = addDialogSwitch(form,
                 getString(R.string.validation_strip_wrapper),
                 stripOuterWrapperInput.isChecked());
+        Switch segments = addDialogSwitch(form,
+                getString(R.string.validation_check_segments),
+                checkSegmentMarkersInput.isChecked());
         Switch placeholders = addDialogSwitch(form,
                 getString(R.string.validation_check_placeholders),
                 checkPlaceholdersInput.isChecked());
@@ -1385,6 +1395,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     }
                     checkWrapperInput.setChecked(wrapper.isChecked());
                     stripOuterWrapperInput.setChecked(strip.isChecked());
+                    checkSegmentMarkersInput.setChecked(segments.isChecked());
                     checkPlaceholdersInput.setChecked(placeholders.isChecked());
                     checkRetainedMarkersInput.setChecked(retained.isChecked());
                     checkLengthInput.setChecked(length.isChecked());
@@ -1667,6 +1678,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             protectionPromptEnabledInput.setChecked(Config.DEF_PROTECTION_PROMPT_ENABLED);
             checkWrapperInput.setChecked(Config.DEF_CHECK_WRAPPER);
             stripOuterWrapperInput.setChecked(Config.DEF_STRIP_OUTER_WRAPPER);
+            checkSegmentMarkersInput.setChecked(Config.DEF_CHECK_SEGMENT_MARKERS);
             checkPlaceholdersInput.setChecked(Config.DEF_CHECK_PLACEHOLDERS);
             checkRetainedMarkersInput.setChecked(Config.DEF_CHECK_RETAINED_MARKERS);
             checkLengthInput.setChecked(Config.DEF_CHECK_LENGTH);
@@ -1781,6 +1793,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     String.valueOf(Config.DEF_MAX_CONCURRENCY));
             checkWrapperInput.setChecked(snapshot.checkWrapper);
             stripOuterWrapperInput.setChecked(snapshot.stripOuterWrapper);
+            checkSegmentMarkersInput.setChecked(snapshot.checkSegmentMarkers);
             checkPlaceholdersInput.setChecked(snapshot.checkPlaceholders);
             checkRetainedMarkersInput.setChecked(snapshot.checkRetainedMarkers);
             checkLengthInput.setChecked(snapshot.checkLength);
@@ -2263,6 +2276,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         protectionPromptEnabledInput.setEnabled(formAvailable);
         checkWrapperInput.setEnabled(formAvailable);
         stripOuterWrapperInput.setEnabled(formAvailable);
+        checkSegmentMarkersInput.setEnabled(formAvailable);
         checkPlaceholdersInput.setEnabled(formAvailable);
         checkRetainedMarkersInput.setEnabled(formAvailable);
         checkLengthInput.setEnabled(formAvailable);
@@ -2346,6 +2360,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 parseIntInput(concurrencyInput, Config.DEF_MAX_CONCURRENCY));
         memoryPrefs.put(Config.KEY_CHECK_WRAPPER, checkWrapperInput.isChecked());
         memoryPrefs.put(Config.KEY_STRIP_OUTER_WRAPPER, stripOuterWrapperInput.isChecked());
+        memoryPrefs.put(Config.KEY_CHECK_SEGMENT_MARKERS, checkSegmentMarkersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_PLACEHOLDERS, checkPlaceholdersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_RETAINED_MARKERS, checkRetainedMarkersInput.isChecked());
         memoryPrefs.put(Config.KEY_CHECK_LENGTH, checkLengthInput.isChecked());

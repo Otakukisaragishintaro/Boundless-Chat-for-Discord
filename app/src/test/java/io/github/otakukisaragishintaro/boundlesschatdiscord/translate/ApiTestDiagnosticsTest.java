@@ -264,7 +264,7 @@ public class ApiTestDiagnosticsTest {
     }
 
     @Test
-    public void connectionAcceptsWrapperPollutionButTranslationOnlyNormalizesTerminalBoundary()
+    public void connectionAcceptsWrapperPollutionAndPlaceholderButTranslationRejectsSameResponse()
             throws Exception {
         for (String protocol : PROTOCOLS) {
             for (boolean streaming : new boolean[]{false, true}) {
@@ -279,17 +279,11 @@ public class ApiTestDiagnosticsTest {
                     });
                     assertSuccess(harness.call(ApiTester.TestKind.CONNECTION, PRIVATE_INPUT),
                             ApiTester.TestKind.CONNECTION, null);
-                    if ("<translate>你好</translate>".equals(text)
-                            || "你好</translate>".equals(text)) {
-                        // The exact outer pair and one unmatched terminal boundary are normalized.
+                    if ("<translate>你好</translate>".equals(text)) {
+                        // One exact outer wrapper pair is normalized before validation.
                         assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, "你好");
-                    } else if ("<s1>你好</s1>".equals(text)) {
-                        // Legacy segment-looking angle text is ordinary content, not a protocol marker.
-                        assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
-                                ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, text);
                     } else {
-                        // Partial wrapper tags and placeholder hallucinations remain invalid.
                         assertFailure(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION,
                                 TranslationException.Kind.PARSE,

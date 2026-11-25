@@ -376,8 +376,7 @@ public class EmbedCardStateTest {
             StateStore.Entry entry = store.peek(keys.get(i));
             assertEquals(StateStore.Status.TRANSLATED, entry.status);
             assertEquals("译文：" + sourceText, entry.translatedText);
-            assertNull("A translated embed slot is not cached before native rendering",
-                    TranslationCache.get().get(entry.contentHash));
+            assertEquals(entry.translatedText, TranslationCache.get().get(entry.contentHash));
         }
         assertEquals(4, requests.size());
         assertChoice(keys, false);

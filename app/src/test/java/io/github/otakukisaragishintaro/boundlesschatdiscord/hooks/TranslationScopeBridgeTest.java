@@ -405,30 +405,7 @@ public class TranslationScopeBridgeTest {
         assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslateResult(task, true, "current generation", null);
         assertEquals(StateStore.Status.TRANSLATED, current.status);
-        assertEquals("The previous valid cache entry remains until replacement is render-validated",
-                "retained API result", TranslationCache.get().get(hash));
-        bridge.onTranslationRenderApplied(ROW, "current generation");
         assertEquals("current generation", TranslationCache.get().get(hash));
-    }
-
-    @Test
-    public void rejectedNativeReconstructionNeverPersistsAnAcceptedApiTranslation() {
-        bridge.rememberMessageLocation(ROW, new MessageLocation(null, "20"));
-        String hash = "render-rejected:" + ROW;
-        StateStore.Entry entry = store.obtain(ROW, hash);
-        TranslationTaskId task = store.begin(entry);
-        assertNotNull(task);
-
-        bridge.onTranslateResult(task, true, "merged list translation", null);
-        assertEquals(StateStore.Status.TRANSLATED, entry.status);
-        assertNull("The API callback must not write before native reconstruction",
-                TranslationCache.get().get(hash));
-
-        bridge.onTranslationRenderRejected(ROW, "merged list translation");
-        assertEquals(StateStore.Status.FAILED, entry.status);
-        assertNull(entry.translatedText);
-        assertNull("Rejected translations must never enter persistent or memory cache",
-                TranslationCache.get().get(hash));
     }
 
     @Test
@@ -492,8 +469,6 @@ public class TranslationScopeBridgeTest {
         bridge.onTranslateResult(task, true, "completed after display-only edit", null);
         assertEquals(StateStore.Status.TRANSLATED, entry.status);
         assertEquals("completed after display-only edit", entry.translatedText);
-        assertNull(TranslationCache.get().get("hash"));
-        bridge.onTranslationRenderApplied(ROW, "completed after display-only edit");
         assertEquals("completed after display-only edit", TranslationCache.get().get("hash"));
     }
 

@@ -9,8 +9,6 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Http;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.MemoryPrefs;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
 
 import org.json.JSONArray;
@@ -30,8 +28,6 @@ import java.net.SocketTimeoutException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -80,106 +76,11 @@ public class JsonApiEngineTest {
                 .put(Config.KEY_STREAMING, streaming));
     }
 
-    private static Config.Snapshot wrapperConfig(boolean strip, boolean checkWrapper) {
-        return Config.read(new MemoryPrefs()
-                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
-                .put(Config.KEY_API_KEY, "key")
-                .put(Config.KEY_STREAMING, false)
-                .put(Config.KEY_STRIP_OUTER_WRAPPER, strip)
-                .put(Config.KEY_CHECK_WRAPPER, checkWrapper));
-    }
-
     @SuppressWarnings("unchecked")
     private static Map<Thread, Http.Request> active(JsonApiEngine engine) throws Exception {
         Field field = JsonApiEngine.class.getDeclaredField("active");
         field.setAccessible(true);
         return (Map<Thread, Http.Request>) field.get(engine);
-    }
-
-    @Test
-    public void productionDiagnosticsIncludeBoundedSourceAndRestoredTranslationContent() throws Exception {
-        List<String> messages = new ArrayList<>();
-        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
-                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
-                .put(Config.KEY_API_KEY, "key")
-                .put(Config.KEY_STREAMING, false)
-                .put(Config.KEY_LOGGING_ENABLED, true));
-        ProjectLog.attach((priority, tag, message) -> messages.add(message));
-        ProjectLog.configure(snapshot);
-        try {
-            JsonApiEngine engine = new JsonApiEngine(snapshot,
-                    http(url -> new FakeConnection(chatJson("你好 <3"))));
-            assertEquals("你好 <3", engine.translate("hello <3"));
-            boolean sourceLogged = false;
-            boolean translatedLogged = false;
-            for (String message : messages) {
-                sourceLogged |= message.contains("translation.content type=source")
-                        && message.contains("hello <3");
-                translatedLogged |= message.contains("translation.content type=translated")
-                        && message.contains("你好 <3");
-            }
-            assertTrue("Original source must be present in production diagnostics", sourceLogged);
-            assertTrue("Restored translation must be present in production diagnostics", translatedLogged);
-        } finally {
-            ProjectLog.configure(Config.read(new MemoryPrefs()));
-            ProjectLog.attach(null);
-        }
-    }
-
-    @Test
-    public void failedProductionValidationLogsSourceAndReceivedProviderResponse() throws Exception {
-        List<String> messages = new ArrayList<>();
-        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
-                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
-                .put(Config.KEY_API_KEY, "key")
-                .put(Config.KEY_STREAMING, false)
-                .put(Config.KEY_LOGGING_ENABLED, true)
-                .put(Config.KEY_STRIP_OUTER_WRAPPER, false));
-        ProjectLog.attach((priority, tag, message) -> messages.add(message));
-        ProjectLog.configure(snapshot);
-        try {
-            JsonApiEngine engine = new JsonApiEngine(snapshot,
-                    http(url -> new FakeConnection(chatJson("<translate>provider returned bad wrapper</translate>"))));
-            try {
-                engine.translate("original source text");
-                fail("Invalid provider response must be rejected");
-            } catch (TranslationException expected) {
-                // The detailed source and provider response must remain available in diagnostics.
-            }
-            boolean sourceLogged = false;
-            boolean responseLogged = false;
-            for (String message : messages) {
-                sourceLogged |= message.contains("translation.content type=source")
-                        && message.contains("original source text");
-                responseLogged |= message.contains("translation.content type=provider_response")
-                        && message.contains("<translate>provider returned bad wrapper</translate>");
-            }
-            assertTrue("Failed request source must be logged", sourceLogged);
-            assertTrue("Received invalid provider response must be logged", responseLogged);
-        } finally {
-            ProjectLog.configure(Config.read(new MemoryPrefs()));
-            ProjectLog.attach(null);
-        }
-    }
-
-    @Test
-    public void outerWrapperStrippingAndValidationSwitchesHaveIndependentEffects() throws Exception {
-        JsonApiEngine stripped = new JsonApiEngine(wrapperConfig(true, true),
-                http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
-        assertEquals("你好", stripped.translate("hello"));
-
-        JsonApiEngine rejected = new JsonApiEngine(wrapperConfig(false, true),
-                http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
-        try {
-            rejected.translate("hello");
-            fail("wrapper validation should reject an unstripped outer wrapper");
-        } catch (TranslationException expected) {
-            assertEquals(TranslationException.Kind.PARSE, expected.kind());
-        }
-
-        JsonApiEngine allowed = new JsonApiEngine(wrapperConfig(false, false),
-                http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
-        assertEquals("<translate>你好</translate>", allowed.translate("hello"));
     }
 
     @Test
@@ -201,14 +102,13 @@ public class JsonApiEngineTest {
         String source = first + "\n\n" + second;
 
         AtomicInteger normalOpens = new AtomicInteger();
-        String merged = repeat("z", 250) + repeat("z", 252);
-        FakeConnection normalConnection = new FakeConnection(chatJson(merged));
+        FakeConnection normalConnection = new FakeConnection(chatJson(repeat("z", 502)));
         JsonApiEngine normal = new JsonApiEngine(config(
                 Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
                     normalOpens.incrementAndGet();
                     return normalConnection;
                 }));
-        assertEquals("A merged paragraph is valid translation output", merged, normal.translate(source));
+        assertEquals(repeat("z", 502), normal.translate(source));
         assertEquals(1, normalOpens.get());
 
         AtomicInteger chunkedOpens = new AtomicInteger();
@@ -257,9 +157,18 @@ public class JsonApiEngineTest {
         assertEquals(repeat("a", 250) + "\n\nhttps://example.com/release",
                 tailGroups.chunks.get(0));
 
+        // Grouped requests protect their internal blank-line layout from model normalization.
+        io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers.Protection
+                separatorProtection =
+                io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers
+                        .protectBlankLineSeparators("first\n\nsecond");
+        assertTrue(separatorProtection.text.contains("<keep1/>"));
+        assertEquals("first\n\nsecond",
+                separatorProtection.restore(separatorProtection.text));
+
         AtomicInteger raisedThresholdOpens = new AtomicInteger();
-        String raisedThresholdMerged = repeat("q", 250) + repeat("q", 252);
-        FakeConnection raisedThresholdConnection = new FakeConnection(chatJson(raisedThresholdMerged));
+        FakeConnection raisedThresholdConnection =
+                new FakeConnection(chatJson(repeat("q", 502)));
         Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
                 .put(Config.KEY_API_URL, "https://fake.invalid/v1")
                 .put(Config.KEY_API_KEY, "key")
@@ -271,71 +180,48 @@ public class JsonApiEngineTest {
             raisedThresholdOpens.incrementAndGet();
             return raisedThresholdConnection;
         }));
-        assertEquals(raisedThresholdMerged, raisedThreshold.translate(source));
+        assertEquals(repeat("q", 502), raisedThreshold.translate(source));
         assertEquals(1, raisedThresholdOpens.get());
     }
 
     @Test
-    public void literalDiscordTokensUseFullContextAndMayChangeOrder() throws Exception {
+    public void literalDiscordMentionsChannelTokensAndUrlsAreShieldedAndRestored() throws Exception {
         String source = "Please contact <@403924274437685248> and visit "
                 + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
-        String translated = "请联系 ⟦BC_TOKEN_1⟧ 并访问 ⟦BC_TOKEN_4⟧ ⟦BC_TOKEN_3⟧ ⟦BC_TOKEN_2⟧";
-        FakeConnection connection = new FakeConnection(chatJson(translated));
+        FakeConnection connection = new FakeConnection(chatJson(
+                "请联系 <keep1/> 并访问 <keep2/> <keep3/> <keep4/>"));
         JsonApiEngine engine = new JsonApiEngine(
                 config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
 
-        assertEquals("请联系 <@403924274437685248> 并访问 "
-                        + "https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4 "
-                        + "@everyone <#1570408648533082167>",
+        assertEquals("请联系 <@403924274437685248> 并访问 <#1570408648533082167> @everyone "
+                        + "https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4",
                 engine.translate(source));
 
         JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
         String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
-        assertEquals(Protocols.WRAPPER_OPEN
-                        + "Please contact ⟦BC_TOKEN_1⟧ and visit ⟦BC_TOKEN_2⟧ "
-                        + "⟦BC_TOKEN_3⟧ ⟦BC_TOKEN_4⟧"
-                        + Protocols.WRAPPER_CLOSE, userContent);
-        assertFalse(userContent.contains("segments"));
+        for (int i = 1; i <= 4; i++) assertTrue(userContent.contains("<keep" + i + "/>"));
         assertFalse(userContent.contains("403924274437685248"));
         assertFalse(userContent.contains("1570408648533082167"));
         assertFalse(userContent.contains("@everyone"));
         assertFalse(userContent.contains("github.com/YusufOzmen01"));
-        String system = request.getJSONArray("messages").getJSONObject(0).getString("content");
-        assertTrue(system.contains("may move it"));
         assertTrue(connection.disconnected);
         assertTrue(active(engine).isEmpty());
     }
 
     @Test
-    public void styleBoundariesAlsoUseTheSingleKeepMarkerNamespace() throws Exception {
-        String source = "<x1>Visit <keep1/> for details</x1>";
-        DiscordTokenMarkers.Protection protection =
-                DiscordTokenMarkers.protect(source, true, true, true);
-        assertEquals("<keep2/>Visit <keep1/> for details<keep3/>", protection.text);
-        assertEquals(source, protection.restore(protection.text));
-    }
-
-    @Test
-    public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() throws Exception {
+    public void discordProtectionOptionsDefaultOnAndCanBeDisabledIndependently() {
         Config.Snapshot defaults = Config.read(new MemoryPrefs());
         assertTrue(defaults.protectMentions);
         assertTrue(defaults.protectChannelsEmojis);
         assertTrue(defaults.protectUrls);
 
         String source = "<@403924274437685248> <#1570408648533082167> "
-                + "<:openhouse:123456789012345678> 😀 @everyone https://example.com/path";
+                + "<:openhouse:123456789012345678> @everyone https://example.com/path";
         DiscordTokenMarkers.Protection selected = DiscordTokenMarkers.protect(
                 source, false, true, false);
-        assertEquals("<@403924274437685248> ⟦BC_TOKEN_1⟧ ⟦BC_TOKEN_2⟧ ⟦BC_TOKEN_3⟧ @everyone https://example.com/path",
+        assertEquals("<@403924274437685248> <keep1/> <keep2/> @everyone https://example.com/path",
                 selected.text);
         assertEquals(source, selected.restore(selected.text));
-        DiscordTokenMarkers.Protection emojiDisabled = DiscordTokenMarkers.protect(
-                "😀", true, false, true);
-        assertEquals("😀", emojiDisabled.text);
-        DiscordTokenMarkers.Protection emojiEnabled = DiscordTokenMarkers.protect(
-                "😀", true, true, true);
-        assertEquals("⟦BC_TOKEN_1⟧", emojiEnabled.text);
-        assertEquals("😀", emojiEnabled.restore(emojiEnabled.text));
 
         Config.Snapshot disabled = Config.read(new MemoryPrefs()
                 .put(Config.KEY_PROTECT_MENTIONS, false)
@@ -346,58 +232,10 @@ public class JsonApiEngineTest {
         assertFalse(disabled.protectUrls);
     }
 
-    @Test
-    public void productionProtectionOptionsIndependentlyControlMentionChannelEmojiAndUrlTokens()
-            throws Exception {
-        String source = "@everyone <#1570408648533082167> 😀 https://example.com/path";
-        boolean[][] options = {
-                {false, true, true},
-                {true, false, true},
-                {true, true, false}
-        };
-        for (boolean[] option : options) {
-            Config.Snapshot snapshot = Config.read(new MemoryPrefs()
-                    .put(Config.KEY_API_URL, "https://fake.invalid/v1")
-                    .put(Config.KEY_API_KEY, "key")
-                    .put(Config.KEY_STREAMING, false)
-                    .put(Config.KEY_PROTECT_MENTIONS, option[0])
-                    .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, option[1])
-                    .put(Config.KEY_PROTECT_URLS, option[2]));
-            DiscordTokenMarkers.Protection expected = DiscordTokenMarkers.protect(
-                    source, option[0], option[1], option[2]);
-            FakeConnection connection = new FakeConnection(chatJson(expected.text));
-            JsonApiEngine engine = new JsonApiEngine(snapshot, http(url -> connection));
-            assertEquals(source, engine.translate(source));
-            JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
-            String user = request.getJSONArray("messages").getJSONObject(1).getString("content");
-            assertEquals(Protocols.WRAPPER_OPEN + expected.text + Protocols.WRAPPER_CLOSE, user);
-            assertFalse(user.contains("<keep"));
-            assertFalse(user.contains("segments"));
-        }
-    }
-
     private static String repeat(String value, int count) {
         StringBuilder result = new StringBuilder(value.length() * count);
         for (int i = 0; i < count; i++) result.append(value);
         return result.toString();
-    }
-
-    @Test
-    public void productionRequestIncludesOrOmitsSeparateProtectionPromptBySetting() throws Exception {
-        for (boolean enabled : new boolean[]{true, false}) {
-            FakeConnection connection = new FakeConnection(chatJson("你好"));
-            Config.Snapshot snapshot = Config.read(new MemoryPrefs()
-                    .put(Config.KEY_API_URL, "https://fake.invalid/v1")
-                    .put(Config.KEY_API_KEY, "key")
-                    .put(Config.KEY_STREAMING, false)
-                    .put(Config.KEY_PROTECTION_PROMPT_ENABLED, enabled));
-            JsonApiEngine engine = new JsonApiEngine(snapshot, http(url -> connection));
-            assertEquals("你好", engine.translate("hello"));
-            JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
-            String system = request.getJSONArray("messages").getJSONObject(0).getString("content");
-            assertTrue(system.contains("Translate only the text between"));
-            assertEquals(enabled, system.contains("⟦BC_TOKEN_N⟧"));
-        }
     }
 
     @Test

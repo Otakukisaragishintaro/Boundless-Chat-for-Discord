@@ -78,10 +78,8 @@ public final class ProjectLog {
 
     private static synchronized void emit(int priority, @Nullable String key, String message) {
         if (!enabled || (key != null && !REPORTED.add(key))) return;
-        // Apply the same credential redaction and size bound to Logcat, LSPosed and IPC.
-        String safeMessage = DiagnosticLogStore.sanitizeMessage(message);
-        write(priority, safeMessage);
-        TranslationCache.publishDiagnosticLog(priority, TAG, safeMessage, currentRequestId());
+        write(priority, message);
+        TranslationCache.publishDiagnosticLog(priority, TAG, message, currentRequestId());
     }
 
     /** Attach one correlation ID to every ProjectLog entry emitted during a translation request. */

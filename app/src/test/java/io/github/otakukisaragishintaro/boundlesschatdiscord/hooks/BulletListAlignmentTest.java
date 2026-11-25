@@ -410,17 +410,13 @@ public class BulletListAlignmentTest {
     }
 
     @Test
-    public void plainParagraphMessagePreservesSplitParagraphsWithoutDroppingText() {
-        // 普通段落允许拆分；额外段落必须完整保留，不能因槽位不足而丢弃。
+    public void plainParagraphMessageStillRejectsMismatchedStructure() {
+        // 不含列表的消息保持严格校验：多出来的行不能被塞进节点。
         List<Object> nodes = list(
                 new TextContentNode("first paragraph"),
                 new TextContentNode("\n\n"),
                 new TextContentNode("second paragraph"));
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "一\n二\n三\n四");
-        assertNotNull(out);
-        ContentTree rebuilt = ContentTree.compile(out);
-        assertNotNull(rebuilt);
-        assertEquals("一\n二\n三\n四", TextExtractor.extractTree(rebuilt).text);
+        assertNull(ContentPlanTestSupport.replace(nodes, "一\n二\n三\n四"));
     }
 }

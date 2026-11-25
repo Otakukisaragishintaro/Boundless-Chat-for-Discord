@@ -12,12 +12,32 @@ import org.junit.Test;
 public class SegmentsTest {
 
     @Test
+    public void hasSegmentMarkersDetectsOpeningClosingAndIncompleteTags() {
+        for (String text : new String[]{"<s1>你好</s1>", "译文里残留</s2>字面量",
+                "<s1>你好", "<s 12 >文本", "</s 12 >", "前言 <s3", "</s4",
+                "<s999999999999999999999999>文本"}) {
+            assertTrue(text, Segments.hasSegmentMarkers(text));
+            assertNotNull(text, Segments.plainTextViolation(text, "hello world"));
+        }
+    }
+
+    @Test
+    public void hasSegmentMarkersLeavesPlainTextUntouched() {
+        assertFalse(Segments.hasSegmentMarkers(null));
+        assertFalse(Segments.hasSegmentMarkers(""));
+        assertFalse(Segments.hasSegmentMarkers("你好世界"));
+        assertFalse(Segments.hasSegmentMarkers("<strong>hello</strong>"));
+    }
+
+    @Test
     public void plainTextViolationRejectsWrapperTagsWithoutRepairOrPrivateDetails() {
         for (String text : new String[]{"<translate>你好</translate>", "<translate>",
                 "</translate>", "前言 <translate>你好</translate> 后语",
                 "https://private.invalid/?token=secret <translate>Bearer private-key"}) {
             assertEquals("译文包含包装标签", Segments.plainTextViolation(text, "hello"));
         }
+        assertEquals("译文包含包装标签",
+                Segments.plainTextViolation("<translate><s1>XXXX<keep2/>", "hello<keep1/>"));
         assertNull(Segments.plainTextViolation("你好", "hello"));
         // Only the exact request wrapper tags are rejected; no new fuzzy tag repair/detection.
         assertNull(Segments.plainTextViolation("<trans", "hello"));
@@ -26,22 +46,18 @@ public class SegmentsTest {
 
     @Test
     public void stripOuterResponseWrapperRemovesOnlyOneExactOuterPair() {
-        assertEquals("你好", Segments.stripOuterResponseWrapper("<translate>你好</translate>", "你好"));
-        assertEquals("hello", Segments.stripOuterResponseWrapper(" <translate>hello</translate> ", "hello"));
+        assertEquals("你好", Segments.stripOuterResponseWrapper("<translate>你好</translate>"));
+        assertEquals("hello", Segments.stripOuterResponseWrapper(" <translate>hello</translate> "));
         assertEquals("prefix <translate>hello</translate>",
-                Segments.stripOuterResponseWrapper("prefix <translate>hello</translate>", "hello"));
-        assertEquals("<translate>hello", Segments.stripOuterResponseWrapper("<translate>hello", "hello"));
+                Segments.stripOuterResponseWrapper("prefix <translate>hello</translate>"));
+        assertEquals("<translate>hello", Segments.stripOuterResponseWrapper("<translate>hello"));
         assertEquals("<translate><translate>hello</translate></translate>",
-                Segments.stripOuterResponseWrapper("<translate><translate>hello</translate></translate>", "hello"));
-        assertEquals("hello", Segments.stripOuterResponseWrapper("hello</translate>", "hello"));
-        assertEquals("<keep1/>你好", Segments.stripOuterResponseWrapper("<keep1/>你好</translate>", "<keep1/>你好"));
+                Segments.stripOuterResponseWrapper("<translate><translate>hello</translate></translate>"));
+        assertEquals("hello</translate>", Segments.stripOuterResponseWrapper("hello</translate>"));
+        assertEquals("<keep1/>你好", Segments.stripOuterResponseWrapper("<keep1/>你好</translate>"));
         assertEquals("hello</translate></translate>",
-                Segments.stripOuterResponseWrapper("hello</translate></translate>", "hello"));
-        assertEquals("prefix </translate> middle</translate>",
-                Segments.stripOuterResponseWrapper("prefix </translate> middle</translate>", "hello"));
-        assertEquals("literal </translate>",
-                Segments.stripOuterResponseWrapper("literal </translate>", "literal </translate>"));
-        assertNull(Segments.stripOuterResponseWrapper(null, "hello"));
+                Segments.stripOuterResponseWrapper("hello</translate></translate>"));
+        assertNull(Segments.stripOuterResponseWrapper(null));
     }
 
     @Test
@@ -49,33 +65,20 @@ public class SegmentsTest {
         String wrapped = "<translate>hello</translate>";
         assertEquals("译文包含包装标签", Segments.plainTextViolation(wrapped, "hello"));
         assertNull(Segments.plainTextViolation(wrapped, "hello",
-                false, false, false, false, 10, 500));
+                false, false, false, false, false, 10, 500));
 
         String source = repeat('a', 40);
         String shortTranslation = repeat('b', 8);
         assertNotNull(Segments.plainTextViolation(shortTranslation, source,
-                false, false, false, true, 25, 500));
+                false, false, false, false, true, 25, 500));
         assertNull(Segments.plainTextViolation(shortTranslation, source,
-                false, false, false, true, 20, 500));
+                false, false, false, false, true, 20, 500));
 
         String longTranslation = repeat('b', 220);
         assertNotNull(Segments.plainTextViolation(longTranslation, source,
-                false, false, false, true, 10, 500));
+                false, false, false, false, true, 10, 500));
         assertNull(Segments.plainTextViolation(longTranslation, source,
-                false, false, false, true, 10, 600));
-    }
-
-    @Test
-    public void eachIntegritySwitchControlsOnlyItsOwnValidationRule() {
-        assertNotNull(Segments.plainTextViolation("XXXX", "hello",
-                false, true, false, false, 0, 1000));
-        assertNull(Segments.plainTextViolation("XXXX", "hello",
-                false, false, false, false, 0, 1000));
-
-        assertTrue(Segments.plainTextViolation("hello", "hello<keep1/>",
-                false, false, true, false, 0, 1000).contains("missing=[<keep1/>x1]"));
-        assertNull(Segments.plainTextViolation("hello", "hello<keep1/>",
-                false, false, false, false, 0, 1000));
+                false, false, false, false, true, 10, 600));
     }
 
     @Test
@@ -114,8 +117,8 @@ public class SegmentsTest {
     public void plainTextViolationGuardsForSinglePath() {
         // 单链路引擎在返回译文前调用该校验：任何一项不过都判失败，
         // 由用户点图标重试，绝不把损坏内容送进节点树。
-        assertNull("普通尖括号文本不应被当作旧分段标记",
-                Segments.plainTextViolation(">.< <.< >_< <3", "hello world"));
+        assertNotNull("残留标记必须拦截",
+                Segments.plainTextViolation("译文里残留</s2>字面量", "hello world"));
         assertNotNull("模板占位符必须拦截",
                 Segments.plainTextViolation("SENSENOVA_6_8_FLASH_LITE_XXXXXX", "hello world"));
         assertNotNull("空译文必须拦截",

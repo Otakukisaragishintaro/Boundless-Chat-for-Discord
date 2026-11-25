@@ -49,37 +49,6 @@ public class SourceNewlineAlignmentTest {
     }
 
     @Test
-    public void mergedLaterParagraphChunkDoesNotConsumeEarlierSingleLineSlots() {
-        // The first paragraph remains a one-line chunk; the following three
-        // native slots are a connected line run inside the next paragraph chunk.
-        // The first chunk must not consume later slots just because the global
-        // translated chunk count is smaller than the native slot count.
-        List<String> parts = ContentNodes.alignSpanToParts(
-                "标题\n\n正文\n变化\n• 项目",
-                Arrays.asList(0, 1, 1, 1),
-                Arrays.asList(false, false, false, true),
-                Arrays.asList(false, false, true, true),
-                Arrays.asList(1, 1, 1, 1),
-                Arrays.asList(false, false, false, false),
-                Arrays.asList(0, 0, 0, 0));
-        assertEquals(Arrays.asList("标题", "正文", "变化", "项目"), parts);
-    }
-
-    @Test
-    public void paragraphBeforeMultilineListUsesSeparateAlignmentChunk() {
-        ContentTree tree = compiled(list(text("intro"), multilineList(text("\\n"))));
-        List<Object> out = replaced(tree,
-                "介绍\\n\\n• 第一\\n首项续行\\n补充\\n• 第二\\n次项续行");
-
-        assertEquals("介绍", content(out.get(0)));
-        BulletListContentNode rebuilt = (BulletListContentNode) out.get(1);
-        assertEquals(2, rebuilt.getItems().size());
-        assertEquals("第一\\n首项续行", content(rebuilt.getItems().get(0).get(0)));
-        assertEquals("补充", content(rebuilt.getItems().get(0).get(2)));
-        assertEquals("第二\\n次项续行", content(rebuilt.getItems().get(1).get(0)));
-    }
-
-    @Test
     public void headingThenWhitespaceTextLfThenPlainTextAlignsAsTwoLines() {
         HeadingContentNode heading = new HeadingContentNode(list(text("Lower Rates")), 2);
         TextContentNode lf = text("\n");
@@ -135,7 +104,7 @@ public class SourceNewlineAlignmentTest {
         assertEquals(2, extraLine.expected);
         assertEquals(3, extraLine.actual);
         ContentNodes.Rejection extraParagraph = rejected(tree, "标题\n正文\n\n多余",
-                ContentNodes.RejectionReason.LINE_COUNT);
+                ContentNodes.RejectionReason.PARAGRAPH_EXTRA);
         assertEquals(1, extraParagraph.expected);
         assertEquals(2, extraParagraph.actual);
     }
@@ -176,8 +145,7 @@ public class SourceNewlineAlignmentTest {
         assertSame(spaces, out.get(1));
         assertSame(lf, out.get(2));
         assertEquals("\n第二\n\n", content(out.get(3)));
-        List<Object> merged = replaced(tree, "第一\n第二");
-        assertTrue(extracted(compiled(merged)).contains("第一\n第二"));
+        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.PARAGRAPH_MISSING);
         assertEquals("\n\nfirst\n \t\n\nsecond\n\n", extracted(tree));
     }
 
@@ -188,7 +156,7 @@ public class SourceNewlineAlignmentTest {
         List<Object> out = replaced(tree, "第一\n\n第二");
         assertSame(lineBreak, out.get(2));
         assertEquals("第一\n\n第二", extracted(compiled(out)));
-        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.LINE_COUNT);
+        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.PARAGRAPH_MISSING);
     }
 
     @Test

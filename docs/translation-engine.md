@@ -16,9 +16,7 @@
 | `openai-responses` | `/responses` | JSON message/output_text 或 SSE response.output_text.delta |
 | `anthropic-messages` | `/messages` | JSON text 块或 SSE；请求 `max_tokens=8192` |
 
-请求按所选协议构造，使用系统 `org.json` 和 `HttpURLConnection`。配置校验解析一次额外请求头，实际请求复用并追加协议认证头。默认提示词按目标语言生成；自定义提示词不随目标语言改写。协议层去除普通提示词首尾空白后，始终附加包装边界规则；另有独立的“必要保护提示词”开关（默认开启），按当前目标语言生成保护规则。该规则在提示词管理器中单独折叠查看，不混入普通提示词编辑框；关闭开关只是不向模型发送这段说明，不关闭程序自身的占位符完整性检查。
-
-翻译请求始终把完整的受保护文本作为一个普通文本正文发送，不再切成 JSON 片段，也不要求模型按原文片段顺序重组。Discord 提及、频道/自定义 emoji、URL 和按设置启用的 Unicode emoji 使用 `⟦BC_TOKEN_N⟧` 身份占位符；每个占位符必须原样出现一次，但允许随目标语言语序移动。程序按占位符身份恢复对应原文，而不是按出现顺序恢复，缺失、重复、未知或被修改的占位符都会拒绝。原生保留节点和样式边界使用 `<keepN/>` 结构锚点；这些锚点必须完整且保持原始顺序，避免破坏 Discord 原生节点树和格式。普通段落换行不再使用保护锚点，也不要求译文保留原文段落数量；普通段落允许合并或拆分。但列表项是独立的原生结构边界，必须逐项对应、保持顺序，不能把多个列表项合并成一项或丢弃项目；无法可靠对齐时整条拒绝并保留原文。普通尖括号文本、未闭合片段和颜文字不属于占位符语法。样式边界 `<xN>` 与 `</xN>` 由程序转换为有序结构锚点并在校验后恢复。
+请求按所选协议构造，使用系统 `org.json` 和 `HttpURLConnection`。配置校验解析一次额外请求头，实际请求复用并追加协议认证头。默认提示词按目标语言生成；自定义提示词不随目标语言改写。协议层去除提示词首尾空白后，统一附加行段及保留标记规则。
 
 每次请求只创建一个协议 decoder，不切换解析模式。`SseReader` 以空行提交完整事件，支持多行 data、event、注释和 CR/LF/CRLF。Compatible 必须收到 `[DONE]`，Responses 必须收到 `response.completed`，Anthropic 必须收到 `message_stop`；结束后不等待 EOF。缺结束事件、已识别的错误帧、异常停止原因、所读取文本字段类型错误会失败，不返回该请求已收集的部分译文。这些检查不构成完整响应 schema 校验。包装标签回显属于 `Segments` 译文防损坏校验：实际翻译及翻译测试拒绝，连接测试不执行该内容校验。
 
@@ -28,21 +26,17 @@ Chat 与 Anthropic SSE 必须收到各自结束事件，但不强制出现停止
 
 Responses 按 `output_index`、`content_index` 和 `item_id` 收集文本增量，校验递增事件序号，并逐段核对完成响应；按 output/content 顺序拼接全部 `message/output_text`，跳过 reasoning、工具等非 message output 项，拒绝 message 内容中的 refusal、流式 refusal 事件、failed、incomplete 和完成文本不一致。流式和非流式共用同一个完成文本提取操作，不用 `.done` 快照重复追加或补齐缺失增量。事件格式参见 [OpenAI 流式响应文档](https://developers.openai.com/api/docs/guides/streaming-responses)。
 
-HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单位，UTF-8 严格校验，禁止跟随重定向。非 2xx 读取有界 body 后按 HTTP 状态分类；正文保留给设置页测试结果，并在项目日志启用时按统一长度限制及凭据脱敏后记录。引擎在配置校验和构造请求体前登记 `Http.Request`，取消与连接 attach 原子协调，finally 才释放；实际 worker 是否退出由生命周期另行确认。
+HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单位，UTF-8 严格校验，禁止跟随重定向。非 2xx 读取有界 body 后按 HTTP 状态分类；正文保留给设置页测试结果，并在项目日志启用时原样记录。引擎在配置校验和构造请求体前登记 `Http.Request`，取消与连接 attach 原子协调，finally 才释放；实际 worker 是否退出由生命周期另行确认。
 
 ## 调度、缓存与错误
 
 等待队列与状态仓库各有独立的 512 上限；翻译缓存为可选功能，默认关闭。启用后采用 512 条内存 LRU + 用户自定义容量（1–1,000,000 条）的 SQLite 持久化 LRU。建议设置为 100,000–1,000,000 条。并发实际限制为 1–8，默认 4；满队列明确失败。请求和交付都核对任务所有权，旧结果不得覆盖新消息/编辑版本。失败后只有用户点击才重新请求，无自动重试。
 
-缓存启用时，消息绑定和发送前翻译先查本地缓存，命中后直接复用，不请求翻译 API；入站译文只有在 Discord 原生 `StructurableText` 重建成功后才写入缓存，API 返回成功本身不会触发缓存写入，结构重建拒绝的译文不会进入缓存。发送前译文仍在其自身校验成功后保存。重复消息不受消息 ID 限制。关闭缓存时不读取、不写入缓存，沿用原有 API 请求流程；关闭不会删除旧条目，重新开启后仍可使用。设置页将缓存开关、容量输入、已保存数量及清空操作收纳在“本地翻译缓存”二级菜单；容量可在关闭缓存时编辑并保存，关闭期间只记录新上限，不打开数据库、不执行淘汰；重新开启缓存时再按新上限执行 LRU 清理。建议容量为 100,000–1,000,000 条。Discord 进程通过 remote preferences 同步已保存条目数，清空按钮发送独立命令让 Discord 进程清理数据库。持久化数据库位于 Discord 私有应用目录，退出/重启 Discord、重新登录及设备重启后仍保留；清除 Discord 应用数据或卸载 Discord 会删除它。数据库只保存内容配置哈希和译文，不保存原文、API 密钥或请求头。缓存读写失败时退回正常 API 流程，不阻断消息显示。
+缓存启用时，消息绑定和发送前翻译先查本地缓存，命中后直接复用，不请求翻译 API；成功的入站译文和发送前译文都会保存，重复消息不受消息 ID 限制。关闭缓存时不读取、不写入缓存，沿用原有 API 请求流程；关闭不会删除旧条目，重新开启后仍可使用。设置页将缓存开关、容量输入、已保存数量及清空操作收纳在“本地翻译缓存”二级菜单；容量可在关闭缓存时编辑，应用后即时更新 LRU 上限。建议容量为 100,000–1,000,000 条。Discord 进程通过 remote preferences 同步已保存条目数，清空按钮发送独立命令让 Discord 进程清理数据库。持久化数据库位于 Discord 私有应用目录，退出/重启 Discord、重新登录及设备重启后仍保留；清除 Discord 应用数据或卸载 Discord 会删除它。数据库只保存内容配置哈希和译文，不保存原文、API 密钥或请求头。缓存读写失败时退回正常 API 流程，不阻断消息显示。
 
 缓存键含输入及影响结果的配置版本；API URL、模型、目标语言、协议、流式、系统提示词、凭据指纹变化后旧结果不会命中，但不会因普通配置变更而立即清空。日志开关不影响请求版本、缓存或任务状态。密钥及额外请求头仅以 SHA-256 指纹参与版本编码，不以原值进入指纹字段。
 
-错误类别为 `CONFIG / NETWORK / TIMEOUT / HTTP / RATE_LIMIT / PARSE / EMPTY / CANCELLED / UNKNOWN`。未知异常仅保留类型，服务端停止理由使用固定描述。请求校验失败不缓存；入站译文在原生重建成功前不写缓存，重建拒绝时标记失败并保留宿主原树；若拒绝的是已有缓存命中，则删除该缓存条目。
-
-## 按语言独立的提示词
-
-`LanguagePromptConfig` 为 22 种受支持语言分别保存接收消息和发送消息提示词，两个方向互不共享。默认模板按目标语言生成；旧版单一提示词只迁移到旧配置当前选中的语言，不覆盖其他语言。提示词编辑器默认收起内容，用户点击显示开关后才展开；可逐语言恢复默认。发送按钮显式配置的自定义提示词仍是该按钮的优先覆盖，按钮恢复默认后才读取对应语言的发送提示词。必要的 `⟦BC_TOKEN_N⟧` 可移动占位符与 `<keepN/>` 有序结构锚点规则由 `Protocols.protectionPromptFor(targetLanguage)` 按当前目标语言独立生成；设置页将它与普通提示词分开显示，默认折叠查看，并提供默认开启的独立发送开关。该开关参与配置版本及跨进程配置同步。关闭时仍保留 `DiscordTokenMarkers.Protection.restore()` 和 `ContentNodes` 的强制标记完整性检查，不能静默丢失保护内容。
+错误类别为 `CONFIG / NETWORK / TIMEOUT / HTTP / RATE_LIMIT / PARSE / EMPTY / CANCELLED / UNKNOWN`。未知异常仅保留类型，服务端停止理由使用固定描述。请求校验失败不缓存；原生重建拒绝时删除对应缓存、标记失败并保留宿主原树。
 
 ## 设置与持久化
 
@@ -59,7 +53,6 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 | `target_lang` | `简体中文` | 目标语言；旧列表外值继续保留 |
 | `provider_protocol` | `openai-compatible` | 上表三种协议之一 |
 | `streaming_enabled` | true | 三种协议共用的流式请求开关 |
-| `protection_prompt_enabled` | true | 单独发送按目标语言生成的 `⟦BC_TOKEN_N⟧` 与 `<keepN/>` 必要保护提示词；关闭不影响程序强制完整性检查 |
 | `system_prompt` | `Config.DEF_SYSTEM_PROMPT` | 规则式翻译提示词 |
 | `timeout_ms` | 30000 | 正整数；HTTP 实际至少 1000 ms |
 | `max_concurrency` | 4 | 正整数；调度器实际限制为 1–8 |
@@ -88,7 +81,7 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 | `CONNECTION`（测试连接） | 固定探针请求成功，按所选协议及 SSE/JSON 模式完成响应解析；**HTTP 200 不够**，不能忽略无效结构、异常停止或缺少完成事件 | 无；不运行译文防损坏校验 |
 | `TRANSLATION`（测试翻译） | 测试文本的请求、完整协议解析及 `Segments` 译文防损坏校验通过（非空、包装标签、旧分段标记、保留节点定位、占位符及长度比例）；不证明宿主节点重建的行段、样式或链接投影校验通过 | 仅成功时展示译文；失败不展示部分或损坏结果 |
 
-`ApiTester.Result` 返回测试类型、成功标志、耗时和结构化 `Failure`。设置页由唯一的 `ApiTestResultFormatter` 通过 `getString` 解析本地化资源，区分三种成功概念；失败显示本地化建议、类别及固定类别码、固定原因码、已知 HTTP 状态和异常类型。每次测试还在结果下方显示独立请求 ID 与阶段诊断，并可随测试结果一起复制。耗时只用于页面显示，不进入持久化日志。Failure 包含 `kind / reason / httpStatus / exceptionType / upstreamErrorBody`，异常类型取底层 cause 类型（若有）；仅非 2xx HTTP 错误携带未经修改的上游正文，其余失败的 `upstreamErrorBody` 为 null。不携带原异常对象或异常消息，UI 不调用 `Throwable.getMessage()` 或 `userMessage()`。
+`ApiTester.Result` 返回测试类型、成功标志、耗时和结构化 `Failure`。设置页由唯一的 `ApiTestResultFormatter` 通过 `getString` 解析本地化资源，区分三种成功概念；失败显示本地化建议、类别及固定类别码、固定原因码、已知 HTTP 状态和异常类型。耗时只用于页面显示，不进入日志。Failure 包含 `kind / reason / httpStatus / exceptionType / upstreamErrorBody`，异常类型取底层 cause 类型（若有）；仅非 2xx HTTP 错误携带未经修改的上游正文，其余失败的 `upstreamErrorBody` 为 null。不携带原异常对象或异常消息，UI 不调用 `Throwable.getMessage()` 或 `userMessage()`。
 
 | 固定原因码 | 排查建议 |
 |---|---|
@@ -111,11 +104,8 @@ HTTP 累计响应最多 1 MiB 字节，decoder/SSE 累计最多 1 MiB UTF-16 单
 
 - **设置页进程：logcat**，标签为 `BoundlessChatDiscord`。页面不挂载 LSPosed 框架输出；不需要 LSPosed 连接，也不需要重启页面。必须将“项目日志”开关设为开启并成功保存后生效，或加载/导入已确认本地保存的值；草稿切换、草稿测试和失败的本地提交都不能强行开启日志。保存成功先应用已确认本地快照，再输出保存结果；远程同步失败仍与本地保存成功分开记录。成功保存关闭开关或重置为默认配置后，连该成功结果日志也不输出。
 - **Discord 进程：logcat + LSPosed 项目日志**，框架输出仅由模块入口挂载，使用 remote 配置。因此需保存并同步成功后重启 Discord，设置页的 logcat 诊断与 Discord 的 LSPosed 诊断不是同一进程/目的地。
-- **跨进程持久化诊断**：Discord 进程通过现有 `CacheCountProvider` 的 UID 校验调用新增 `publish_log` 方法，将项目日志异步发送到插件 APK。Provider 仍保留原有缓存数量发布接口；日志写入插件私有 `boundless_diagnostics.db`，与 Discord 翻译缓存完全分离。数据库最多保留最近 5,000 条，记录来源（`discord` / `module_test`）、时间、进程、级别、标签、请求 ID 和消息；写入前限制字段长度并脱敏常见 Bearer/API Key 格式。设置页可查看最近记录、复制全部或清空。
-- **测试翻译诊断**：`ApiTester.Result` 带独立请求 ID 和阶段事件；测试页在结果下方显示阶段、保护标记数量、范围检查、语言检测、生产翻译入口、成功/失败类别、原因和 HTTP 状态。可复制的测试结果同时包含该次诊断。测试预览留在当前界面，不把原文/响应预览写入持久化日志；持久化记录只保存阶段和错误分类。
-- 生产日志在项目日志开关开启时才跨进程转发；测试界面的阶段日志不依赖 Discord 进程日志开关。Provider 仅接受 Discord UID 的写入请求，插件应用自身读取私有数据库，不向 Discord 进程开放数据库文件。
-- 网络请求收到非 2xx 状态时，`JsonApiEngine` 将 HTTP 状态和上游响应正文交给统一错误结果；设置页测试结果显示正文，`ProjectLog` 在日志开关启用时按统一长度限制及凭据脱敏后记录。HTTP 200 后的协议/译文错误不把成功响应正文当作错误详情。
-- **生产翻译内容诊断**：项目日志开关开启时，`JsonApiEngine` 会额外写入两条同请求 ID 的记录：`translation.content type=source` 和 `translation.content type=translated`；失败时会记录原文及已收到的 provider response。每条最多记录 3,000 个 Unicode 字符，超长内容会截断；设置页测试翻译不写入这些正文日志。日志可能包含私聊内容、链接、提及或其他个人信息，因此默认仍关闭，只有用户主动开启“项目日志”后才记录。分享日志或截图前应检查并按需清空。
+- 网络请求收到非 2xx 状态时，`JsonApiEngine` 将 HTTP 状态和上游响应正文交给统一错误结果；设置页测试结果原样显示正文，`ProjectLog` 在日志开关启用时也原样记录正文。HTTP 200 后的协议/译文错误不把成功响应正文当作错误详情。
+- 项目诊断不主动输出原请求正文、译文、消息身份、链接或凭据；**非 2xx 上游错误响应正文是明确允许展示和记录的例外**，不进入缓存或任务状态。错误响应正文可能包含上述敏感内容，分享日志或截图前应检查。
 
 
 ## 代码目录与跨聊天平台复用边界

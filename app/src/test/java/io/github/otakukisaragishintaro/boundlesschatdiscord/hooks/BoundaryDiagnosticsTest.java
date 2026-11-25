@@ -121,22 +121,12 @@ public class BoundaryDiagnosticsTest {
         ContentNodes.Rejection missing = assertThrows(ContentNodes.Rejection.class,
                 () -> ContentNodes.replaceChecked(tree, "译文"));
         assertEquals(ContentNodes.RejectionReason.RETAINED_MARKER, missing.reason);
-        assertTrue(missing.structure.contains("markerDiagnostic={type=MISSING"));
-        assertTrue(missing.structure.contains("expectedCount=2"));
-        assertTrue(missing.structure.contains("actualCount=0"));
-        assertTrue(missing.structure.contains("missing=[<keep1/>x1,<keep2/>x1]"));
-        assertFalse(missing.structure.contains("credential-secret"));
-        assertFalse(missing.structure.contains("hidden-name"));
+        assertEquals("", missing.structure);
         assertNull(ContentNodes.replacePlanned(tree, "译文"));
         ContentNodes.Rejection missingOpaque = assertThrows(ContentNodes.Rejection.class,
                 () -> ContentNodes.replaceChecked(tree, "第一<keep1/>第二"));
         assertEquals(ContentNodes.RejectionReason.RETAINED_MARKER, missingOpaque.reason);
-        assertTrue(missingOpaque.structure.contains("markerDiagnostic={type=MISSING"));
-        assertTrue(missingOpaque.structure.contains("expectedCount=2"));
-        assertTrue(missingOpaque.structure.contains("actualCount=1"));
-        assertTrue(missingOpaque.structure.contains("missing=[<keep2/>x1]"));
-        assertFalse(missingOpaque.structure.contains("credential-secret"));
-        assertFalse(missingOpaque.structure.contains("hidden-name"));
+        assertEquals("", missingOpaque.structure);
         assertNull(ContentNodes.replacePlanned(tree, "第一<keep1/>第二"));
     }
 

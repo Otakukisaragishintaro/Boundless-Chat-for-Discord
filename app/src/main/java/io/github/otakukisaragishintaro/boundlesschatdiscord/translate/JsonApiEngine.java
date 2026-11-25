@@ -82,10 +82,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
     }
 
     /**
-     * Keep a Discord message as one scheduled/cached translation, but optionally
-     * send long multi-paragraph bodies as smaller requests. Only separators between
-     * independently requested chunks are copied from the source; paragraph layout
-     * inside each request may be freely normalized by the translation provider.
+     * Keep a Discord message as one scheduled/cached translation, but send long
+     * multi-paragraph bodies as smaller requests. Paragraph separators are copied
+     * from the source verbatim; every chunk still goes through the same decoder,
+     * cancellation owner and integrity checks as an ordinary translation.
      */
     @Override
     public String translate(String text) throws Exception {
@@ -100,16 +100,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
     private String translateInternal(String text, boolean logFailureDiagnostics) throws Exception {
         String previousRequestId = ProjectLog.beginRequest();
         try {
-            String translated = translateWithRequestContext(text, logFailureDiagnostics);
-            if (logFailureDiagnostics && ProjectLog.isEnabled()) {
-                // Full bounded content previews are emitted only when the user's project-log
-                // switch is enabled; each side gets its own diagnostic record.
-                ProjectLog.info("translation.content type=source chars=" + codePointLength(text)
-                        + " preview=" + safeDiagnosticPreview(text, 3000));
-                ProjectLog.info("translation.content type=translated chars=" + codePointLength(translated)
-                        + " preview=" + safeDiagnosticPreview(translated, 3000));
-            }
-            return translated;
+            return translateWithRequestContext(text, logFailureDiagnostics);
         } finally {
             ProjectLog.endRequest(previousRequestId);
         }
@@ -126,16 +117,14 @@ public final class JsonApiEngine implements Scheduler.Engine {
         java.util.List<String> separators = new java.util.ArrayList<>();
         if (!cfg.experimentalLongMessageChunking || requestText == null
                 || requestText.length() <= cfg.experimentalLongMessageThreshold) {
-            return protection.restore(execute(requestText, true, logFailureDiagnostics,
-                    !logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics, !logFailureDiagnostics).translated);
         }
         splitParagraphs(requestText, paragraphs, separators);
 
         if (paragraphs.size() <= 1) {
             ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
                     + " sourceChars=" + requestText.length());
-            return protection.restore(execute(requestText, true, logFailureDiagnostics,
-                    !logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics, !logFailureDiagnostics).translated);
         }
 
         ParagraphGroups groups = groupParagraphs(paragraphs, separators,
@@ -144,8 +133,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             ProjectLog.info("translation.chunking skipped reason=paragraphs_fit_one_request"
                     + " sourceChars=" + requestText.length()
                     + " paragraphs=" + paragraphs.size());
-            return protection.restore(execute(requestText, true, logFailureDiagnostics,
-                    !logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics, !logFailureDiagnostics).translated);
         }
 
         StringBuilder combined = new StringBuilder(requestText.length());
@@ -155,13 +143,14 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 + " requests=" + groups.chunks.size());
         for (int i = 0; i < groups.chunks.size(); i++) {
             String group = groups.chunks.get(i);
+            DiscordTokenMarkers.Protection separatorProtection =
+                    DiscordTokenMarkers.protectBlankLineSeparators(group);
             ProjectLog.info("translation.chunking request index=" + (i + 1)
                     + " sourceChars=" + group.length()
                     + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
             try {
-                String translated = execute(group, true, logFailureDiagnostics,
-                        !logFailureDiagnostics).translated;
-                combined.append(translated);
+                String translated = execute(separatorProtection.text, true, logFailureDiagnostics, !logFailureDiagnostics).translated;
+                combined.append(separatorProtection.restore(translated));
             } catch (Exception failure) {
                 ProjectLog.warn("translation.chunking failed index=" + (i + 1)
                         + " errorClass=" + failure.getClass().getSimpleName()
@@ -297,11 +286,13 @@ public final class JsonApiEngine implements Scheduler.Engine {
             }
             translated = translated.trim();
             if (validateTranslation) {
+                // Optional normalization: remove only one exact outer wrapper pair.
+                // Embedded, partial, and nested markers remain available to the checks below.
                 if (cfg.stripOuterWrapper) {
-                    translated = Segments.stripOuterResponseWrapper(translated, text);
+                    translated = Segments.stripOuterResponseWrapper(translated);
                 }
                 String violation = Segments.plainTextViolation(translated, text,
-                        cfg.checkWrapper, cfg.checkPlaceholders,
+                        cfg.checkWrapper, cfg.checkSegmentMarkers, cfg.checkPlaceholders,
                         cfg.checkRetainedMarkers, cfg.checkLength,
                         cfg.minLengthPercent, cfg.maxLengthPercent);
                 if (violation != null) {
@@ -323,22 +314,18 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     ? ((TranslationException) e).httpStatus() : 0;
             String detail = e instanceof TranslationException
                     ? safeDiagnosticDetail(e.getMessage()) : e.getClass().getSimpleName();
-            if (logFailureDiagnostics && ProjectLog.isEnabled()) {
+            if (logFailureDiagnostics) {
                 ProjectLog.warn("translation.failure stage=" + failureStage
                         + " errorClass=" + e.getClass().getSimpleName()
                         + " errorKind=" + kind
                         + " errorReason=" + reason
                         + " httpStatus=" + status
                         + " sourceChars=" + codePointLength(text)
+                        + " sourcePreview=" + safeDiagnosticPreview(text, 200)
+                        + " sourceTail=" + safeDiagnosticTail(text, 100)
                         + " translatedChars=" + codePointLength(diagnosticTranslated)
+                        + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                         + " detail=" + detail);
-                ProjectLog.warn("translation.content type=source chars=" + codePointLength(text)
-                        + " preview=" + safeDiagnosticPreview(text, 3000));
-                if (diagnosticTranslated != null && !diagnosticTranslated.isEmpty()) {
-                    ProjectLog.warn("translation.content type=provider_response chars="
-                            + codePointLength(diagnosticTranslated)
-                            + " preview=" + safeDiagnosticPreview(diagnosticTranslated, 3000));
-                }
             }
             if (captureFailureDiagnostics && !(e instanceof DiagnosticException)) {
                 TranslationException classified = e instanceof TranslationException
@@ -358,7 +345,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
     private static String safeDiagnosticDetail(String message) {
         if (message == null || message.isEmpty()) return "none";
         String safe = message.replaceAll("[\\r\\n\\t]+", " ").trim();
-        return safe.length() <= 4096 ? safe : safe.substring(0, 4096);
+        return safe.length() <= 160 ? safe : safe.substring(0, 160);
     }
 
     /** Counts Unicode code points so preview limits do not split surrogate pairs. */
@@ -394,9 +381,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
         return (start > 0 ? "…" : "") + safeDiagnosticPreview(value.substring(start), maxCodePoints);
     }
 
-    /** Sends the complete protected source text in one ordinary translation request. */
+    /** Sends exactly once and retains the decoded response status for post-request validation. */
     private Http.Response requestOnce(String text, Http.Request request, Http.Headers headers)
             throws Exception {
+        // 1) 单一输入按协议构造请求体；保留节点统一使用 <keepN/> 标记。
         boolean sse = cfg.streaming;
         String systemPrompt;
         if (cfg.systemPrompt.contains("{{target_language}}")) {
@@ -410,13 +398,18 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 sse, cfg.protectionPromptEnabled, cfg.targetLang);
         buildHeaders(headers);
 
+        // Decoder selection is fixed for this request; no reparsing or mode detection.
         request.checkCancelled();
         String url = Protocols.endpoint(cfg.protocol, cfg.apiUrl);
         Http.Response resp = http.postJson(url, body, headers, request,
                 Protocols.createDecoder(cfg.protocol, sse));
+
+        // 3) 状态码归类
         if (!resp.isSuccess()) {
             throw classifyHttpError(resp);
         }
+
+        // Successful HTTP bodies have already passed the selected protocol decoder.
         return resp;
     }
 

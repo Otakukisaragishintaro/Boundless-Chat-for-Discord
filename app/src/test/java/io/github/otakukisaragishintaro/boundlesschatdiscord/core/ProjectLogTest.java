@@ -76,16 +76,6 @@ public class ProjectLogTest {
     }
 
     @Test
-    public void enabledProjectLogsRedactCredentialLikeContentBeforeEveryOutput() {
-        ProjectLog.configure(snapshot(true));
-        ProjectLog.info("source contains Authorization: Bearer secret-token and api_key=private-key");
-        assertEquals(1, entries.size());
-        assertFalse(entries.get(0).message.contains("secret-token"));
-        assertFalse(entries.get(0).message.contains("private-key"));
-        assertTrue(entries.get(0).message.contains("[REDACTED]"));
-    }
-
-    @Test
     public void bootstrapCheckpointsAreVisibleBeforeRegularLoggingIsEnabled() {
         ProjectLog.configure(snapshot(false));
         ProjectLog.bootstrapInfo("module lifecycle entered");

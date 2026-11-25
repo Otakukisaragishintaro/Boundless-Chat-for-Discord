@@ -4,14 +4,17 @@ import androidx.annotation.Nullable;
 
 import java.util.regex.Pattern;
 
-
 /**
  * 单一文本翻译输入的防损坏校验（含格式与保留叶节点定位标记）。
  *
- * <p>{@link #plainTextViolation} 检查空文本、
+ * <p>引擎与渲染层共用 {@link #hasSegmentMarkers} 拒绝残留分段标记，
+ * 不解析、剥离或修复标记。{@link #plainTextViolation} 还检查空文本、
  * 包装标签、模板占位符与长度比例异常，不把损坏内容送进节点树。</p>
  */
 public final class Segments {
+
+    /** 段内夹带的标记碎片（开/闭均算）：协议被破坏，会把标记泄漏成字面量。 */
+    private static final Pattern STRAY_MARKER = Pattern.compile("</?s\\s*\\d");
 
     /**
      * 模型幻觉出的模板占位符（如 {@code XXXXXX}）。
@@ -24,12 +27,17 @@ public final class Segments {
     private Segments() {
     }
 
+    /** 检测开/闭分段标记及未闭合碎片；只拒绝，不修复。 */
+    public static boolean hasSegmentMarkers(@Nullable String text) {
+        return text != null && STRAY_MARKER.matcher(text).find();
+    }
+
     /**
      * Removes a single, exact pair of request-boundary tags when a model echoes the
      * entire wrapper around its answer. Embedded, partial, or nested tags are left
      * untouched so plainTextViolation() can reject them rather than corrupt content.
      */
-    public static String stripOuterResponseWrapper(String translated, String source) {
+    public static String stripOuterResponseWrapper(String translated) {
         if (translated == null) return null;
         String value = translated.trim();
         boolean hasOpen = value.startsWith(Protocols.WRAPPER_OPEN);
@@ -42,23 +50,20 @@ public final class Segments {
             }
             return inner.trim();
         }
-        // A provider may echo only the closing request boundary even when the answer
-        // starts with ordinary translated text rather than a retained-node marker.
-        // Strip that single unmatched terminal boundary only when the source itself
-        // did not contain the literal tag; embedded or repeated tags remain untouched.
-        boolean sourceContainsClose = source != null
-                && source.contains(Protocols.WRAPPER_CLOSE);
-        int closeIndex = value.indexOf(Protocols.WRAPPER_CLOSE);
-        if (!hasOpen && hasClose && !sourceContainsClose
-                && !value.contains(Protocols.WRAPPER_OPEN)
-                && closeIndex == value.length() - Protocols.WRAPPER_CLOSE.length()) {
-            return value.substring(0, closeIndex).trim();
+        // Some providers drop the opening wrapper when a retained-node marker is the
+        // first token, but echo the closing wrapper. Treat that one exact trailing
+        // protocol tag as framing noise; embedded or repeated tags remain untouched
+        // and are rejected by plainTextViolation().
+        if (!hasOpen && hasClose && !value.contains(Protocols.WRAPPER_OPEN)
+                && Pattern.compile("^<keep[1-9][0-9]*/>").matcher(value).find()) {
+            String inner = value.substring(0, value.length() - Protocols.WRAPPER_CLOSE.length());
+            if (!inner.contains(Protocols.WRAPPER_CLOSE)) return inner.trim();
         }
         return translated;
     }
 
     /**
-     * 译文的防损坏校验：非空、无包装标签、原样保留结构定位、长度比例合理。
+     * 译文的防损坏校验：非空、无包装标签与旧分段标记、原样保留结构定位、长度比例合理。
      *
      * <p>单链路在引擎侧返回前调用：复读刷屏（长度
      * 暴涨）、内容大面积丢失（长度骤减）、标记泄漏与模板占位符都在这里
@@ -74,17 +79,19 @@ public final class Segments {
     @Nullable
     public static String plainTextViolation(@Nullable String translated, String source) {
         return plainTextViolation(translated, source,
-                Config.DEF_CHECK_WRAPPER, Config.DEF_CHECK_PLACEHOLDERS,
-                Config.DEF_CHECK_RETAINED_MARKERS, Config.DEF_CHECK_LENGTH,
-                Config.DEF_MIN_LENGTH_PERCENT, Config.DEF_MAX_LENGTH_PERCENT);
+                Config.DEF_CHECK_WRAPPER, Config.DEF_CHECK_SEGMENT_MARKERS,
+                Config.DEF_CHECK_PLACEHOLDERS, Config.DEF_CHECK_RETAINED_MARKERS,
+                Config.DEF_CHECK_LENGTH, Config.DEF_MIN_LENGTH_PERCENT,
+                Config.DEF_MAX_LENGTH_PERCENT);
     }
 
     /** Applies the user's independent response-integrity policy. */
     @Nullable
     public static String plainTextViolation(@Nullable String translated, String source,
-                                            boolean checkWrapper, boolean checkPlaceholders,
-                                            boolean checkRetainedMarkers, boolean checkLength,
-                                            int minLengthPercent, int maxLengthPercent) {
+                                            boolean checkWrapper, boolean checkSegments,
+                                            boolean checkPlaceholders, boolean checkRetainedMarkers,
+                                            boolean checkLength, int minLengthPercent,
+                                            int maxLengthPercent) {
         // An empty API response is never a usable translation and remains a hard protocol error.
         if (translated == null || translated.trim().isEmpty()) {
             return "译文为空";
@@ -93,12 +100,14 @@ public final class Segments {
                 || translated.contains(Protocols.WRAPPER_CLOSE))) {
             return "译文包含包装标签";
         }
+        if (checkSegments && hasSegmentMarkers(translated)) {
+            return "译文中残留分段标记";
+        }
         if (checkPlaceholders && PLACEHOLDER_RUN.matcher(translated).find()) {
             return "译文含模板占位符";
         }
         if (checkRetainedMarkers && !RetainedNodeMarkers.matchesSource(translated, source)) {
-            return "保留节点定位标记无效；"
-                    + RetainedNodeMarkers.mismatchDiagnostic(translated, source);
+            return "保留节点定位标记无效";
         }
         String sourceWithoutKeep = RetainedNodeMarkers.withoutMarkers(source);
         String translationWithoutKeep = RetainedNodeMarkers.withoutMarkers(translated);

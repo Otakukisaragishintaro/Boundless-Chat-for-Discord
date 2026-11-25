@@ -14,10 +14,8 @@ public class ProtectionPromptConfigTest {
             String prompt = Protocols.protectionPromptFor(language);
             assertTrue(prompt.contains(language));
             assertTrue(prompt.contains("<keepN/>"));
-            assertTrue(prompt.contains("⟦BC_TOKEN_N⟧"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("may move it"));
-            assertTrue(prompt.contains("original order"));
+            assertTrue(prompt.contains("same order"));
         }
     }
 
@@ -26,18 +24,15 @@ public class ProtectionPromptConfigTest {
             throws Exception {
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_OPENAI_RESPONSES, Config.PROTOCOL_ANTHROPIC_MESSAGES}) {
-            String enabled = Protocols.requestBody(protocol, "source<keep1/>", "translate", "model",
+            String enabled = Protocols.requestBody(protocol, "source", "translate", "model",
                     false, true, "日本語");
             String disabled = Protocols.requestBody(protocol, "source", "translate", "model",
                     false, false, "日本語");
             String enabledSystem = systemPrompt(protocol, enabled);
             String disabledSystem = systemPrompt(protocol, disabled);
-            assertTrue(enabledSystem.contains("opaque placeholder"));
-            assertTrue(enabledSystem.contains("may move it"));
-            assertTrue(enabledSystem.contains("structural anchors"));
-            assertTrue(enabledSystem.contains("⟦BC_TOKEN_N⟧"));
-            assertFalse(disabledSystem.contains("opaque placeholder"));
-            assertFalse(disabledSystem.contains("⟦BC_TOKEN_N⟧"));
+            assertTrue(enabledSystem.contains("protected marker"));
+            assertTrue(enabledSystem.contains("<keepN/>"));
+            assertFalse(disabledSystem.contains("protected marker"));
             assertFalse(disabledSystem.contains("<keepN/>"));
             assertTrue(disabledSystem.contains("Translate only the text between"));
         }

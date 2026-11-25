@@ -7,7 +7,6 @@ import android.view.View;
 import androidx.annotation.Nullable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.EnglishDetector;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.StateStore;
@@ -151,7 +150,7 @@ public final class HookBridge {
         this.config = c;
         ProjectLog.info("local translation cache configured enabled=" + c.cacheEnabled
                 + " diskLimit=" + c.cacheLimit);
-        TranslationCache.get().setMaxDiskEntries(c.cacheLimit, c.cacheEnabled);
+        TranslationCache.get().setMaxDiskEntries(c.cacheLimit);
 
         // 并发上限即时生效（需求 §5.7 普通配置变更尽量即时生效）。
         Scheduler.get().setMaxConcurrency(c.maxConcurrency);
@@ -468,12 +467,8 @@ public final class HookBridge {
             return;
         }
 
-        // Apply the same literal Discord-token shielding before language detection
-        // that the request engine applies before sending text to the provider.
-        String detectionText = DiscordTokenMarkers.protect(ex.text,
-                cfg.protectMentions, cfg.protectChannelsEmojis, cfg.protectUrls).text;
         EnglishDetector.Verdict v = EnglishDetector.evaluate(
-                detectionText, ex.textNodeCount, cfg.targetLang);
+                ex.text, ex.textNodeCount, cfg.targetLang);
         if (!v.shouldTranslate) {
             ProjectLog.infoOnce("translation.languageSkip." + v.reason.name(),
                     "translation skipped by language detector"
@@ -517,8 +512,12 @@ public final class HookBridge {
             return;
         }
         if (success) {
-            ProjectLog.info("translation result accepted; cache write deferred until native reconstruction succeeds"
-                    + " cacheEnabled=" + resultConfig.cacheEnabled);
+            if (resultConfig.cacheEnabled) {
+                ProjectLog.info("translation result accepted; persistent cache write requested");
+                TranslationCache.get().put(task.contentHash, translated);
+            } else {
+                ProjectLog.info("translation result accepted; cache skipped reason=disabled");
+            }
         }
         refreshTranslation(task.messageId);
     }
@@ -542,23 +541,6 @@ public final class HookBridge {
         return t.getClass().getSimpleName();
     }
 
-    /**
-     * Persist only after the Discord-native StructurableText has been reconstructed successfully.
-     * This is also called for validated cache hits, refreshing their LRU position.
-     */
-    public void onTranslationRenderApplied(String id, String translated) {
-        StateStore.Entry entry = StateStore.get().peek(id);
-        if (entry == null || entry.status != StateStore.Status.TRANSLATED
-                || translated == null || !translated.equals(entry.translatedText)) {
-            return;
-        }
-        if (!config.cacheEnabled) {
-            ProjectLog.info("translation cache write skipped reason=disabled after_render=accepted");
-            return;
-        }
-        TranslationCache.get().put(entry.contentHash, translated);
-    }
-
     /** 富文本结构未能按严格规则重建时，将网络成功转换为可见翻译失败。 */
     public void onTranslationRenderRejected(String id, String translated) {
         StateStore.Entry entry = StateStore.get().peek(id);
@@ -566,9 +548,7 @@ public final class HookBridge {
                 || !translated.equals(entry.translatedText)) {
             return;
         }
-        // A previously cached translation can become invalid after native structure changes
-        // or a renderer update. Invalidate it even if the user disabled cache after the lookup.
-        TranslationCache.get().remove(entry.contentHash);
+        if (config.cacheEnabled) TranslationCache.get().remove(entry.contentHash);
         if (StateStore.get().rejectRender(id, translated)) {
             ProjectLog.info("translation render rejected: native structure reconstruction failed");
             refreshTranslation(id);

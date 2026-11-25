@@ -9,6 +9,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ContentTree;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.HookConfiguration;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.RetainedNodeMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Reflect;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TextExtractor;
 
 import java.lang.reflect.Method;
@@ -50,9 +51,9 @@ public final class ContentNodes {
 
     /** Fixed classifications only; never carries source text, translation, anchors or identity. */
     enum RejectionReason {
-        INVALID_INPUT, NO_TRANSLATABLE_SEGMENTS, EMPTY_TRANSLATION,
+        INVALID_INPUT, NO_TRANSLATABLE_SEGMENTS, SEGMENT_MARKER, EMPTY_TRANSLATION,
         URL_COUNT, EMOJI_COUNT, RETAINED_MARKER, ANCHOR_ORDER, STYLE_OPEN, STYLE_CLOSE, STYLE_EMPTY,
-        UNASSIGNED_TEXT, SOURCE_BOUNDARY_AMBIGUOUS,
+        UNASSIGNED_TEXT, PARAGRAPH_MISSING, PARAGRAPH_EXTRA, SOURCE_BOUNDARY_AMBIGUOUS,
         LINE_COUNT, LINE_EMPTY, LIST_ITEM_EMPTY, PART_COUNT,
         RETAINED_STRUCTURE_CHANGED, TEXT_CONSTRUCTOR, CONTAINER_CONSTRUCTOR, CONSUMPTION_COUNT
     }
@@ -66,8 +67,6 @@ public final class ContentNodes {
         /** Interval-local failing connected line run, source slot ordinals only. */
         int blockStart = -1;
         int blockEnd = -1;
-        int actualChunkIndex = -1;
-        int paragraphGroups = -1;
         String structure = "";
 
         Rejection(RejectionReason reason, int expected, int actual) {
@@ -103,8 +102,10 @@ public final class ContentNodes {
         if (targetCount == 0) {
             throw reject(RejectionReason.NO_TRANSLATABLE_SEGMENTS);
         }
-        // Registered structural anchors are checked below. Legacy JSON segment tags
-        // are no longer part of the request protocol and remain ordinary text.
+        // 锚点必须按原数量及顺序出现；各间隔只执行所属结构的唯一切分规则。
+        if (Segments.hasSegmentMarkers(translated)) {
+            throw reject(RejectionReason.SEGMENT_MARKER);
+        }
         String plain = normalize(translated);
         if (plain.isEmpty()) throw reject(RejectionReason.EMPTY_TRANSLATION);
         AlignmentPlan plan = buildPlan(tree);
@@ -113,21 +114,14 @@ public final class ContentNodes {
             throw new Rejection(RejectionReason.PART_COUNT, targetCount, parts.size());
         }
         // Do not allow reserved fragments split across adjacent styled text slots to reach rendering.
-        String rebuiltPlain = String.join("", parts);
-        if (RetainedNodeMarkers.hasReservedPrefix(rebuiltPlain)) {
-            Rejection mismatch = reject(RejectionReason.RETAINED_MARKER);
-            mismatch.structure = " " + RetainedNodeMarkers.mismatchDiagnostic(
-                    rebuiltPlain, plan.retainedMarkers);
-            throw mismatch;
-        }
+        if (RetainedNodeMarkers.hasReservedPrefix(String.join("", parts)))
+            throw reject(RejectionReason.RETAINED_MARKER);
         // 按节点出现的位置分配片段，不能以实例身份为键：共享节点的后一次
         // 空片段会覆盖前一次译文，造成文字全部消失但 emoji 仍保留。
-        Replacement replacement = new Replacement(parts, plan.headingBoundaries);
-        replacement.normalizedTranslation = plain;
+        Replacement replacement = new Replacement(parts);
         List<Object> result = new ArrayList<>(tree.root.children.size());
         for (ContentTree.Node occurrence : tree.root.children) {
-            Object rebuilt = rebuild(occurrence, replacement);
-            if (occurrence.original == null || rebuilt != null) result.add(rebuilt);
+            result.add(rebuild(occurrence, replacement));
         }
         // 容器复制失败可能丢弃已重建的子节点；不得把其他已清空的文本节点
         // 作为部分成功的结果交给宿主，必须整棵树替换成功。
@@ -139,7 +133,7 @@ public final class ContentNodes {
 
     /**
      * 统一换行符并去掉首尾空白：模型常以换行收尾（开头偶尔也会多一行），
-     * 直接渲染就会在译文上下方留下多余空行。正文内部的段落布局交由原生节点重建处理。
+     * 直接渲染就会在译文上下方留下多余空行。正文中间的空行保持不变。
      */
     static String normalize(String translated) {
         return translated.replace("\r\n", "\n").replace('\r', '\n').trim();
@@ -147,30 +141,10 @@ public final class ContentNodes {
 
     private static final class Replacement {
         final List<String> parts;
-        final List<Boolean> headingBoundaries;
         int next;
-        int searchOffset;
-        String normalizedTranslation = "";
 
-        Replacement(List<String> parts, List<Boolean> headingBoundaries) {
+        Replacement(List<String> parts) {
             this.parts = parts;
-            this.headingBoundaries = headingBoundaries;
-        }
-
-        boolean isHeadingBoundary(int rightSlot) {
-            return rightSlot >= 0 && rightSlot < headingBoundaries.size()
-                    && Boolean.TRUE.equals(headingBoundaries.get(rightSlot));
-        }
-
-        @Nullable String separatorBetween(String left, String right) {
-            if (left == null || right == null || left.isEmpty() || right.isEmpty()) return null;
-            int leftAt = normalizedTranslation.indexOf(left, searchOffset);
-            if (leftAt < 0) return null;
-            int rightAt = normalizedTranslation.indexOf(right, leftAt + left.length());
-            if (rightAt < 0) return null;
-            searchOffset = rightAt + right.length();
-            String gap = normalizedTranslation.substring(leftAt + left.length(), rightAt);
-            return gap.trim().isEmpty() ? gap : null;
         }
     }
 
@@ -189,7 +163,7 @@ public final class ContentNodes {
                 if (rebuiltChild != child.original) {
                     localChanged = true;
                 }
-                if (child.original == null || rebuiltChild != null) rebuiltChildren.add(rebuiltChild);
+                rebuiltChildren.add(rebuiltChild);
             }
             if (!localChanged && !ContentTree.retainedStructureMatches(occurrence))
                 throw reject(RejectionReason.RETAINED_STRUCTURE_CHANGED);
@@ -206,63 +180,30 @@ public final class ContentNodes {
             }
             int needed = occurrence.segmentCount;
             if (needed == 0) {
-                // Keep opaque/non-whitespace nodes. A standalone blank-line node between
-                // a translated slot and an empty merged slot no longer represents a
-                // visible paragraph boundary, so omit it from the rebuilt tree.
-                if (BlankLines.isBlank(original)) {
-                    int previous = replacement.next - 1;
-                    int next = replacement.next;
-                    if (previous >= 0 && next < replacement.parts.size()) {
-                        String left = replacement.parts.get(previous);
-                        String right = replacement.parts.get(next);
-                        if (left.isEmpty() || right.isEmpty()) return null;
-                        String separator = replacement.separatorBetween(left, right);
-                        int sourceNewlines = 0;
-                        for (int i = 0; i < original.length(); i++) {
-                            if (original.charAt(i) == '\n') sourceNewlines++;
-                        }
-                        if (sourceNewlines >= 2 && replacement.isHeadingBoundary(next)
-                                && separator != null && !separator.contains("\n\n")) return null;
-                    }
-                }
+                // 空白/空行结构节点：不参与翻译，原样保留。
                 return node;
             }
             if (replacement.next + needed > replacement.parts.size()) {
                 throw new Rejection(RejectionReason.CONSUMPTION_COUNT,
                         replacement.parts.size(), replacement.next + needed);
             }
-            // 保留首尾空白，并按可用译文片段重建文本节点。
-            // 当模型合并段落时，空的源槽不会重新插入对应的空行分隔。
+            // 保留首尾空白，并按原空行位置拼回译文片段：
+            // 段落分隔由原节点提供，不依赖模型是否保留。
             int lead = occurrence.leadingEnd;
             int tail = occurrence.trailingStart;
             StringBuilder rebuilt = new StringBuilder();
             rebuilt.append(original, 0, lead);
-            String previousTranslated = null;
-            boolean previousTranslatable = false;
             for (int i = 0; i < occurrence.chunks.size(); i++) {
+                if (i > 0) rebuilt.append(occurrence.separators.get(i - 1));
                 String chunk = occurrence.chunks.get(i);
-                boolean translatable = occurrence.translatable.get(i);
-                String translatedPart = translatable
-                        ? replacement.parts.get(replacement.next++) : null;
-                if (i > 0) {
-                    // A merged paragraph is represented by an empty source slot.
-                    // Do not reinsert the original blank-line separator around that
-                    // empty slot; retain separators around opaque/non-translatable nodes.
-                    boolean keepSeparator = !previousTranslatable || !translatable
-                            || (!previousTranslated.isEmpty() && !translatedPart.isEmpty());
-                    if (keepSeparator) rebuilt.append(occurrence.separators.get(i - 1));
-                }
-                if (!translatable) {
+                if (!occurrence.translatable.get(i)) {
                     // 空白块或 URL 块不消费片段，原样保留（与计数口径一致）。
                     rebuilt.append(chunk);
-                } else {
-                    rebuilt.append(translatedPart);
+                    continue;
                 }
-                previousTranslatable = translatable;
-                previousTranslated = translatedPart;
+                rebuilt.append(replacement.parts.get(replacement.next++));
             }
             rebuilt.append(original, tail, original.length());
-            if (rebuilt.length() == 0) return null;
             Object created = createTextNode(node, rebuilt.toString());
             if (created != null) {
                 return created;
@@ -284,7 +225,7 @@ public final class ContentNodes {
             if (nc != c.original) {
                 localChanged = true;
             }
-            if (c.original == null || nc != null) newChildren.add(nc);
+            newChildren.add(nc);
         }
         if (!localChanged) {
             if (!ContentTree.retainedStructureMatches(occurrence))
@@ -426,12 +367,8 @@ public final class ContentNodes {
         if (plan.groupIds.isEmpty()) throw reject(RejectionReason.NO_TRANSLATABLE_SEGMENTS);
         requireAnchorCounts(plain, plan.urls, RejectionReason.URL_COUNT);
         requireAnchorCounts(plain, plan.emojiAnchors, RejectionReason.EMOJI_COUNT);
-        if (!RetainedNodeMarkers.matchesExpected(plain, plan.retainedMarkers)) {
-            Rejection mismatch = reject(RejectionReason.RETAINED_MARKER);
-            mismatch.structure = " " + RetainedNodeMarkers.mismatchDiagnostic(
-                    plain, plan.retainedMarkers);
-            throw mismatch;
-        }
+        if (!RetainedNodeMarkers.matchesExpected(plain, plan.retainedMarkers))
+            throw reject(RejectionReason.RETAINED_MARKER);
         requireStyleMarkers(plain, plan);
         if (plan.hasStyleMarkers()) {
             return alignByStyleMarkers(plain, plan);
@@ -439,20 +376,21 @@ public final class ContentNodes {
         return alignTokens(plain, plan);
     }
 
-    // Only exact registered style tags are structural; incomplete angle text stays in the text slot.
-    private static final java.util.regex.Pattern STYLE_MARKER =
-            java.util.regex.Pattern.compile("</?x[1-9][0-9]*>");
+    // Recognize malformed reserved tags too; an exact-tag-only scan would let them reach Text.
+    private static final java.util.regex.Pattern STYLE_PREFIX =
+            java.util.regex.Pattern.compile("<\\s*/?\\s*x(?![A-Za-z_])",
+                    java.util.regex.Pattern.CASE_INSENSITIVE);
 
-    /** Validate only exact internal style tokens; malformed angle text is natural text. */
+    /** The captured flat sequence must occur exactly once, with no nesting or extra reserved tags. */
     private static void requireStyleMarkers(String plain, AlignmentPlan plan) {
-        java.util.regex.Matcher markers = STYLE_MARKER.matcher(plain);
+        java.util.regex.Matcher markers = STYLE_PREFIX.matcher(plain);
         int styleId = 1;
         boolean closing = false;
         while (markers.find()) {
             RejectionReason reason = closing ? RejectionReason.STYLE_CLOSE : RejectionReason.STYLE_OPEN;
             if (styleId > plan.styleMarkers) throw reject(reason);
             String expected = (closing ? "</x" : "<x") + styleId + ">";
-            if (!expected.equals(markers.group())) throw reject(reason);
+            if (!plain.startsWith(expected, markers.start())) throw reject(reason);
             if (closing) styleId++;
             closing = !closing;
         }
@@ -592,17 +530,10 @@ public final class ContentNodes {
 
     /** One interval operation; decoration consumes captured structure only, never the response. */
     private static List<String> alignInterval(String span, AlignmentPlan plan, int start, int end) {
-        for (String url : plan.urls) {
-            if (span.contains(url)) throw reject(RejectionReason.ANCHOR_ORDER);
-        }
-        for (String emoji : plan.emojiAnchors) {
-            if (!emoji.isEmpty() && span.contains(emoji)) throw reject(RejectionReason.ANCHOR_ORDER);
-        }
         try {
             return alignSpanToParts(span, plan.groupIds.subList(start, end),
                     plan.listPrefixesIn(start, end), plan.lineBreakFlagsIn(start, end),
-                    plan.sourceLinesIn(start, end), plan.hardBoundariesIn(start, end),
-                    plan.boundaryLinesIn(start, end));
+                    plan.sourceLinesIn(start, end));
         } catch (Rejection rejection) {
             if (rejection.reason == RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS) {
                 int right = start + rejection.boundary;
@@ -623,8 +554,6 @@ public final class ContentNodes {
                     rejection.structure = " intervalSlots=" + (end - start)
                             + " runSlots=" + (last - first + 1)
                             + " firstSlot=" + first + " lastSlot=" + last
-                            + " chunkIndex=" + Math.max(0, rejection.actualChunkIndex)
-                            + " paragraphGroups=" + rejection.paragraphGroups
                             + plan.boundaries.get(first).describe("first")
                             + plan.boundaries.get(last).describe("last");
                 }
@@ -644,98 +573,30 @@ public final class ContentNodes {
     }
 
     /**
-     * 按结构类型切分：明确的源换行/列表边界仍按捕获行数校验；
-     * 普通段落块数量允许与源槽不同，缺少的源槽留空，多出的译文块追加到末槽。
+     * 按结构类型执行唯一切分：源换行/列表边界按每槽捕获行数，其余按段落块对应。
+     * 任一数量或结构不匹配都拒绝整条回填。
      */
     static List<String> alignSpanToParts(String span, List<Integer> groups,
                                          @Nullable List<Boolean> listPrefixes,
                                          @Nullable List<Boolean> lineBreakBefore,
                                          List<Integer> sourceLineCounts) {
-        return alignSpanToParts(span, groups, listPrefixes, lineBreakBefore,
-                sourceLineCounts, null);
-    }
-
-    private static List<String> alignSpanToParts(String span, List<Integer> groups,
-                                         @Nullable List<Boolean> listPrefixes,
-                                         @Nullable List<Boolean> lineBreakBefore,
-                                         List<Integer> sourceLineCounts,
-                                         @Nullable List<Boolean> hardBoundaries) {
-        return alignSpanToParts(span, groups, listPrefixes, lineBreakBefore,
-                sourceLineCounts, hardBoundaries, null);
-    }
-
-    static List<String> alignSpanToParts(String span, List<Integer> groups,
-                                         @Nullable List<Boolean> listPrefixes,
-                                         @Nullable List<Boolean> lineBreakBefore,
-                                         List<Integer> sourceLineCounts,
-                                         @Nullable List<Boolean> hardBoundaries,
-                                         @Nullable List<Integer> boundaryLineCounts) {
         int segments = groups.size();
         if (segments == 0) {
             if (!span.trim().isEmpty()) throw reject(RejectionReason.UNASSIGNED_TEXT);
             return new ArrayList<>();
         }
         List<String> chunks = translatableChunks(span);
-        for (String chunk : chunks) {
-            if (TextExtractor.isUrlLike(chunk)) {
-                throw new Rejection(RejectionReason.UNASSIGNED_TEXT, segments, chunks.size());
-            }
-        }
-        int paragraphGroups = 0;
-        for (int i = 0; i < segments; i++) {
-            if (i == 0 || !groups.get(i).equals(groups.get(i - 1))) paragraphGroups++;
-        }
-        boolean hasHardBoundary = false;
-        boolean hasLineBoundary = false;
-        if (hardBoundaries != null) {
-            for (Boolean boundary : hardBoundaries) hasHardBoundary |= Boolean.TRUE.equals(boundary);
-        }
-        if (lineBreakBefore != null) {
-            for (Boolean boundary : lineBreakBefore) hasLineBoundary |= Boolean.TRUE.equals(boundary);
-        }
         List<String> parts = new ArrayList<>(
                 java.util.Collections.nCopies(segments, ""));
         int segment = 0;
         int chunk = 0;
         while (segment < segments) {
-            // A provider may merge adjacent source paragraphs. Keep the returned
-            // text in the corresponding leading slots and leave the remaining
-            // source slots empty; native reconstruction then omits their separators.
             if (chunk >= chunks.size()) {
-                boolean remainingStructuralBoundary = false;
-                for (int i = segment; i < segments; i++) {
-                    if (isLineBreakBefore(lineBreakBefore, i)
-                            || isHardBoundaryBefore(hardBoundaries, i)) {
-                        remainingStructuralBoundary = true;
-                        break;
-                    }
-                }
-                if (remainingStructuralBoundary) {
-                    throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
-                }
-                break;
+                throw new Rejection(RejectionReason.PARAGRAPH_MISSING, chunk + 1, chunks.size());
             }
-            String block = chunks.get(chunk);
-            int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
                 if (isLineBreakBefore(lineBreakBefore, end)) {
-                    // Do not let a short translated paragraph consume multiple source
-                    // slots. If it lacks the lines for the next slot, leave that slot
-                    // for the next translated paragraph chunk.
-                    if (expectedSourceLines(segment, end + 1, sourceLineCounts,
-                            boundaryLineCounts) <= availableLines) {
-                        end++;
-                    } else {
-                        break;
-                    }
-                } else if (chunks.size() < paragraphGroups
-                        && isHardBoundaryBefore(hardBoundaries, end)
-                        && expectedSourceLines(segment, end + 1, sourceLineCounts,
-                        boundaryLineCounts) <= availableLines) {
-                    // A smaller global chunk count does not prove that this particular
-                    // chunk merged later source slots. Only cross a hard boundary when
-                    // this chunk actually contains enough lines to represent every slot.
                     end++;
                 } else if (groups.get(end).equals(groups.get(end - 1))) {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
@@ -746,23 +607,15 @@ public final class ContentNodes {
                 }
             }
 
-            chunk++;
+            String block = chunks.get(chunk++);
             if (end - segment > 1) {
                 String[] lines = block.split("\n", -1);
                 int expectedLines = 0;
-                for (int i = segment; i < end; i++) {
-                    expectedLines += sourceLineCounts.get(i);
-                    if (i > segment && boundaryLineCounts != null
-                            && i < boundaryLineCounts.size()) {
-                        expectedLines += boundaryLineCounts.get(i);
-                    }
-                }
+                for (int i = segment; i < end; i++) expectedLines += sourceLineCounts.get(i);
                 if (lines.length != expectedLines) {
                     Rejection rejection = new Rejection(RejectionReason.LINE_COUNT, expectedLines, lines.length);
                     rejection.blockStart = segment;
                     rejection.blockEnd = end;
-                    rejection.actualChunkIndex = chunk - 1;
-                    rejection.paragraphGroups = paragraphGroups;
                     throw rejection;
                 }
                 for (String line : lines) {
@@ -784,31 +637,10 @@ public final class ContentNodes {
             }
             segment = end;
         }
-        if (chunk < chunks.size()) {
-            if (hasHardBoundary || hasLineBoundary) {
-                throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
-            }
-            // A provider may also split ordinary paragraphs into several. Preserve
-            // every returned block by appending the extras to the final native text slot.
-            String extra = String.join("\n\n", chunks.subList(chunk, chunks.size()));
-            int last = segments - 1;
-            String existing = parts.get(last);
-            parts.set(last, existing.isEmpty() ? extra : existing + "\n\n" + extra);
+        if (chunk != chunks.size()) {
+            throw new Rejection(RejectionReason.PARAGRAPH_EXTRA, chunk, chunks.size());
         }
         return parts;
-    }
-
-    private static int expectedSourceLines(int start, int end,
-                                           List<Integer> sourceLineCounts,
-                                           @Nullable List<Integer> boundaryLineCounts) {
-        int expected = 0;
-        for (int i = start; i < end; i++) {
-            expected += sourceLineCounts.get(i);
-            if (i > start && boundaryLineCounts != null && i < boundaryLineCounts.size()) {
-                expected += boundaryLineCounts.get(i);
-            }
-        }
-        return expected;
     }
 
     private static boolean isListPrefix(@Nullable List<Boolean> listPrefixes, int index) {
@@ -817,10 +649,6 @@ public final class ContentNodes {
     }
 
     private static boolean isLineBreakBefore(@Nullable List<Boolean> flags, int index) {
-        return flags != null && index < flags.size() && Boolean.TRUE.equals(flags.get(index));
-    }
-
-    private static boolean isHardBoundaryBefore(@Nullable List<Boolean> flags, int index) {
         return flags != null && index < flags.size() && Boolean.TRUE.equals(flags.get(index));
     }
 
@@ -843,7 +671,7 @@ public final class ContentNodes {
 
     /**
      * 译文 interval 的段落块：仅剔除空白块。源 URL 已由定位 token 消费，
-     * 剩余 URL 块也是输出，必须参与文本对齐，不能静默丢弃。
+     * 剩余 URL 块也是输出，必须参与段落数量校验，不能静默丢弃。
      */
     private static List<String> translatableChunks(String translated) {
         List<String> chunks = new ArrayList<>();
@@ -869,12 +697,6 @@ public final class ContentNodes {
         final List<Boolean> listPrefixes = new ArrayList<>();
         /** 与片段平行：当前片段前是否有已捕获的源换行（文本空白或 BREAK）。 */
         final List<Boolean> lineBreakBefore = new ArrayList<>();
-        /** Boundaries that must not be merged: heading transitions and native break nodes. */
-        final List<Boolean> hardBoundaries = new ArrayList<>();
-        /** Extra source line separators contributed by native BREAK nodes. */
-        final List<Integer> boundaryLineCounts = new ArrayList<>();
-        /** Heading boundaries render their own line break; an intervening blank node is redundant. */
-        final List<Boolean> headingBoundaries = new ArrayList<>();
         /** 与片段平行：该片段的源文本内部行数，不能假定每个槽只占一行。 */
         final List<Integer> sourceLineCounts = new ArrayList<>();
         /** Source-only structural diagnostics for each slot; discarded with this alignment plan. */
@@ -900,14 +722,6 @@ public final class ContentNodes {
 
         List<Integer> sourceLinesIn(int segStart, int segEnd) {
             return sourceLineCounts.subList(segStart, segEnd);
-        }
-
-        List<Boolean> hardBoundariesIn(int segStart, int segEnd) {
-            return hardBoundaries.subList(segStart, segEnd);
-        }
-
-        List<Integer> boundaryLinesIn(int segStart, int segEnd) {
-            return boundaryLineCounts.subList(segStart, segEnd);
         }
 
         /** [segStart, segEnd) 范围片段对应的列表项起始前缀。 */
@@ -1017,7 +831,6 @@ public final class ContentNodes {
                     w.itemStarts++;
                     w.pendingListPrefix = true;
                     if (!w.plan.groupIds.isEmpty()) w.forceNewGroup = true;
-                    w.forceLineBoundary = true;
                     w.separatorNewlines++; // Native list-item line boundary, not opaque text.
                     w.listLevel++;
                     continue;
@@ -1095,7 +908,6 @@ public final class ContentNodes {
         int headingBreaks;
         int listLevel;
         boolean forceNewGroup;
-        boolean forceLineBoundary;
         boolean pendingListPrefix;
         final int[] gapKinds = new int[ContentTree.Kind.values().length];
         int whitespaceNodes;
@@ -1149,17 +961,8 @@ public final class ContentNodes {
         w.pendingListPrefix = false;
         w.plan.boundaries.add(new BoundaryContext(event, w, sourceLines));
         int separatorNewlines = w.separatorNewlines;
-        // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
-        // Do not turn the latter into a line boundary or list lines get merged with following body text.
-        boolean sameListDepthAsPrevious = !w.plan.boundaries.isEmpty()
-                && w.plan.boundaries.get(w.plan.boundaries.size() - 1).listDepth == w.listLevel;
-        // ITEM_START is a connected line boundary only between items at the same
-        // list depth. Entering or leaving a list is a paragraph/group boundary,
-        // not a continuation of the adjacent root/container text.
-        boolean listItemLineBoundary = w.forceLineBoundary && sameListDepthAsPrevious;
         boolean lineBoundary = separatorNewlines < 2
-                && (listItemLineBoundary || w.headingBreaks > 0
-                || (!w.forceNewGroup && separatorNewlines == 1));
+                && (w.forceNewGroup || separatorNewlines == 1);
         if (w.forceNewGroup) {
             w.group++;
             w.forceNewGroup = false;
@@ -1169,19 +972,8 @@ public final class ContentNodes {
         w.plan.groupIds.add(w.group);
         w.plan.lineBreakBefore.add(lineBoundary);
         w.plan.sourceLineCounts.add(sourceLines);
-        boolean currentHeading = containsHeading(event.containers);
-        boolean previousHeading = w.plan.boundaries.size() > 1
-                && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 2).event.containers);
-        boolean headingBoundary = w.headingBreaks > 0
-                || (w.plan.boundaries.size() > 1 && currentHeading != previousHeading);
-        w.plan.headingBoundaries.add(headingBoundary);
-        boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
-        w.plan.hardBoundaries.add(headingBoundary || nativeBreakBoundary);
-        w.plan.boundaryLineCounts.add(nativeBreakBoundary && !headingBoundary
-                ? Math.max(0, w.separatorNewlines - 1) : 0);
         w.separatorNewlines = 0;
         w.headingBreaks = 0;
-        w.forceLineBoundary = false;
         java.util.Arrays.fill(w.gapKinds, 0);
         w.whitespaceNodes = 0;
         w.itemStarts = 0;
@@ -1192,16 +984,6 @@ public final class ContentNodes {
     }
 
     /** Count only captured text whitespace; URL/emoji/opaque and synthetic code text give no proof. */
-    private static boolean containsHeading(List<ContentTree.Node> containers) {
-        for (ContentTree.Node container : containers) {
-            String semantic = container.semantic;
-            if (semantic != null && semantic.toLowerCase(java.util.Locale.ROOT).contains("heading")) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     private static void addSourceWhitespace(PlanWalk w, String text, int start, int end) {
         for (int i = start; i < end; i++) if (text.charAt(i) == '\n') w.separatorNewlines++;
     }

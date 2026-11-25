@@ -27,39 +27,8 @@ public class RetainedNodeMarkersTest {
         assertFalse(RetainedNodeMarkers.matchesSource("运行现在", source));
         assertFalse(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", "run<keep1>now"));
         assertNull(Segments.plainTextViolation("运行<keep1/>现在", source));
-        assertTrue(Segments.plainTextViolation("运行现在", source).startsWith("保留节点定位标记无效；markerDiagnostic={"));
-        assertTrue(Segments.plainTextViolation("正文<keep1/>", "plain").startsWith("保留节点定位标记无效；markerDiagnostic={"));
-    }
-
-
-    @Test public void mismatchDiagnosticIdentifiesOrderMissingDuplicatesAndMalformedTokens() {
-        String source = "A<keep1/>B<keep2/>C<keep3/>D";
-        String translated = "甲<keep2/>乙<keep1/>丙<keep4/><keep4/><keep5 >";
-        String diagnostic = RetainedNodeMarkers.mismatchDiagnostic(translated, source);
-        assertTrue(diagnostic, diagnostic.contains("type=MISSING_AND_UNEXPECTED"));
-        assertTrue(diagnostic, diagnostic.contains("expectedCount=3"));
-        assertTrue(diagnostic, diagnostic.contains("actualCount=4"));
-        assertTrue(diagnostic, diagnostic.contains("firstMismatchIndex=1"));
-        assertTrue(diagnostic, diagnostic.contains("expectedAt=<keep1/>"));
-        assertTrue(diagnostic, diagnostic.contains("actualAt=<keep2/>"));
-        assertTrue(diagnostic, diagnostic.contains("expectedSequence=[<keep1/>,<keep2/>,<keep3/>]"));
-        assertTrue(diagnostic, diagnostic.contains("actualSequence=[<keep2/>,<keep1/>,<keep4/>,<keep4/>]"));
-        assertTrue(diagnostic, diagnostic.contains("missing=[<keep3/>x1]"));
-        assertTrue(diagnostic, diagnostic.contains("unexpected=[<keep4/>x2]"));
-        assertTrue(diagnostic, diagnostic.contains("duplicated=[<keep4/>x1]"));
-        assertTrue(diagnostic, diagnostic.contains("malformed=[<keep5 >]"));
-    }
-
-    @Test public void mismatchDiagnosticDistinguishesPureMissingAndPureReordering() {
-        String missing = RetainedNodeMarkers.mismatchDiagnostic(
-                "译文<keep1/>", "source<keep1/><keep2/>");
-        assertTrue(missing, missing.contains("type=MISSING"));
-        assertTrue(missing, missing.contains("firstMismatchIndex=2"));
-        String reordered = RetainedNodeMarkers.mismatchDiagnostic(
-                "<keep2/><keep1/>", "<keep1/><keep2/>");
-        assertTrue(reordered, reordered.contains("type=ORDER"));
-        assertTrue(reordered, reordered.contains("missing=[]"));
-        assertTrue(reordered, reordered.contains("unexpected=[]"));
+        assertEquals("保留节点定位标记无效", Segments.plainTextViolation("运行现在", source));
+        assertEquals("保留节点定位标记无效", Segments.plainTextViolation("正文<keep1/>", "plain"));
     }
 
     @Test public void markerCharactersCannotMakeShortTextTranslatable() {
@@ -155,12 +124,10 @@ public class RetainedNodeMarkersTest {
         assertNull(Segments.plainTextViolation("你好<keep1/>世界", "hello<keep1/>world"));
     }
 
-    @Test public void incompleteAngleTextAndEmoticonsAreNotInternalMarkers() {
-        for (String value : new String[]{"<3", ">.<", "<.<", ">_<", "<keep", "<keep1>", "</keep1",
-                "<x1", "<x1 ", "literal <tag"}) {
-            assertTrue(value, RetainedNodeMarkers.matchesExpected(value, Collections.emptyList()));
-        }
-        assertTrue(RetainedNodeMarkers.matchesSource("普通文本", "<x1><ke</x1><x2>ep9/></x2>"));
+    @Test public void reservedPrefixAssembledAcrossStyleTagsIsRejected() {
+        assertFalse(RetainedNodeMarkers.matchesExpected("<x1><ke</x1><x2>ep9/></x2>", Collections.emptyList()));
+        assertFalse(RetainedNodeMarkers.matchesExpected("<x1><ke</x1><x2>ep9</x2>", Collections.emptyList()));
+        assertFalse(RetainedNodeMarkers.matchesSource("正文", "<x1><ke</x1><x2>ep9/></x2>"));
         assertTrue(RetainedNodeMarkers.matchesSource("<x1>正文</x1><keep1/>", "<x1>Body</x1><keep1/>"));
     }
 
@@ -172,14 +139,10 @@ public class RetainedNodeMarkersTest {
             String prompt = Config.PROTOCOL_OPENAI_COMPATIBLE.equals(protocol)
                     ? body.getJSONArray("messages").getJSONObject(0).getString("content")
                     : body.getString(Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol) ? "instructions" : "system");
-            assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE + "\n\n"
-                    + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG), prompt);
-            assertTrue(prompt.contains("<keepN/>"));
-            assertTrue(prompt.contains("⟦BC_TOKEN_N⟧"));
-            assertFalse(prompt.contains("⟦BCP"));
+            assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE, prompt);
+            assertTrue(prompt.contains("<keep1/>"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("may move"));
-            assertTrue(prompt.contains("original order"));
+            assertTrue(prompt.contains("original position and order"));
         }
     }
 }
