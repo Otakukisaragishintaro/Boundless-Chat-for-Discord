@@ -62,6 +62,11 @@ public final class IconClickSpanFactory {
 
     @Nullable
     static Object createByConstructor(ClassLoader hostCl, String messageId,
+                                               JSONObject spec) throws Exception {
+        return createByConstructor(hostCl, messageId, spec, "toggleTranslation");
+    }
+
+    static Object createByConstructor(ClassLoader hostCl, String messageId,
                                                JSONObject spec, String action) throws Exception {
         Class<?> spanClass = configuredClass(hostCl, spec.optString("spanClass", ""));
         Class<?> expectedSuperclass = configuredClass(
