@@ -36,15 +36,17 @@ public final class DiscordTokenMarkers {
         private final List<String> movableOriginals;
         private final List<String> orderedMarkers;
         private final List<String> orderedOriginals;
+        private final boolean validateMovableTokens;
 
         private Protection(String text, List<String> movableMarkers,
                            List<String> movableOriginals, List<String> orderedMarkers,
-                           List<String> orderedOriginals) {
+                           List<String> orderedOriginals, boolean validateMovableTokens) {
             this.text = text;
             this.movableMarkers = movableMarkers;
             this.movableOriginals = movableOriginals;
             this.orderedMarkers = orderedMarkers;
             this.orderedOriginals = orderedOriginals;
+            this.validateMovableTokens = validateMovableTokens;
         }
 
         /**
@@ -59,15 +61,17 @@ public final class DiscordTokenMarkers {
                 return null;
             }
 
-            Map<String, Integer> expected = counts(movableMarkers);
-            Map<String, Integer> actual = new HashMap<>();
-            Matcher tokenMatcher = TOKEN_FAMILY.matcher(translated);
-            while (tokenMatcher.find()) {
-                String marker = tokenMatcher.group();
-                actual.put(marker, actual.containsKey(marker) ? actual.get(marker) + 1 : 1);
-            }
-            if (!expected.equals(actual)) {
-                throw invalidRestoration();
+            if (validateMovableTokens) {
+                Map<String, Integer> expected = counts(movableMarkers);
+                Map<String, Integer> actual = new HashMap<>();
+                Matcher tokenMatcher = TOKEN_FAMILY.matcher(translated);
+                while (tokenMatcher.find()) {
+                    String marker = tokenMatcher.group();
+                    actual.put(marker, actual.containsKey(marker) ? actual.get(marker) + 1 : 1);
+                }
+                if (!expected.equals(actual)) {
+                    throw invalidRestoration();
+                }
             }
 
             int previousPosition = -1;
@@ -138,7 +142,7 @@ public final class DiscordTokenMarkers {
             }
         }
         return new Protection(protectedText.toString(), new ArrayList<>(),
-                new ArrayList<>(), markers, originals);
+                new ArrayList<>(), markers, originals, false);
     }
 
     /** Replace selected literal Discord syntax with movable identity placeholders. */
@@ -186,7 +190,7 @@ public final class DiscordTokenMarkers {
         }
         matcher.appendTail(protectedText);
         return new Protection(protectedText.toString(), movableMarkers, movableOriginals,
-                orderedMarkers, orderedOriginals);
+                orderedMarkers, orderedOriginals, true);
     }
 
     private static int nextKeepId(String source) {
@@ -204,6 +208,6 @@ public final class DiscordTokenMarkers {
 
     private static Protection empty(String source) {
         return new Protection(source, new ArrayList<>(), new ArrayList<>(),
-                new ArrayList<>(), new ArrayList<>());
+                new ArrayList<>(), new ArrayList<>(), false);
     }
 }
