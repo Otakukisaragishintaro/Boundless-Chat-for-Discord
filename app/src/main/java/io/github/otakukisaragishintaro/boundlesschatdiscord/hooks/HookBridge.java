@@ -538,9 +538,13 @@ public final class HookBridge {
     }
 
     /** Called only after the enclosing Discord message-render chain has returned normally. */
-    void onMessageRenderCompleted(String messageId) {
+    void onMessageRenderCompleted(String messageId, boolean viewAttached) {
         if (!config.cacheEnabled) {
             ProjectLog.info("local translation cache write skipped reason=disabled");
+            return;
+        }
+        if (!viewAttached) {
+            ProjectLog.info("local translation cache write deferred reason=view_detached");
             return;
         }
         java.util.List<StateStore.Entry> entries =
