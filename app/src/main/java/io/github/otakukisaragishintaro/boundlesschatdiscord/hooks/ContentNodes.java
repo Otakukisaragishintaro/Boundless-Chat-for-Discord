@@ -114,8 +114,13 @@ public final class ContentNodes {
             throw new Rejection(RejectionReason.PART_COUNT, targetCount, parts.size());
         }
         // Do not allow reserved fragments split across adjacent styled text slots to reach rendering.
-        if (RetainedNodeMarkers.hasReservedPrefix(String.join("", parts)))
-            throw reject(RejectionReason.RETAINED_MARKER);
+        String rebuiltPlain = String.join("", parts);
+        if (RetainedNodeMarkers.hasReservedPrefix(rebuiltPlain)) {
+            Rejection mismatch = reject(RejectionReason.RETAINED_MARKER);
+            mismatch.structure = " " + RetainedNodeMarkers.mismatchDiagnostic(
+                    rebuiltPlain, buildPlan(tree).retainedMarkers);
+            throw mismatch;
+        }
         // 按节点出现的位置分配片段，不能以实例身份为键：共享节点的后一次
         // 空片段会覆盖前一次译文，造成文字全部消失但 emoji 仍保留。
         Replacement replacement = new Replacement(parts);
@@ -367,8 +372,12 @@ public final class ContentNodes {
         if (plan.groupIds.isEmpty()) throw reject(RejectionReason.NO_TRANSLATABLE_SEGMENTS);
         requireAnchorCounts(plain, plan.urls, RejectionReason.URL_COUNT);
         requireAnchorCounts(plain, plan.emojiAnchors, RejectionReason.EMOJI_COUNT);
-        if (!RetainedNodeMarkers.matchesExpected(plain, plan.retainedMarkers))
-            throw reject(RejectionReason.RETAINED_MARKER);
+        if (!RetainedNodeMarkers.matchesExpected(plain, plan.retainedMarkers)) {
+            Rejection mismatch = reject(RejectionReason.RETAINED_MARKER);
+            mismatch.structure = " " + RetainedNodeMarkers.mismatchDiagnostic(
+                    plain, plan.retainedMarkers);
+            throw mismatch;
+        }
         requireStyleMarkers(plain, plan);
         if (plan.hasStyleMarkers()) {
             return alignByStyleMarkers(plain, plan);
