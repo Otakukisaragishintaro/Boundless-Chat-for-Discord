@@ -21,7 +21,6 @@ public final class DiagnosticLogStore {
     private static final int MAX_MESSAGE_LENGTH = 4000;
     private static final int PRUNE_INTERVAL = 32;
     @Nullable private static Helper sHelper;
-    private static int writesSincePrune;
 
     private DiagnosticLogStore() { }
 
@@ -73,13 +72,13 @@ public final class DiagnosticLogStore {
             values.put("tag", bounded(tag, 120, "BoundlessChatDiscord"));
             values.put("message", sanitizeMessage(message));
             values.put("request_id", bounded(requestId, 80, ""));
-            if (db.insert(TABLE, null, values) < 0) return false;
+            long rowId = db.insert(TABLE, null, values);
+            if (rowId < 0) return false;
 
-            // Pruning once per batch avoids a full retained-table delete query for every event.
-            if (++writesSincePrune >= PRUNE_INTERVAL) {
+            // The auto-increment ID makes pruning cadence survive process restarts.
+            if (rowId % PRUNE_INTERVAL == 0) {
                 db.execSQL("DELETE FROM " + TABLE + " WHERE _id NOT IN (SELECT _id FROM "
                         + TABLE + " ORDER BY _id DESC LIMIT " + MAX_ENTRIES + ")");
-                writesSincePrune = 0;
             }
             return true;
         } catch (Throwable failure) {
@@ -106,7 +105,6 @@ public final class DiagnosticLogStore {
         if (context == null) return false;
         try {
             helper(context).getWritableDatabase().delete(TABLE, null, null);
-            writesSincePrune = 0;
             return true;
         } catch (Throwable failure) {
             return false;
