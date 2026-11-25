@@ -153,7 +153,7 @@ public class ProtocolsTest {
                     ? body.getJSONArray("messages").getJSONObject(0).getString("content")
                     : Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol)
                     ? body.getString("instructions") : body.getString("system");
-            assertTrue(system.contains("You MUST copy every marker verbatim"));
+            assertTrue(system.contains("every <keepN/> token is an"));
             assertTrue(system.contains("exact original sequence"));
             assertTrue(system.contains("without moving the token"));
             assertFalse(system.contains("<keep13/>, <keep14/>"));
