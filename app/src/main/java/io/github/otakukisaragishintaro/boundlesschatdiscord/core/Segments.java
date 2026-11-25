@@ -2,19 +2,14 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import androidx.annotation.Nullable;
 
-import java.util.regex.Pattern;
 
 /**
  * 单一文本翻译输入的防损坏校验（含格式与保留叶节点定位标记）。
  *
- * <p>引擎与渲染层共用 {@link #hasSegmentMarkers} 拒绝残留分段标记，
- * 不解析、剥离或修复标记。{@link #plainTextViolation} 还检查空文本、
+ * <p>{@link #plainTextViolation} 检查空文本、
  * 包装标签、模板占位符与长度比例异常，不把损坏内容送进节点树。</p>
  */
 public final class Segments {
-
-    /** 段内夹带的标记碎片（开/闭均算）：协议被破坏，会把标记泄漏成字面量。 */
-    private static final Pattern STRAY_MARKER = Pattern.compile("</?s\\s*\\d");
 
     /**
      * 模型幻觉出的模板占位符（如 {@code XXXXXX}）。
@@ -25,11 +20,6 @@ public final class Segments {
     private static final Pattern PLACEHOLDER_RUN = Pattern.compile("X{4,}");
 
     private Segments() {
-    }
-
-    /** 检测开/闭分段标记及未闭合碎片；只拒绝，不修复。 */
-    public static boolean hasSegmentMarkers(@Nullable String text) {
-        return text != null && STRAY_MARKER.matcher(text).find();
     }
 
     /**
@@ -66,7 +56,7 @@ public final class Segments {
     }
 
     /**
-     * 译文的防损坏校验：非空、无包装标签与旧分段标记、原样保留结构定位、长度比例合理。
+     * 译文的防损坏校验：非空、无包装标签、原样保留结构定位、长度比例合理。
      *
      * <p>单链路在引擎侧返回前调用：复读刷屏（长度
      * 暴涨）、内容大面积丢失（长度骤减）、标记泄漏与模板占位符都在这里
@@ -82,19 +72,17 @@ public final class Segments {
     @Nullable
     public static String plainTextViolation(@Nullable String translated, String source) {
         return plainTextViolation(translated, source,
-                Config.DEF_CHECK_WRAPPER, Config.DEF_CHECK_SEGMENT_MARKERS,
-                Config.DEF_CHECK_PLACEHOLDERS, Config.DEF_CHECK_RETAINED_MARKERS,
-                Config.DEF_CHECK_LENGTH, Config.DEF_MIN_LENGTH_PERCENT,
-                Config.DEF_MAX_LENGTH_PERCENT);
+                Config.DEF_CHECK_WRAPPER, Config.DEF_CHECK_PLACEHOLDERS,
+                Config.DEF_CHECK_RETAINED_MARKERS, Config.DEF_CHECK_LENGTH,
+                Config.DEF_MIN_LENGTH_PERCENT, Config.DEF_MAX_LENGTH_PERCENT);
     }
 
     /** Applies the user's independent response-integrity policy. */
     @Nullable
     public static String plainTextViolation(@Nullable String translated, String source,
-                                            boolean checkWrapper, boolean checkSegments,
-                                            boolean checkPlaceholders, boolean checkRetainedMarkers,
-                                            boolean checkLength, int minLengthPercent,
-                                            int maxLengthPercent) {
+                                            boolean checkWrapper, boolean checkPlaceholders,
+                                            boolean checkRetainedMarkers, boolean checkLength,
+                                            int minLengthPercent, int maxLengthPercent) {
         // An empty API response is never a usable translation and remains a hard protocol error.
         if (translated == null || translated.trim().isEmpty()) {
             return "译文为空";
@@ -102,9 +90,6 @@ public final class Segments {
         if (checkWrapper && (translated.contains(Protocols.WRAPPER_OPEN)
                 || translated.contains(Protocols.WRAPPER_CLOSE))) {
             return "译文包含包装标签";
-        }
-        if (checkSegments && hasSegmentMarkers(translated)) {
-            return "译文中残留分段标记";
         }
         if (checkPlaceholders && PLACEHOLDER_RUN.matcher(translated).find()) {
             return "译文含模板占位符";
