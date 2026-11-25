@@ -33,6 +33,8 @@ public class TranslationResultOwnershipTest {
         assertNull(TranslationCache.get().get("old"));
         bridge.onTranslateResult(current, true, "new result", null);
         assertEquals("new result", next.translatedText);
+        assertNull("API acceptance alone must not persist a translation", TranslationCache.get().get("new"));
+        bridge.onTranslationRendered("row", "new result");
         assertEquals("new result", TranslationCache.get().get("new"));
     }
 
@@ -61,9 +63,11 @@ public class TranslationResultOwnershipTest {
     @Test public void nativeRenderRejectionInvalidatesOnlyTheMatchingCompletedTranslation() {
         StateStore.Entry entry = store.obtain("row", "hash");
         bridge.onTranslateResult(store.begin(entry), true, "译文", null);
+        assertNull("A result rejected before native conversion must not be cached",
+                TranslationCache.get().get("hash"));
         bridge.onTranslationRenderRejected("row", "outdated result");
         assertEquals(StateStore.Status.TRANSLATED, entry.status);
-        assertEquals("译文", TranslationCache.get().get("hash"));
+        assertNull(TranslationCache.get().get("hash"));
         bridge.onTranslationRenderRejected("row", "译文");
         assertEquals(StateStore.Status.FAILED, entry.status);
         assertNull(entry.translatedText);
