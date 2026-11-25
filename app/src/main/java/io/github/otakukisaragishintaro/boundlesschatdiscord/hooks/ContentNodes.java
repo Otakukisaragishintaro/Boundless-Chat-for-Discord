@@ -712,7 +712,7 @@ public final class ContentNodes {
                     boolean nativeBreakParagraph = boundaryLineCounts != null
                             && i < boundaryLineCounts.size() && boundaryLineCounts.get(i) > 0;
                     boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, i)
-                            && (groups.get(i).equals(groups.get(i - 1))
+                            && ((i > 0 && groups.get(i).equals(groups.get(i - 1)))
                             || isListPrefix(listPrefixes, i));
                     if (connectedLineBoundary || hardLineBoundary
                             || missingListParagraph || nativeBreakParagraph) {
