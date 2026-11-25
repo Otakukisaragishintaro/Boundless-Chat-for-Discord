@@ -366,7 +366,7 @@ public final class MessageHooks {
                                         + " sourceClass="
                                         + (source == null ? "null" : source.getClass().getName()));
                         ProjectLog.infoOnce("message.textConversion.callers",
-                                "message.textConversion Discord callers="
+                                () -> "message.textConversion Discord callers="
                                         + discordCallers());
                         boolean replyTranslationApplied = false;
                         boolean translationReplacementApplied = false;
