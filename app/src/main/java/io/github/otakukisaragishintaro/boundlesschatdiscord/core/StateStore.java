@@ -15,6 +15,8 @@ public final class StateStore {
         public volatile String translatedText;
         public volatile Status status = Status.IDLE;
         public volatile boolean showingOriginal;
+        /** True only when this message is rendered without its original rich formatting. */
+        public volatile boolean renderDegraded;
         public volatile String lastError;
         private TranslationTaskId task;
         private Source source;
@@ -119,6 +121,7 @@ public final class StateStore {
             entry.lastError = null;
             entry.status = Status.TRANSLATED;
             entry.showingOriginal = false;
+            entry.renderDegraded = false;
         }
         return true;
     }
@@ -129,6 +132,7 @@ public final class StateStore {
         entry.translatedText = translated;
         entry.status = Status.TRANSLATED;
         entry.showingOriginal = false;
+        entry.renderDegraded = false;
         return true;
     }
 
