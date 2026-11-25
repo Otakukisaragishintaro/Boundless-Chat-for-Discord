@@ -405,6 +405,8 @@ public class TranslationScopeBridgeTest {
         assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslateResult(task, true, "current generation", null);
         assertEquals(StateStore.Status.TRANSLATED, current.status);
+        assertEquals("retained API result", TranslationCache.get().get(hash));
+        bridge.onTranslationRendered(ROW, "current generation");
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
 
