@@ -124,10 +124,12 @@ public class RetainedNodeMarkersTest {
         assertNull(Segments.plainTextViolation("你好<keep1/>世界", "hello<keep1/>world"));
     }
 
-    @Test public void reservedPrefixAssembledAcrossStyleTagsIsRejected() {
-        assertFalse(RetainedNodeMarkers.matchesExpected("<x1><ke</x1><x2>ep9/></x2>", Collections.emptyList()));
-        assertFalse(RetainedNodeMarkers.matchesExpected("<x1><ke</x1><x2>ep9</x2>", Collections.emptyList()));
-        assertFalse(RetainedNodeMarkers.matchesSource("正文", "<x1><ke</x1><x2>ep9/></x2>"));
+    @Test public void incompleteAngleTextAndEmoticonsAreNotInternalMarkers() {
+        for (String value : new String[]{"<3", ">.<", "<.<", ">_<", "<keep", "<keep1>", "</keep1",
+                "<x1", "<x1 ", "literal <tag"}) {
+            assertTrue(value, RetainedNodeMarkers.matchesExpected(value, Collections.emptyList()));
+        }
+        assertTrue(RetainedNodeMarkers.matchesSource("普通文本", "<x1><ke</x1><x2>ep9/></x2>"));
         assertTrue(RetainedNodeMarkers.matchesSource("<x1>正文</x1><keep1/>", "<x1>Body</x1><keep1/>"));
     }
 
@@ -139,10 +141,12 @@ public class RetainedNodeMarkersTest {
             String prompt = Config.PROTOCOL_OPENAI_COMPATIBLE.equals(protocol)
                     ? body.getJSONArray("messages").getJSONObject(0).getString("content")
                     : body.getString(Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol) ? "instructions" : "system");
-            assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE, prompt);
-            assertTrue(prompt.contains("<keep1/>"));
+            assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE + "\n\n"
+                    + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG), prompt);
+            assertTrue(prompt.contains("<keepN/>"));
+            assertFalse(prompt.contains("⟦BCP"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("original position and order"));
+            assertTrue(prompt.contains("same order"));
         }
     }
 }
