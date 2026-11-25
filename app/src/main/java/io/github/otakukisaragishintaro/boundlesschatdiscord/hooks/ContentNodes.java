@@ -1151,8 +1151,14 @@ public final class ContentNodes {
         int separatorNewlines = w.separatorNewlines;
         // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
         // Do not turn the latter into a line boundary or list lines get merged with following body text.
+        boolean sameListDepthAsPrevious = !w.plan.boundaries.isEmpty()
+                && w.plan.boundaries.get(w.plan.boundaries.size() - 1).listDepth == w.listLevel;
+        // ITEM_START is a connected line boundary only between items at the same
+        // list depth. Entering or leaving a list is a paragraph/group boundary,
+        // not a continuation of the adjacent root/container text.
+        boolean listItemLineBoundary = w.forceLineBoundary && sameListDepthAsPrevious;
         boolean lineBoundary = separatorNewlines < 2
-                && (w.forceLineBoundary || w.headingBreaks > 0
+                && (listItemLineBoundary || w.headingBreaks > 0
                 || (!w.forceNewGroup && separatorNewlines == 1));
         if (w.forceNewGroup) {
             w.group++;
