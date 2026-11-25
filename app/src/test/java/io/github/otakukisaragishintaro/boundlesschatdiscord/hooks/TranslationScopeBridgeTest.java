@@ -480,7 +480,7 @@ public class TranslationScopeBridgeTest {
         bridge.onTranslationRendered(ROW, "completed after display-only edit");
         assertNull("text conversion alone must not persist", TranslationCache.get().get("hash"));
         bridge.onMessageRenderCompleted(ROW, false);
-        assertNull("detached message views must not commit pending cache", TranslationCache.get().get(hash));
+        assertNull("detached message views must not commit pending cache", TranslationCache.get().get("hash"));
         bridge.onMessageRenderCompleted(ROW, true);
         assertEquals("completed after display-only edit", TranslationCache.get().get("hash"));
     }
