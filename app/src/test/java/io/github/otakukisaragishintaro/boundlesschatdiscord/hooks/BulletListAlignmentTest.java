@@ -360,7 +360,7 @@ public class BulletListAlignmentTest {
         assertSame(blank, out.get(1));
         assertEquals("之后", ((TextContentNode) out.get(2)).getContent());
         assertEquals("\n• \n  <x1>阅读</x1>\n\n<x2>1. 指南</x2>  \n• <x3>接着</x3>"
-                + " 1. 字面编号\n\n之后", extracted(out));
+                + " 1. 字面编号\n\n<x4>之后</x4>", extracted(out));
     }
 
     @Test
