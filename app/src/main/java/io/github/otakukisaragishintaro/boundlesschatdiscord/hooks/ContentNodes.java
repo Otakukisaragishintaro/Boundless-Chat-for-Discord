@@ -223,7 +223,7 @@ public final class ContentNodes {
         if (targetCount == 0) {
             throw reject(RejectionReason.NO_TRANSLATABLE_SEGMENTS);
         }
-        // 锚点必须按原数量及顺序出现；各间隔只执行所属结构的唯一切分规则。
+        // 富文本回填按捕获顺序对齐结构锚点；keep 身份与数量已由请求校验，换序时由纯文本路径按译文位置恢复。
         if (Segments.hasSegmentMarkers(translated)) {
             throw reject(RejectionReason.SEGMENT_MARKER);
         }
