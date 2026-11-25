@@ -101,7 +101,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         String previousRequestId = ProjectLog.beginRequest();
         try {
             String translated = translateWithRequestContext(text, logFailureDiagnostics);
-            if (logFailureDiagnostics) {
+            if (logFailureDiagnostics && ProjectLog.isEnabled()) {
                 // Full bounded content previews are emitted only when the user's project-log
                 // switch is enabled; each side gets its own diagnostic record.
                 ProjectLog.info("translation.content type=source chars=" + codePointLength(text)
@@ -323,7 +323,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     ? ((TranslationException) e).httpStatus() : 0;
             String detail = e instanceof TranslationException
                     ? safeDiagnosticDetail(e.getMessage()) : e.getClass().getSimpleName();
-            if (logFailureDiagnostics) {
+            if (logFailureDiagnostics && ProjectLog.isEnabled()) {
                 ProjectLog.warn("translation.failure stage=" + failureStage
                         + " errorClass=" + e.getClass().getSimpleName()
                         + " errorKind=" + kind
