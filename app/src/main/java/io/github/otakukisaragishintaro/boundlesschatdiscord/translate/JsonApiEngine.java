@@ -297,8 +297,11 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 throw new TranslationException(TranslationException.Kind.EMPTY, "原文为空，无需翻译");
             }
             Http.Headers headers = validateConfig(cfg);
+            StructuredTranslation.Source structuredSource = structuredSegments
+                    ? StructuredTranslation.split(text) : null;
+            String providerInput = structuredSource == null ? text : structuredSource.requestJson;
             failureStage = "http_response_decode";
-            Http.Response response = requestOnce(text, request, headers,
+            Http.Response response = requestOnce(providerInput, request, headers,
                     structuredSegments ? STRUCTURED_SEGMENT_INSTRUCTIONS : null);
             failureStage = "translation_validation";
             diagnosticTranslated = response.body;
@@ -312,7 +315,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 // The wrapper is transport framing. Decode it before parsing the JSON segment
                 // envelope; marker positions are then rebuilt from the source, never the model.
                 translated = Segments.stripOuterResponseWrapper(translated, text);
-                translated = StructuredTranslation.split(text).restore(translated);
+                translated = structuredSource.restore(translated);
             }
             if (validateTranslation) {
                 // Optional normalization for ordinary text responses.
