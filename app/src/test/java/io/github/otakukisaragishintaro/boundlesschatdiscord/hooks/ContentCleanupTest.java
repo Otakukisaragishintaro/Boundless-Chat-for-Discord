@@ -309,7 +309,7 @@ public class ContentCleanupTest {
     }
 
     private static void rejectExtra(ContentTree tree, String translated, int expected, int actual) {
-        ContentNodes.Rejection failure = reject(tree, translated, ContentNodes.RejectionReason.PARAGRAPH_EXTRA);
+        ContentNodes.Rejection failure = reject(tree, translated, ContentNodes.RejectionReason.UNASSIGNED_TEXT);
         assertEquals(expected, failure.expected);
         assertEquals(actual, failure.actual);
     }
