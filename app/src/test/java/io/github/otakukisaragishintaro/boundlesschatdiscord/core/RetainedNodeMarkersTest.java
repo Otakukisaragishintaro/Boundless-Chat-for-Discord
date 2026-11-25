@@ -175,10 +175,11 @@ public class RetainedNodeMarkersTest {
             assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE + "\n\n"
                     + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG), prompt);
             assertTrue(prompt.contains("<keepN/>"));
+            assertTrue(prompt.contains("⟦BC_TOKEN_N⟧"));
             assertFalse(prompt.contains("⟦BCP"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("exact original sequence"));
-            assertFalse(prompt.contains("original relative order"));
+            assertTrue(prompt.contains("may move"));
+            assertTrue(prompt.contains("original order"));
         }
     }
 }
