@@ -65,13 +65,15 @@ public final class Protocols {
     public static String protectionPromptFor(String targetLanguage) {
         String language = targetLanguage == null || targetLanguage.trim().isEmpty()
                 ? Config.DEF_TARGET_LANG : targetLanguage.trim();
-        return "When translating into " + language + ", every <keepN/> token is an "
-                + "opaque, immovable placeholder for source content. Do not translate, "
-                + "interpret, copy from instructions, or create these tokens. Preserve each "
-                + "token from the source exactly once and in its exact original sequence. "
-                + "Translate the text around each token without moving the token to another "
-                + "source item or across its neighboring content. Never omit, add, rename, "
-                + "duplicate, split, or reorder a token. Output only the translated source.";
+        return "When translating into " + language + ", translate the complete text as one "
+                + "coherent passage and use the full context to produce natural target-language "
+                + "word order. Each ⟦BC_TOKEN_N⟧ token is an opaque placeholder for exact source "
+                + "content: preserve every one exactly once and unchanged, but you may move it "
+                + "to the grammatically natural position required by the translation. Keep each "
+                + "token attached to the content it represents. Never translate, omit, invent, "
+                + "rename, duplicate, split, or alter a token. The separate <keepN/> markers are "
+                + "structural anchors: preserve each exactly once and in its original order; "
+                + "do not move them. Output only the translated source.";
     }
 
     private static final String SUFFIX_CHAT_COMPLETIONS = "/chat/completions";
@@ -111,15 +113,6 @@ public final class Protocols {
                                      boolean streaming, boolean protectionPromptEnabled,
                                      String targetLanguage)
             throws TranslationException {
-        return requestBody(protocol, text, systemPrompt, model, streaming,
-                protectionPromptEnabled, targetLanguage, null);
-    }
-
-    public static String requestBody(String protocol, String text,
-                                     @Nullable String systemPrompt, String model,
-                                     boolean streaming, boolean protectionPromptEnabled,
-                                     String targetLanguage, @Nullable String additionalInstructions)
-            throws TranslationException {
         if (text == null || text.trim().isEmpty()) {
             throw new TranslationException(TranslationException.Kind.EMPTY, "原文为空，无需翻译");
         }
@@ -130,14 +123,8 @@ public final class Protocols {
         }
         String wrapped = WRAPPER_OPEN + text + WRAPPER_CLOSE;
         String prompt = systemPrompt.trim() + "\n\n" + WRAPPER_RULE;
-        // Structured segment mode does not expose marker tokens to the model; the
-        // structured instructions replace the ordinary marker-copying prompt for that request.
-        if (protectionPromptEnabled
-                && (additionalInstructions == null || additionalInstructions.trim().isEmpty())) {
+        if (protectionPromptEnabled) {
             prompt += "\n\n" + protectionPromptFor(targetLanguage);
-        }
-        if (additionalInstructions != null && !additionalInstructions.trim().isEmpty()) {
-            prompt += "\n\n" + additionalInstructions.trim();
         }
         try {
             JSONObject body = new JSONObject();
