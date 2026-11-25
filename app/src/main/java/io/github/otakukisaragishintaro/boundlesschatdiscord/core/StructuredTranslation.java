@@ -32,34 +32,38 @@ public final class StructuredTranslation {
         }
 
         public String restore(String responseJson) throws TranslationException {
+            return restore(responseJson, 0);
+        }
+
+        public String restore(String responseJson, int httpStatus) throws TranslationException {
             try {
                 JSONObject root = new JSONObject(responseJson);
                 if (root.length() != 1 || !root.has("segments")) {
-                    throw invalid("返回对象包含未知字段");
+                    throw invalid("返回对象包含未知字段", httpStatus);
                 }
                 JSONArray returned = root.optJSONArray("segments");
                 if (returned == null || returned.length() != ids.size()) {
-                    throw invalid("返回片段数量不匹配");
+                    throw invalid("返回片段数量不匹配", httpStatus);
                 }
                 Map<String, String> translated = new HashMap<>();
                 for (int i = 0; i < returned.length(); i++) {
                     JSONObject item = returned.optJSONObject(i);
                     if (item == null || item.length() != 2
                             || !item.has("id") || !item.has("text")) {
-                        throw invalid("返回片段字段不符合要求");
+                        throw invalid("返回片段字段不符合要求", httpStatus);
                     }
                     Object idValue = item.opt("id");
                     Object textValue = item.opt("text");
                     if (!(idValue instanceof String) || !(textValue instanceof String)) {
-                        throw invalid("返回片段缺少字符串 id 或 text");
+                        throw invalid("返回片段缺少字符串 id 或 text", httpStatus);
                     }
                     String id = (String) idValue;
                     if (!ids.contains(id) || translated.put(id, (String) textValue) != null) {
-                        throw invalid("返回片段 id 未知或重复");
+                        throw invalid("返回片段 id 未知或重复", httpStatus);
                     }
                 }
                 if (translated.size() != ids.size()) {
-                    throw invalid("返回片段 id 不完整");
+                    throw invalid("返回片段 id 不完整", httpStatus);
                 }
                 StringBuilder out = new StringBuilder();
                 for (int i = 0; i < ids.size(); i++) {
@@ -68,7 +72,7 @@ public final class StructuredTranslation {
                 }
                 return out.toString();
             } catch (JSONException failure) {
-                throw invalid("返回内容不是合法 JSON");
+                throw invalid("返回内容不是合法 JSON", httpStatus);
             }
         }
     }
@@ -114,8 +118,12 @@ public final class StructuredTranslation {
     }
 
     private static TranslationException invalid(String detail) {
+        return invalid(detail, 0);
+    }
+
+    private static TranslationException invalid(String detail, int httpStatus) {
         return new TranslationException(TranslationException.Kind.PARSE,
                 TranslationException.Reason.TRANSLATION_INVALID,
-                "结构化片段校验失败：" + detail);
+                "结构化片段校验失败：" + detail, httpStatus, null);
     }
 }
