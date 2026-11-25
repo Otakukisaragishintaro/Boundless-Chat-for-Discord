@@ -283,6 +283,10 @@ public final class InlineIconSpan extends ImageSpan {
         startSpin();
     }
 
+    void ownText(android.text.Spannable text, Object clickSpan) {
+        ownText(text, clickSpan, null);
+    }
+
     void ownText(android.text.Spannable text, Object clickSpan, @Nullable Object warningClickSpan) {
         this.clickSpan = clickSpan;
         this.warningClickSpan = warningClickSpan;
