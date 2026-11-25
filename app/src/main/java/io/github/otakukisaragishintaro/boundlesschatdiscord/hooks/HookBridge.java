@@ -512,14 +512,28 @@ public final class HookBridge {
             return;
         }
         if (success) {
-            if (resultConfig.cacheEnabled) {
-                ProjectLog.info("translation result accepted; persistent cache write requested");
-                TranslationCache.get().put(task.contentHash, translated);
-            } else {
-                ProjectLog.info("translation result accepted; cache skipped reason=disabled");
-            }
+            ProjectLog.info("translation result accepted; cache pending native display confirmation");
         }
         refreshTranslation(task.messageId);
+    }
+
+    /**
+     * Persist only after Discord's native text conversion has returned the translated
+     * content successfully. Receiving an API result or queuing a rerender is not enough.
+     */
+    void onTranslationRendered(String messageId, String translated) {
+        StateStore.Entry entry = StateStore.get().peek(messageId);
+        if (entry == null || entry.status != StateStore.Status.TRANSLATED
+                || !translated.equals(entry.translatedText)) {
+            ProjectLog.info("local translation cache write skipped reason=render_state_changed");
+            return;
+        }
+        if (!config.cacheEnabled) {
+            ProjectLog.info("local translation cache write skipped reason=disabled");
+            return;
+        }
+        ProjectLog.info("native translated content rendered; persistent cache write requested");
+        TranslationCache.get().put(entry.contentHash, translated);
     }
 
     /** A segment update also refreshes its card's aggregate progress/error icon. */
