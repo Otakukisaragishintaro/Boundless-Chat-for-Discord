@@ -561,7 +561,7 @@ public class SourceNewlineAlignmentTest {
     }
 
     private static ContentTree compiled(List<?> nodes) {
-        ContentTree tree = ContentTree.compile(nodes);
+        ContentTree tree = ContentTree.compileForTranslation(nodes);
         assertNotNull("valid synthetic fixture must compile", tree);
         return tree;
     }
@@ -570,7 +570,7 @@ public class SourceNewlineAlignmentTest {
         TextExtractor.Result result = TextExtractor.extractTree(tree);
         assertNotNull(result);
         assertEquals(tree.segmentCount, result.segmentCount);
-        return result.text;
+        return result.requestText;
     }
 
     private static List<Object> replaced(ContentTree tree, String translated) {
