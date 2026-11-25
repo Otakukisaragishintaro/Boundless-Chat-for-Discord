@@ -531,7 +531,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(new ParagraphContentNode(list(first)),
                 new TextContentNode("\n\n"), last);
 
-        assertNull(ContentPlanTestSupport.replace(nodes, "第一\n\n<x1>最后</x1>"));
+        assertNull(ContentPlanTestSupport.replace(nodes, "第一\n\n最后"));
         assertEquals("first", first.getContent());
         assertEquals("last", ((TextContentNode) last.getContent().get(0)).getContent());
     }
@@ -665,7 +665,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(new TextContentNode(
                 "hello\n\nhttps://gofile.io/d/rfh2yimO\n\nworld"));
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "你好\n\nhttps://gofile.io/d/rfh2yimO\n\n<x1>世界</x1>");
+                "你好\n\nhttps://gofile.io/d/rfh2yimO\n\n世界");
 
         assertNotNull(out);
         assertEquals("URL 块逐字符保留，段落结构不变",
@@ -1000,7 +1000,7 @@ public class ContentNodesTest {
                 new TextContentNode("world"));
 
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "你好\n\n<x1>世界</x1>");
+                "你好\n\n世界");
 
         assertNotNull(out);
         assertEquals(3, out.size());
@@ -1030,7 +1030,7 @@ public class ContentNodesTest {
         // 分隔符来自原节点，不是模型输出。
         List<Object> nodes = list(new TextContentNode("hello\n\nworld"));
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "  你好 \n\n <x1>世界</x1>  ");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "  你好 \n\n 世界  ");
 
         assertNotNull(out);
         assertEquals("你好\n\n世界", ((TextContentNode) out.get(0)).getContent());
@@ -1154,7 +1154,7 @@ public class ContentNodesTest {
                 new TextContentNode("second para"));
 
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "<x1>加粗</x1> 尾巴\n\n<x2>第二段</x2>");
+                "<x1>加粗</x1> 尾巴\n\n第二段");
 
         assertNotNull(out);
         assertEquals(4, out.size());
@@ -1230,7 +1230,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(new TextContentNode("hello"), emoji,
                 new NewLineContentNode(), tail);
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好<keep1/>\n<x1>再见</x1>");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好<keep1/>\n再见");
 
         assertNotNull(out);
         assertEquals(4, out.size());
