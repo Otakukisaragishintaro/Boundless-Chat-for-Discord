@@ -36,6 +36,10 @@ public class RetainedNodeMarkersTest {
         assertTrue(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", source));
         assertFalse(RetainedNodeMarkers.matchesSource("运行现在", source));
         assertFalse(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", "run<keep1>now"));
+        assertTrue("native identity set survives translation reordering",
+                RetainedNodeMarkers.matchesSource(
+                        "第二项<keep2/>，第一项<keep1/>",
+                        "first<keep1/> then second<keep2/>"));
         assertNull(Segments.plainTextViolation("运行<keep1/>现在", source));
         assertEquals("保留节点定位标记无效", Segments.plainTextViolation("运行现在", source));
         assertEquals("保留节点定位标记无效", Segments.plainTextViolation("正文<keep1/>", "plain"));
