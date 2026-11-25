@@ -117,8 +117,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
         java.util.List<String> separators = new java.util.ArrayList<>();
         if (!cfg.experimentalLongMessageChunking || requestText == null
                 || requestText.length() <= cfg.experimentalLongMessageThreshold) {
-            return protection.restore(executeSingleRequestPreservingParagraphs(
-                    requestText, logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics,
+                    !logFailureDiagnostics).translated);
         }
         splitParagraphs(requestText, paragraphs, separators);
 
@@ -146,15 +146,13 @@ public final class JsonApiEngine implements Scheduler.Engine {
                 + " requests=" + groups.chunks.size());
         for (int i = 0; i < groups.chunks.size(); i++) {
             String group = groups.chunks.get(i);
-            DiscordTokenMarkers.Protection separatorProtection =
-                    DiscordTokenMarkers.protectBlankLineSeparators(group);
             ProjectLog.info("translation.chunking request index=" + (i + 1)
                     + " sourceChars=" + group.length()
                     + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
             try {
-                String translated = execute(separatorProtection.text, true, logFailureDiagnostics,
+                String translated = execute(group, true, logFailureDiagnostics,
                         !logFailureDiagnostics).translated;
-                combined.append(separatorProtection.restore(translated));
+                combined.append(translated);
             } catch (Exception failure) {
                 ProjectLog.warn("translation.chunking failed index=" + (i + 1)
                         + " errorClass=" + failure.getClass().getSimpleName()
@@ -171,16 +169,6 @@ public final class JsonApiEngine implements Scheduler.Engine {
         ProjectLog.info("translation.chunking complete chunks=" + groups.chunks.size()
                 + " protectedDiscordTokens=" + protection.tokenCount());
         return protection.restore(combined.toString());
-    }
-
-    /** Preserve every source blank-line boundary in both normal and chunked requests. */
-    private Exchange executeSingleRequestPreservingParagraphs(
-            String source, boolean logFailureDiagnostics) throws Exception {
-        DiscordTokenMarkers.Protection separators =
-                DiscordTokenMarkers.protectBlankLineSeparators(source);
-        Exchange exchange = execute(separators.text, true, logFailureDiagnostics,
-                !logFailureDiagnostics);
-        return new Exchange(separators.restore(exchange.translated), exchange.httpStatus);
     }
 
     /** Split using the same whitespace-aware blank-line rules as Discord node alignment. */
