@@ -150,7 +150,7 @@ public class OpaqueNodeTranslationTest {
         items.add(list(channel, new TextContentNode("read the guide")));
         BulletListContentNode original = new BulletListContentNode(null, false, items);
 
-        List<Object> out = ContentPlanTestSupport.replace(list(original), "<keep1/>阅读指南");
+        List<Object> out = ContentPlanTestSupport.replace(list(original), "<keep1/><x1>阅读指南</x1>");
 
         assertNotNull(out);
         BulletListContentNode bullets = (BulletListContentNode) out.get(0);
