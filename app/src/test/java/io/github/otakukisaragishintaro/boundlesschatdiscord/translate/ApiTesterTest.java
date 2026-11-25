@@ -83,12 +83,8 @@ public class ApiTesterTest {
     @Test
     public void translationTestAppliesDiscordTokenProtectionAndRestoresMention() throws Exception {
         String mention = "<@285191197662904320>";
-        org.json.JSONArray segments = new org.json.JSONArray();
-        segments.put(new org.json.JSONObject().put("id", "s0").put("text", "你好 "));
-        segments.put(new org.json.JSONObject().put("id", "s1").put("text", ""));
-        FakeConnection connection = successfulConnection("<translate>"
-                + new org.json.JSONObject().put("segments", segments).toString()
-                + "</translate>");
+        FakeConnection connection = successfulConnection(
+                "<translate>你好 ⟦BC_TOKEN_1⟧</translate>");
         ApiTester.Result result = call(url -> connection,
                 "hello " + mention).call();
         assertTrue(result.ok);
