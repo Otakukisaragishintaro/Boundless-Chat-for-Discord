@@ -27,8 +27,39 @@ public class RetainedNodeMarkersTest {
         assertFalse(RetainedNodeMarkers.matchesSource("运行现在", source));
         assertFalse(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", "run<keep1>now"));
         assertNull(Segments.plainTextViolation("运行<keep1/>现在", source));
-        assertEquals("保留节点定位标记无效", Segments.plainTextViolation("运行现在", source));
-        assertEquals("保留节点定位标记无效", Segments.plainTextViolation("正文<keep1/>", "plain"));
+        assertTrue(Segments.plainTextViolation("运行现在", source).startsWith("保留节点定位标记无效；markerDiagnostic={"));
+        assertTrue(Segments.plainTextViolation("正文<keep1/>", "plain").startsWith("保留节点定位标记无效；markerDiagnostic={"));
+    }
+
+
+    @Test public void mismatchDiagnosticIdentifiesOrderMissingDuplicatesAndMalformedTokens() {
+        String source = "A<keep1/>B<keep2/>C<keep3/>D";
+        String translated = "甲<keep2/>乙<keep1/>丙<keep4/><keep4/><keep5 >";
+        String diagnostic = RetainedNodeMarkers.mismatchDiagnostic(translated, source);
+        assertTrue(diagnostic, diagnostic.contains("type=MISSING_AND_UNEXPECTED"));
+        assertTrue(diagnostic, diagnostic.contains("expectedCount=3"));
+        assertTrue(diagnostic, diagnostic.contains("actualCount=4"));
+        assertTrue(diagnostic, diagnostic.contains("firstMismatchIndex=1"));
+        assertTrue(diagnostic, diagnostic.contains("expectedAt=<keep1/>"));
+        assertTrue(diagnostic, diagnostic.contains("actualAt=<keep2/>"));
+        assertTrue(diagnostic, diagnostic.contains("expectedSequence=[<keep1/>,<keep2/>,<keep3/>]"));
+        assertTrue(diagnostic, diagnostic.contains("actualSequence=[<keep2/>,<keep1/>,<keep4/>,<keep4/>]"));
+        assertTrue(diagnostic, diagnostic.contains("missing=[<keep3/>x1]"));
+        assertTrue(diagnostic, diagnostic.contains("unexpected=[<keep4/>x2]"));
+        assertTrue(diagnostic, diagnostic.contains("duplicated=[<keep4/>x2]"));
+        assertTrue(diagnostic, diagnostic.contains("malformed=[<keep5 >]"));
+    }
+
+    @Test public void mismatchDiagnosticDistinguishesPureMissingAndPureReordering() {
+        String missing = RetainedNodeMarkers.mismatchDiagnostic(
+                "译文<keep1/>", "source<keep1/><keep2/>");
+        assertTrue(missing, missing.contains("type=MISSING"));
+        assertTrue(missing, missing.contains("firstMismatchIndex=2"));
+        String reordered = RetainedNodeMarkers.mismatchDiagnostic(
+                "<keep2/><keep1/>", "<keep1/><keep2/>");
+        assertTrue(reordered, reordered.contains("type=ORDER"));
+        assertTrue(reordered, reordered.contains("missing=[]"));
+        assertTrue(reordered, reordered.contains("unexpected=[]"));
     }
 
     @Test public void markerCharactersCannotMakeShortTextTranslatable() {
