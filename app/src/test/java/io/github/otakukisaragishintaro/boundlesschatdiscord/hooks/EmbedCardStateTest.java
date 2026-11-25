@@ -379,9 +379,15 @@ public class EmbedCardStateTest {
             assertNull("Embed API result is pending native display", TranslationCache.get().get(entry.contentHash));
             bridge.onTranslationRendered(keys.get(i), entry.translatedText);
             assertNull("cache waits for the enclosing row render", TranslationCache.get().get(entry.contentHash));
-            bridge.onMessageRenderCompleted(ROW, false);
-            assertNull("detached message views must not commit pending cache", TranslationCache.get().get(entry.contentHash));
-            onMessageRenderCompleted(ROW, true);
+        }
+        bridge.onMessageRenderCompleted(ROW, false);
+        for (int i : new int[]{1, 2}) {
+            assertNull("detached message views must not commit pending cache",
+                    TranslationCache.get().get(store.peek(keys.get(i)).contentHash));
+        }
+        bridge.onMessageRenderCompleted(ROW, true);
+        for (int i : new int[]{1, 2}) {
+            StateStore.Entry entry = store.peek(keys.get(i));
             assertEquals(entry.translatedText, TranslationCache.get().get(entry.contentHash));
         }
         assertEquals(4, requests.size());
