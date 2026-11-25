@@ -41,7 +41,13 @@ public final class RetainedNodeMarkers {
      * or translated content is included in this diagnostic.
      */
     public static String mismatchDiagnostic(String translated, String source) {
-        List<String> expected = source == null ? new ArrayList<>() : read(source);
+        return mismatchDiagnostic(translated, source == null ? new ArrayList<>() : read(source));
+    }
+
+    /** Same diagnostic when the expected sequence is already available from a native node plan. */
+    public static String mismatchDiagnostic(String translated, List<String> expectedMarkers) {
+        List<String> expected = expectedMarkers == null
+                ? new ArrayList<>() : new ArrayList<>(expectedMarkers);
         List<String> actual = translated == null ? new ArrayList<>() : read(translated);
         int firstMismatch = -1;
         int shared = Math.min(expected.size(), actual.size());
