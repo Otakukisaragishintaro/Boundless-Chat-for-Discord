@@ -136,8 +136,10 @@ public class StructurableTextFactoryTest {
 
         // Rich reconstruction may fail, but the translated body must remain visible.
         Object replacement = planned(original, "第一\n你好<keep1/>");
-        assertTrue(replacement instanceof PrimitiveStructurableText);
-        assertEquals("第一\n你好", ((PrimitiveStructurableText) replacement).getContent());
+        assertTrue(replacement instanceof AnnotatedStructurableText);
+        List<?> flattened = ((AnnotatedStructurableText) replacement).getContent();
+        assertEquals("第一\n你好", ((TextContentNode) flattened.get(0)).getContent());
+        assertSame(emoji, flattened.get(1));
         assertSame(nodes, original.getContent());
         assertSame(emoji, original.getContent().get(2));
         assertEquals("hello", text.getContent());
@@ -151,8 +153,8 @@ public class StructurableTextFactoryTest {
                 list(new TextContentNode("hello"), emoji));
 
         Object replacement = planned(original, "你好<keep1/>");
-        assertTrue(replacement instanceof PrimitiveStructurableText);
-        assertEquals("你好", ((PrimitiveStructurableText) replacement).getContent());
+        assertNull("Protected native nodes must not be discarded when Annotated construction is unavailable",
+                replacement);
         assertSame(emoji, original.getContent().get(1));
     }
 
