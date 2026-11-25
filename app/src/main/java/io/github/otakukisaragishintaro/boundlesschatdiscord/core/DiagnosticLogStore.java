@@ -15,7 +15,7 @@ public final class DiagnosticLogStore {
     private static final String DATABASE_NAME = "boundless_diagnostics.db";
     private static final String TABLE = "diagnostic_logs";
     public static final int MAX_ENTRIES = 5000;
-    public static final int DEFAULT_READ_LIMIT = 500;
+    public static final int DEFAULT_READ_LIMIT = MAX_ENTRIES;
     private static final int MAX_MESSAGE_LENGTH = 4000;
 
     private DiagnosticLogStore() { }
