@@ -185,7 +185,7 @@ public class BoundaryDiagnosticsTest {
     @Test public void listSameLineSlotsKeepCapturedListPathAndDepth() {
         BulletListContentNode list = new BulletListContentNode(null, false,
                 Arrays.asList(Arrays.asList(new TextContentNode("first"), new TextContentNode("second"))));
-        String structure = ambiguous(Arrays.asList(list), "• 译文").structure;
+        String structure = ambiguous(Arrays.asList(list), "• <x1>译文</x1>").structure;
         assertTrue(structure.contains("leftPath=BulletListContentNode"));
         assertTrue(structure.contains("rightListDepth=1"));
         assertTrue(structure.contains("leftGapItemStarts=1"));
@@ -208,21 +208,25 @@ public class BoundaryDiagnosticsTest {
         assertEquals("二", ((TextContentNode) output.get(2)).getContent());
     }
 
-    @Test public void lineCountDiagnosticNamesCapturedHeadingBoundaryWithoutText() {
+    @Test public void structuralMarkerKeepsHeadingBoundaryExplicitWithoutTextInDiagnostics() {
         ContentTree tree = ContentTree.compile(Arrays.asList(
                 new ContentNodesTest.HeadingContentNode(Arrays.asList(new TextContentNode("private-title")), 1),
                 new TextContentNode("private-body")));
         ContentNodes.Rejection rejection = assertThrows(ContentNodes.Rejection.class,
                 () -> ContentNodes.replaceChecked(tree, "私密译文"));
-        assertEquals(ContentNodes.RejectionReason.LINE_COUNT, rejection.reason);
-        assertEquals(2, rejection.expected);
-        assertEquals(1, rejection.actual);
-        assertTrue(rejection.structure.contains("runSlots=2 firstSlot=0 lastSlot=1"));
-        assertTrue(rejection.structure.contains("firstPath=HeadingContentNode"));
-        assertTrue(rejection.structure.contains("lastGapHeadingBreaks=1"));
+        assertEquals(ContentNodes.RejectionReason.STYLE_OPEN, rejection.reason);
+        assertEquals("", rejection.structure);
         assertFalse(rejection.structure.contains("private-"));
         assertFalse(rejection.structure.contains("私密译文"));
-        assertNull(ContentNodes.replacePlanned(tree, "私密译文"));
+
+        List<Object> restored = ContentNodes.replaceChecked(tree,
+                "标题译文<x1>正文译文</x1>");
+        assertNotNull(restored);
+        ContentNodesTest.HeadingContentNode heading =
+                (ContentNodesTest.HeadingContentNode) restored.get(0);
+        assertEquals("标题译文",
+                ((TextContentNode) heading.getContent().get(0)).getContent());
+        assertEquals("正文译文", ((TextContentNode) restored.get(1)).getContent());
     }
 
     @Test public void lineCountLocalRunMapsToGlobalSlotsAfterInlineCodeAnchor() {
