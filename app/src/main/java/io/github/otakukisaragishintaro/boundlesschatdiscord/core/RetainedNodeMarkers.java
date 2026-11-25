@@ -11,7 +11,7 @@ public final class RetainedNodeMarkers {
     private static final Pattern EXACT = Pattern.compile("<keep[1-9][0-9]*/>");
     private static final Pattern STYLE = Pattern.compile("</?x[1-9][0-9]*>");
     private static final Pattern MALFORMED_KEEP = Pattern.compile(
-            "<\\\\s*/?\\\\s*keep[^>\\\\r\\\\n]{0,32}>", Pattern.CASE_INSENSITIVE);
+            "<\\s*/?\\s*keep[^>\\r\\n]{0,32}>", Pattern.CASE_INSENSITIVE);
     private static final int MAX_DIAGNOSTIC_MARKERS = 80;
     private RetainedNodeMarkers() { }
 
