@@ -23,15 +23,15 @@ public final class TextExtractor {
     /** 提取结果。 */
     public static final class Result {
         /**
-         * 统一翻译输入：自然语言、源换行、格式范围与保留叶节点 occurrence 锚点。
+         * 内部规范文本：自然语言、源换行、样式范围与保留叶节点 occurrence 锚点。
          *
-         * <p>它是单链路的正文，也用于语言检测与内容哈希。
+         * <p>用于语言检测与内容哈希，不包含仅供模型对齐的列表/标题边界标记。
          * URL 链接显示文本原样进入请求充当定位标记：模型必须原样保留它，
          * 回填按它切分对齐并删除回显，显示永远用原链接节点。URL 字符
          * 不会损坏，也不会重复显示。</p>
          */
         public final String text;
-        /** Model-facing text with explicit list/heading boundaries; internal identity stays in text. */
+        /** Model-facing text with explicit list/heading boundaries; never use for cache identity. */
         public final String requestText;
         /**
          * 可翻译片段数（来自 ContentTree 捕获的分块，空白块与 URL 块不计）。
