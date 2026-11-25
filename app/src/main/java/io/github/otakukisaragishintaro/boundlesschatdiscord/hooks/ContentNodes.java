@@ -720,7 +720,15 @@ public final class ContentNodes {
             int end = segment + 1;
             while (end < segments) {
                 if (isLineBreakBefore(lineBreakBefore, end)) {
-                    end++;
+                    // A captured source line break connects slots only when this
+                    // translated chunk actually contains a line for the added slot.
+                    // Otherwise the next translated paragraph chunk must consume it.
+                    if (expectedSourceLines(segment, end + 1, sourceLineCounts,
+                            boundaryLineCounts) <= availableLines) {
+                        end++;
+                    } else {
+                        break;
+                    }
                 } else if (chunks.size() < paragraphGroups
                         && isHardBoundaryBefore(hardBoundaries, end)
                         && expectedSourceLines(segment, end + 1, sourceLineCounts,
