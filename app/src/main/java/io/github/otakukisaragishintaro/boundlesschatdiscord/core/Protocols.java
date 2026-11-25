@@ -92,7 +92,7 @@ public final class Protocols {
             count++;
         }
         if (count == 0) return prompt;
-        return prompt + "\\n\\n" + "MANDATORY MARKER MANIFEST FOR THIS REQUEST: "
+        return prompt + "\n\n" + "MANDATORY MARKER MANIFEST FOR THIS REQUEST: "
                 + count + " markers are present, in this exact required order: ["
                 + manifest + "]. The output MUST contain all " + count
                 + " listed markers, each exactly once. This list is an explicit checklist, "
@@ -149,7 +149,7 @@ public final class Protocols {
         String wrapped = WRAPPER_OPEN + text + WRAPPER_CLOSE;
         String prompt = systemPrompt.trim() + "\n\n" + WRAPPER_RULE;
         if (protectionPromptEnabled) {
-            prompt += "\n\n" + protectionPromptFor(targetLanguage);
+            prompt += "\n\n" + protectionPromptFor(targetLanguage, text);
         }
         try {
             JSONObject body = new JSONObject();
