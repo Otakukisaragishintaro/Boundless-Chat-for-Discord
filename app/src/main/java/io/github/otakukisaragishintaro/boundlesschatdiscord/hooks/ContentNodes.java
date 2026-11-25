@@ -660,7 +660,7 @@ public final class ContentNodes {
                 sourceLineCounts, hardBoundaries, null);
     }
 
-    private static List<String> alignSpanToParts(String span, List<Integer> groups,
+    static List<String> alignSpanToParts(String span, List<Integer> groups,
                                          @Nullable List<Boolean> listPrefixes,
                                          @Nullable List<Boolean> lineBreakBefore,
                                          List<Integer> sourceLineCounts,
