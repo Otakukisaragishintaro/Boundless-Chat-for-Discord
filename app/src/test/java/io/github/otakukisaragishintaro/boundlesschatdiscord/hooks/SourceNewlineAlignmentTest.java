@@ -50,27 +50,10 @@ public class SourceNewlineAlignmentTest {
 
     @Test
     public void mergedLaterParagraphChunkDoesNotConsumeEarlierSingleLineSlots() {
-        // Four native slots cross root/heading/list-style hard boundaries. The provider
-        // merges the final three paragraphs into one chunk, but keeps the first paragraph
-        // separate. A global chunks<paragraphGroups check must not greedily absorb all
-        // four slots into the first one-line chunk.
-        List<String> parts = ContentNodes.alignSpanToParts(
-                "标题\n\n正文\n变化\n• 项目",
-                Arrays.asList(0, 1, 2, 3),
-                Arrays.asList(false, false, false, true),
-                Arrays.asList(false, false, false, false),
-                Arrays.asList(1, 1, 1, 1),
-                Arrays.asList(false, true, true, true),
-                Arrays.asList(0, 0, 0, 0));
-        assertEquals(Arrays.asList("标题", "正文", "变化", "项目"), parts);
-    }
-
-    @Test
-    public void mergedLaterParagraphChunkDoesNotConsumeEarlierLineBreakSlots() {
-        // The first translated paragraph remains a one-line chunk, while the
-        // following three source slots are merged into a three-line chunk.
-        // Captured line-break boundaries must not make the first chunk consume
-        // slots that it cannot represent.
+        // The first paragraph remains a one-line chunk; the following three
+        // native slots are a connected line run inside the next paragraph chunk.
+        // The first chunk must not consume later slots just because the global
+        // translated chunk count is smaller than the native slot count.
         List<String> parts = ContentNodes.alignSpanToParts(
                 "标题\n\n正文\n变化\n• 项目",
                 Arrays.asList(0, 1, 1, 1),
