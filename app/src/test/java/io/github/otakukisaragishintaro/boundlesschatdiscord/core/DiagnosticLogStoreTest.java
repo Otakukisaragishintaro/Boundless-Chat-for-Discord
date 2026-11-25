@@ -8,6 +8,11 @@ import org.junit.Test;
 /** Credential redaction is applied before diagnostic records reach persistent storage. */
 public class DiagnosticLogStoreTest {
     @Test
+    public void defaultReadLimitIncludesEveryRetainedDiagnosticEntry() {
+        assertEquals(DiagnosticLogStore.MAX_ENTRIES, DiagnosticLogStore.DEFAULT_READ_LIMIT);
+    }
+
+    @Test
     public void sanitizesBearerApiKeyAndProviderKeyForms() {
         String source = "Authorization: Bearer secret-token api_key=private-value sk-12345678901234567890";
         String result = DiagnosticLogStore.sanitizeMessage(source);
