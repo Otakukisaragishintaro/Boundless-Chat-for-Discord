@@ -44,7 +44,7 @@ public class StateStoreTest {
 
         StateStore.Entry current = store.obtain("row", "new");
         assertNotSame(old, current);
-        assertNull(store.claimCacheCommit("row"));
+        assertTrue(store.claimCacheCommitsForRow("row").isEmpty());
     }
 
     @Test public void rejectedOldContentCannotChangeNewAttempt() {
