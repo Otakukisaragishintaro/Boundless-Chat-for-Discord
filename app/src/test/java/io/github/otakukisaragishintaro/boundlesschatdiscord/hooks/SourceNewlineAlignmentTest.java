@@ -49,6 +49,23 @@ public class SourceNewlineAlignmentTest {
     }
 
     @Test
+    public void mergedLaterParagraphChunkDoesNotConsumeEarlierSingleLineSlots() {
+        // Four native slots cross root/heading/list-style hard boundaries. The provider
+        // merges the final three paragraphs into one chunk, but keeps the first paragraph
+        // separate. A global chunks<paragraphGroups check must not greedily absorb all
+        // four slots into the first one-line chunk.
+        List<String> parts = ContentNodes.alignSpanToParts(
+                "标题\\n\\n正文\\n变化\\n• 项目",
+                Arrays.asList(0, 1, 2, 3),
+                Arrays.asList(false, false, false, true),
+                Arrays.asList(false, false, false, false),
+                Arrays.asList(1, 1, 1, 1),
+                Arrays.asList(false, true, true, true),
+                Arrays.asList(0, 0, 0, 0));
+        assertEquals(Arrays.asList("标题", "正文", "变化", "项目"), parts);
+    }
+
+    @Test
     public void headingThenWhitespaceTextLfThenPlainTextAlignsAsTwoLines() {
         HeadingContentNode heading = new HeadingContentNode(list(text("Lower Rates")), 2);
         TextContentNode lf = text("\n");
