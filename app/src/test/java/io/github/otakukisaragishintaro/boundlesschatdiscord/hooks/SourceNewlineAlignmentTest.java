@@ -73,9 +73,9 @@ public class SourceNewlineAlignmentTest {
         // slots that it cannot represent.
         List<String> parts = ContentNodes.alignSpanToParts(
                 "标题\n\n正文\n变化\n• 项目",
-                Arrays.asList(0, 1, 2, 3),
+                Arrays.asList(0, 1, 1, 1),
                 Arrays.asList(false, false, false, true),
-                Arrays.asList(false, true, true, true),
+                Arrays.asList(false, false, true, true),
                 Arrays.asList(1, 1, 1, 1),
                 Arrays.asList(false, false, false, false),
                 Arrays.asList(0, 0, 0, 0));
