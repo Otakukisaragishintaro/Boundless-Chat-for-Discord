@@ -15,7 +15,7 @@ public class ProtectionPromptConfigTest {
             assertTrue(prompt.contains(language));
             assertTrue(prompt.contains("<keepN/>"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("same order"));
+            assertTrue(prompt.contains("original relative order"));
             assertTrue(prompt.contains("NEVER translate, quote, copy, or output this checklist"));
             assertTrue(prompt.contains("silently compare the translation"));
         }
@@ -32,10 +32,10 @@ public class ProtectionPromptConfigTest {
                     false, false, "日本語");
             String enabledSystem = systemPrompt(protocol, enabled);
             String disabledSystem = systemPrompt(protocol, disabled);
-            assertTrue(enabledSystem.contains("protected marker"));
+            assertTrue(enabledSystem.contains("opaque structural placeholder"));
             assertTrue(enabledSystem.contains("NEVER translate, quote, copy, or output this checklist"));
             assertTrue(enabledSystem.contains("<keepN/>"));
-            assertFalse(disabledSystem.contains("protected marker"));
+            assertFalse(disabledSystem.contains("opaque structural placeholder"));
             assertFalse(disabledSystem.contains("<keepN/>"));
             assertFalse(disabledSystem.contains("PRIVATE VALIDATION CHECKLIST"));
             assertTrue(disabledSystem.contains("Translate only the text between"));
