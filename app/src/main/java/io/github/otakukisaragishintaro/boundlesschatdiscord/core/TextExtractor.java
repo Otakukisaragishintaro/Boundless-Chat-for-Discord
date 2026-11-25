@@ -243,7 +243,7 @@ public final class TextExtractor {
     public static Result extractTree(@Nullable ContentTree tree) {
         if (tree == null) return null;
         StringBuilder out = new StringBuilder();
-        int textNodes = 0, opaque = 0, styleSeq = 0;
+        int textNodes = 0, opaque = 0, styleSeq = 0, segmentIndex = 0;
         java.util.List<String> retainedMarkers = new java.util.ArrayList<>();
         for (ContentTree.Event event : tree.events) {
             if (event.headingBreakBefore) out.append('\n');
@@ -258,7 +258,7 @@ public final class TextExtractor {
                     String text = node.text;
                     if (text == null) break;
                     textNodes++;
-                    if (!event.styled || BlankLines.isBlank(text)) {
+                    if (BlankLines.isBlank(text)) {
                         out.append(text);
                         break;
                     }
@@ -268,11 +268,17 @@ public final class TextExtractor {
                     for (int i = 0; i < node.chunks.size(); i++) {
                         if (i > 0) out.append(node.separators.get(i - 1));
                         String chunk = node.chunks.get(i);
-                        if (!node.translatable.get(i)) out.append(chunk);
-                        else {
-                            styleSeq++;
-                            out.append("<x").append(styleSeq).append('>').append(chunk)
-                                    .append("</x").append(styleSeq).append('>');
+                        if (!node.translatable.get(i)) {
+                            out.append(chunk);
+                        } else {
+                            boolean structuralBoundary = tree.segmentBoundaryBefore.get(segmentIndex++);
+                            if (event.styled || structuralBoundary) {
+                                styleSeq++;
+                                out.append("<x").append(styleSeq).append('>').append(chunk)
+                                        .append("</x").append(styleSeq).append('>');
+                            } else {
+                                out.append(chunk);
+                            }
                         }
                     }
                     out.append(text, tail, text.length());
