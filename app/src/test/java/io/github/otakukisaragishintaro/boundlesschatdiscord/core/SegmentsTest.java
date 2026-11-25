@@ -73,7 +73,7 @@ public class SegmentsTest {
                 false, false, false, false, 0, 1000));
 
         assertTrue(Segments.plainTextViolation("hello", "hello<keep1/>",
-                false, false, true, 0, 1000).contains("missing=[<keep1/>x1]"));
+                false, false, true, false, 0, 1000).contains("missing=[<keep1/>x1]"));
         assertNull(Segments.plainTextViolation("hello", "hello<keep1/>",
                 false, false, false, false, 0, 1000));
     }
