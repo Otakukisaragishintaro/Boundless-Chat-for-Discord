@@ -220,8 +220,10 @@ public class JsonApiEngineTest {
     public void literalDiscordMentionsChannelTokensAndUrlsAreShieldedAndRestored() throws Exception {
         String source = "Please contact <@403924274437685248> and visit "
                 + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
+        // Deliberately return the segment IDs in reverse order. The engine must rebuild
+        // the original source order before the existing marker and placeholder validators run.
         FakeConnection connection = new FakeConnection(structuredChatJson(
-                "s0", "请联系 ", "s1", " 并访问 ", "s2", " ", "s3", " ", "s4", ""));
+                "s4", "", "s3", " ", "s2", " ", "s1", " 并访问 ", "s0", "请联系 "));
         JsonApiEngine engine = new JsonApiEngine(
                 config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
 
