@@ -120,11 +120,12 @@ public final class ContentNodes {
         }
         // 按节点出现的位置分配片段，不能以实例身份为键：共享节点的后一次
         // 空片段会覆盖前一次译文，造成文字全部消失但 emoji 仍保留。
-        Replacement replacement = new Replacement(parts);
+        Replacement replacement = new Replacement(parts, plan.headingBoundaries);
+        replacement.normalizedTranslation = plain;
         List<Object> result = new ArrayList<>(tree.root.children.size());
         for (ContentTree.Node occurrence : tree.root.children) {
             Object rebuilt = rebuild(occurrence, replacement);
-            if (rebuilt != null) result.add(rebuilt);
+            if (occurrence.original == null || rebuilt != null) result.add(rebuilt);
         }
         // 容器复制失败可能丢弃已重建的子节点；不得把其他已清空的文本节点
         // 作为部分成功的结果交给宿主，必须整棵树替换成功。
@@ -144,10 +145,30 @@ public final class ContentNodes {
 
     private static final class Replacement {
         final List<String> parts;
+        final List<Boolean> headingBoundaries;
         int next;
+        int searchOffset;
+        String normalizedTranslation = "";
 
-        Replacement(List<String> parts) {
+        Replacement(List<String> parts, List<Boolean> headingBoundaries) {
             this.parts = parts;
+            this.headingBoundaries = headingBoundaries;
+        }
+
+        boolean isHeadingBoundary(int rightSlot) {
+            return rightSlot >= 0 && rightSlot < headingBoundaries.size()
+                    && Boolean.TRUE.equals(headingBoundaries.get(rightSlot));
+        }
+
+        @Nullable String separatorBetween(String left, String right) {
+            if (left == null || right == null || left.isEmpty() || right.isEmpty()) return null;
+            int leftAt = normalizedTranslation.indexOf(left, searchOffset);
+            if (leftAt < 0) return null;
+            int rightAt = normalizedTranslation.indexOf(right, leftAt + left.length());
+            if (rightAt < 0) return null;
+            searchOffset = rightAt + right.length();
+            String gap = normalizedTranslation.substring(leftAt + left.length(), rightAt);
+            return gap.trim().isEmpty() ? gap : null;
         }
     }
 
@@ -166,7 +187,7 @@ public final class ContentNodes {
                 if (rebuiltChild != child.original) {
                     localChanged = true;
                 }
-                if (rebuiltChild != null) rebuiltChildren.add(rebuiltChild);
+                if (child.original == null || rebuiltChild != null) rebuiltChildren.add(rebuiltChild);
             }
             if (!localChanged && !ContentTree.retainedStructureMatches(occurrence))
                 throw reject(RejectionReason.RETAINED_STRUCTURE_CHANGED);
@@ -189,10 +210,17 @@ public final class ContentNodes {
                 if (BlankLines.isBlank(original)) {
                     int previous = replacement.next - 1;
                     int next = replacement.next;
-                    if (previous >= 0 && next < replacement.parts.size()
-                            && (replacement.parts.get(previous).isEmpty()
-                            || replacement.parts.get(next).isEmpty())) {
-                        return null;
+                    if (previous >= 0 && next < replacement.parts.size()) {
+                        String left = replacement.parts.get(previous);
+                        String right = replacement.parts.get(next);
+                        if (left.isEmpty() || right.isEmpty()) return null;
+                        String separator = replacement.separatorBetween(left, right);
+                        if (separator != null && !separator.contains("\n\n")) {
+                            if (replacement.isHeadingBoundary(next) || separator.isEmpty()) return null;
+                            Object adjusted = createTextNode(node, separator);
+                            if (adjusted == null) throw reject(RejectionReason.TEXT_CONSTRUCTOR);
+                            return adjusted;
+                        }
                     }
                 }
                 return node;
@@ -254,7 +282,7 @@ public final class ContentNodes {
             if (nc != c.original) {
                 localChanged = true;
             }
-            newChildren.add(nc);
+            if (c.original == null || nc != null) newChildren.add(nc);
         }
         if (!localChanged) {
             if (!ContentTree.retainedStructureMatches(occurrence))
@@ -565,7 +593,7 @@ public final class ContentNodes {
         try {
             return alignSpanToParts(span, plan.groupIds.subList(start, end),
                     plan.listPrefixesIn(start, end), plan.lineBreakFlagsIn(start, end),
-                    plan.sourceLinesIn(start, end));
+                    plan.sourceLinesIn(start, end), plan.hardBoundariesIn(start, end));
         } catch (Rejection rejection) {
             if (rejection.reason == RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS) {
                 int right = start + rejection.boundary;
@@ -612,12 +640,41 @@ public final class ContentNodes {
                                          @Nullable List<Boolean> listPrefixes,
                                          @Nullable List<Boolean> lineBreakBefore,
                                          List<Integer> sourceLineCounts) {
+        return alignSpanToParts(span, groups, listPrefixes, lineBreakBefore,
+                sourceLineCounts, null);
+    }
+
+    private static List<String> alignSpanToParts(String span, List<Integer> groups,
+                                         @Nullable List<Boolean> listPrefixes,
+                                         @Nullable List<Boolean> lineBreakBefore,
+                                         List<Integer> sourceLineCounts,
+                                         @Nullable List<Boolean> hardBoundaries) {
         int segments = groups.size();
         if (segments == 0) {
             if (!span.trim().isEmpty()) throw reject(RejectionReason.UNASSIGNED_TEXT);
             return new ArrayList<>();
         }
         List<String> chunks = translatableChunks(span);
+        for (String chunk : chunks) {
+            if (TextExtractor.isUrlLike(chunk)) {
+                throw new Rejection(RejectionReason.UNASSIGNED_TEXT, segments, chunks.size());
+            }
+        }
+        int paragraphGroups = 0;
+        for (int i = 0; i < segments; i++) {
+            if (i == 0 || !groups.get(i).equals(groups.get(i - 1))) paragraphGroups++;
+        }
+        boolean hasHardBoundary = false;
+        boolean hasLineBoundary = false;
+        if (hardBoundaries != null) {
+            for (Boolean boundary : hardBoundaries) hasHardBoundary |= Boolean.TRUE.equals(boundary);
+        }
+        if (lineBreakBefore != null) {
+            for (Boolean boundary : lineBreakBefore) hasLineBoundary |= Boolean.TRUE.equals(boundary);
+        }
+        if (chunks.size() < paragraphGroups && hasHardBoundary) {
+            throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
+        }
         List<String> parts = new ArrayList<>(
                 java.util.Collections.nCopies(segments, ""));
         int segment = 0;
@@ -629,7 +686,8 @@ public final class ContentNodes {
             if (chunk >= chunks.size()) break;
             int end = segment + 1;
             while (end < segments) {
-                if (isLineBreakBefore(lineBreakBefore, end)) {
+                if (isLineBreakBefore(lineBreakBefore, end)
+                        || isHardBoundaryBefore(hardBoundaries, end)) {
                     end++;
                 } else if (groups.get(end).equals(groups.get(end - 1))) {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
@@ -671,7 +729,10 @@ public final class ContentNodes {
             segment = end;
         }
         if (chunk < chunks.size()) {
-            // A provider may also split one source paragraph into several. Preserve
+            if (hasHardBoundary || hasLineBoundary) {
+                throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
+            }
+            // A provider may also split ordinary paragraphs into several. Preserve
             // every returned block by appending the extras to the final native text slot.
             String extra = String.join("\n\n", chunks.subList(chunk, chunks.size()));
             int last = segments - 1;
@@ -687,6 +748,10 @@ public final class ContentNodes {
     }
 
     private static boolean isLineBreakBefore(@Nullable List<Boolean> flags, int index) {
+        return flags != null && index < flags.size() && Boolean.TRUE.equals(flags.get(index));
+    }
+
+    private static boolean isHardBoundaryBefore(@Nullable List<Boolean> flags, int index) {
         return flags != null && index < flags.size() && Boolean.TRUE.equals(flags.get(index));
     }
 
@@ -735,6 +800,10 @@ public final class ContentNodes {
         final List<Boolean> listPrefixes = new ArrayList<>();
         /** 与片段平行：当前片段前是否有已捕获的源换行（文本空白或 BREAK）。 */
         final List<Boolean> lineBreakBefore = new ArrayList<>();
+        /** Boundaries that must not be merged: heading transitions and native break nodes. */
+        final List<Boolean> hardBoundaries = new ArrayList<>();
+        /** Heading boundaries render their own line break; an intervening blank node is redundant. */
+        final List<Boolean> headingBoundaries = new ArrayList<>();
         /** 与片段平行：该片段的源文本内部行数，不能假定每个槽只占一行。 */
         final List<Integer> sourceLineCounts = new ArrayList<>();
         /** Source-only structural diagnostics for each slot; discarded with this alignment plan. */
@@ -760,6 +829,10 @@ public final class ContentNodes {
 
         List<Integer> sourceLinesIn(int segStart, int segEnd) {
             return sourceLineCounts.subList(segStart, segEnd);
+        }
+
+        List<Boolean> hardBoundariesIn(int segStart, int segEnd) {
+            return hardBoundaries.subList(segStart, segEnd);
         }
 
         /** [segStart, segEnd) 范围片段对应的列表项起始前缀。 */
@@ -1015,6 +1088,13 @@ public final class ContentNodes {
         w.plan.groupIds.add(w.group);
         w.plan.lineBreakBefore.add(lineBoundary);
         w.plan.sourceLineCounts.add(sourceLines);
+        boolean headingBoundary = w.headingBreaks > 0
+                || containsHeading(event.containers)
+                || (!w.plan.boundaries.isEmpty()
+                && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 1).event.containers));
+        w.plan.headingBoundaries.add(headingBoundary);
+        w.plan.hardBoundaries.add(headingBoundary
+                || w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0);
         w.separatorNewlines = 0;
         w.headingBreaks = 0;
         w.forceLineBoundary = false;
@@ -1028,6 +1108,16 @@ public final class ContentNodes {
     }
 
     /** Count only captured text whitespace; URL/emoji/opaque and synthetic code text give no proof. */
+    private static boolean containsHeading(List<ContentTree.Node> containers) {
+        for (ContentTree.Node container : containers) {
+            String semantic = container.semantic;
+            if (semantic != null && semantic.toLowerCase(java.util.Locale.ROOT).contains("heading")) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void addSourceWhitespace(PlanWalk w, String text, int start, int end) {
         for (int i = start; i < end; i++) if (text.charAt(i) == '\n') w.separatorNewlines++;
     }
