@@ -132,13 +132,13 @@ public class JsonApiEngineTest {
         String source = first + "\n\n" + second;
 
         AtomicInteger normalOpens = new AtomicInteger();
-        FakeConnection normalConnection = new FakeConnection(chatJson(repeat("z", 502)));
+        FakeConnection normalConnection = new FakeConnection(chatJson(repeat("z", 250) + "<keep1/>" + repeat("z", 252)));
         JsonApiEngine normal = new JsonApiEngine(config(
                 Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
                     normalOpens.incrementAndGet();
                     return normalConnection;
                 }));
-        assertEquals(repeat("z", 502), normal.translate(source));
+        assertEquals(repeat("z", 250) + "\n\n" + repeat("z", 252), normal.translate(source));
         assertEquals(1, normalOpens.get());
 
         AtomicInteger chunkedOpens = new AtomicInteger();
@@ -198,7 +198,7 @@ public class JsonApiEngineTest {
 
         AtomicInteger raisedThresholdOpens = new AtomicInteger();
         FakeConnection raisedThresholdConnection =
-                new FakeConnection(chatJson(repeat("q", 502)));
+                new FakeConnection(chatJson(repeat("q", 250) + "<keep1/>" + repeat("q", 252)));
         Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
                 .put(Config.KEY_API_URL, "https://fake.invalid/v1")
                 .put(Config.KEY_API_KEY, "key")
@@ -210,7 +210,7 @@ public class JsonApiEngineTest {
             raisedThresholdOpens.incrementAndGet();
             return raisedThresholdConnection;
         }));
-        assertEquals(repeat("q", 502), raisedThreshold.translate(source));
+        assertEquals(repeat("q", 250) + "\n\n" + repeat("q", 252), raisedThreshold.translate(source));
         assertEquals(1, raisedThresholdOpens.get());
     }
 
