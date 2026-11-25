@@ -407,7 +407,8 @@ public class TranslationScopeBridgeTest {
         assertEquals(StateStore.Status.TRANSLATED, current.status);
         assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslationRendered(ROW, "current generation");
-        assertNull("text conversion alone must not persist", TranslationCache.get().get(hash));
+        assertEquals("text conversion alone must not replace the retained cache entry",
+                "retained API result", TranslationCache.get().get(hash));
         bridge.onMessageRenderCompleted(ROW);
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
