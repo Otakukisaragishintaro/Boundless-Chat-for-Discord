@@ -407,6 +407,8 @@ public class TranslationScopeBridgeTest {
         assertEquals(StateStore.Status.TRANSLATED, current.status);
         assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslationRendered(ROW, "current generation");
+        assertNull("text conversion alone must not persist", TranslationCache.get().get(hash));
+        bridge.onMessageRenderCompleted(ROW);
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
 
@@ -473,6 +475,8 @@ public class TranslationScopeBridgeTest {
         assertEquals("completed after display-only edit", entry.translatedText);
         assertNull(TranslationCache.get().get("hash"));
         bridge.onTranslationRendered(ROW, "completed after display-only edit");
+        assertNull("text conversion alone must not persist", TranslationCache.get().get("hash"));
+        bridge.onMessageRenderCompleted(ROW);
         assertEquals("completed after display-only edit", TranslationCache.get().get("hash"));
     }
 
