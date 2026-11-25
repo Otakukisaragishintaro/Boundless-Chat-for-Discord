@@ -405,8 +405,8 @@ public class TranslationScopeBridgeTest {
         assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslateResult(task, true, "current generation", null);
         assertEquals(StateStore.Status.TRANSLATED, current.status);
-        assertNull("API success alone must not persist an unrendered translation",
-                TranslationCache.get().get(hash));
+        assertEquals("The previous valid cache entry remains until replacement is render-validated",
+                "retained API result", TranslationCache.get().get(hash));
         bridge.onTranslationRenderApplied(ROW, "current generation");
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
