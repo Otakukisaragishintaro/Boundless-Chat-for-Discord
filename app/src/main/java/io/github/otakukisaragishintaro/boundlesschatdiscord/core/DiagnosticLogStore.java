@@ -46,7 +46,7 @@ public final class DiagnosticLogStore {
     }
 
     private static final class Helper extends SQLiteOpenHelper {
-        Helper(Context context) { super(context.getApplicationContext(), DATABASE_NAME, null, 1); }
+        Helper(Context context) { super(context, DATABASE_NAME, null, 1); }
         @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE " + TABLE + " (_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "timestamp INTEGER NOT NULL,source TEXT NOT NULL,process_name TEXT NOT NULL,"
