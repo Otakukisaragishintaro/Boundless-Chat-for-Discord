@@ -2,6 +2,8 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import androidx.annotation.Nullable;
 
+import java.util.regex.Pattern;
+
 
 /**
  * 单一文本翻译输入的防损坏校验（含格式与保留叶节点定位标记）。
