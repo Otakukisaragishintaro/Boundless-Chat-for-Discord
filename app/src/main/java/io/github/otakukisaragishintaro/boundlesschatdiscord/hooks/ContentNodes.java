@@ -911,6 +911,7 @@ public final class ContentNodes {
 
     private static AlignmentPlan buildPlan(ContentTree tree) {
         PlanWalk w = new PlanWalk();
+        int segmentIndex = 0;
         java.util.ArrayDeque<Integer> listStarts = new java.util.ArrayDeque<>();
         for (ContentTree.Event event : tree.events) {
             if (event.headingBreakBefore) {
@@ -971,8 +972,9 @@ public final class ContentNodes {
                         addUrlToken(w, chunk.trim());
                         continue;
                     }
+                    boolean structuralBoundary = tree.segmentBoundaryBefore.get(segmentIndex++);
                     int styleId = 0;
-                    if (event.styled) {
+                    if (event.styled || structuralBoundary) {
                         styleId = ++w.plan.styleMarkers;
                     }
                     addSegment(w, event, node.chunkLineCounts.get(i), styleId);
