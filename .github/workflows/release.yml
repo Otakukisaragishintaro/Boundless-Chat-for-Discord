@@ -304,8 +304,12 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$APP_NAME.apk"
 
           git add app/build.gradle
-          git commit -m "chore(release): $TAG"
-          echo "版本号提交：$(git rev-parse --short HEAD)（仅被 tag $TAG 引用，main 不变）"
+          if ! git diff --cached --quiet; then
+            git commit -m "chore(release): $TAG"
+            echo "版本号提交：$(git rev-parse --short HEAD)（仅被 tag $TAG 引用，main 不变）"
+          else
+            echo "来源提交已包含目标版本号，无需创建空提交；tag 将直接指向来源提交 $(git rev-parse --short HEAD)"
+          fi
 
           git tag -a "$TAG" -m "Release $TAG (versionCode $VERSION_CODE)"
           git push origin "refs/tags/$TAG"
