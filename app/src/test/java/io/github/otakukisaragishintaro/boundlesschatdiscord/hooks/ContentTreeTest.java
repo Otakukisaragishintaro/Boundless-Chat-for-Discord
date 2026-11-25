@@ -332,7 +332,7 @@ public class ContentTreeTest {
         List<Object> source = wrapParagraphs(10, outer);
         ContentTree tree = compiled(source);
         assertEquals(3, tree.segmentCount);
-        assertEquals("\n• outer\n• inner\n• last", extracted(tree).text);
+        assertEquals("\n• <x1>outer</x1>\n• <x2>inner</x2>\n• <x3>last</x3>", extracted(tree).text);
         assertEquals(3, extracted(tree).textNodeCount);
         assertEquals(0, extracted(tree).opaqueNodeCount);
         assertEventKinds(tree, ContentTree.EventKind.LIST_START, ContentTree.EventKind.ITEM_START,
@@ -346,9 +346,9 @@ public class ContentTreeTest {
         assertSame(nested, tree.events.get(3).node.original);
         for (ContentTree.Event event : tree.events) assertFalse(event.styled);
 
-        List<Object> rebuilt = ContentNodes.replacePlanned(tree, "• 外层\n• 内层\n• 末项");
+        List<Object> rebuilt = ContentNodes.replacePlanned(tree, "• <x1>外层</x1>\n• <x2>内层</x2>\n• <x3>末项</x3>");
         assertNotNull(rebuilt);
-        assertEquals("\n• 外层\n• 内层\n• 末项", extracted(compiled(rebuilt)).text);
+        assertEquals("\n• <x1>外层</x1>\n• <x2>内层</x2>\n• <x3>末项</x3>", extracted(compiled(rebuilt)).text);
         List<Object> cursor = rebuilt;
         for (int depth = 0; depth < 10; depth++) {
             assertEquals(1, cursor.size());
