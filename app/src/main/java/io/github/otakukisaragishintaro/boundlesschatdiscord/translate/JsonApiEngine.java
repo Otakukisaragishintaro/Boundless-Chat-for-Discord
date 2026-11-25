@@ -82,10 +82,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
     }
 
     /**
-     * Keep a Discord message as one scheduled/cached translation, but send long
-     * multi-paragraph bodies as smaller requests. Paragraph separators are copied
-     * from the source verbatim; every chunk still goes through the same decoder,
-     * cancellation owner and integrity checks as an ordinary translation.
+     * Keep a Discord message as one scheduled/cached translation, but optionally
+     * send long multi-paragraph bodies as smaller requests. Only separators between
+     * independently requested chunks are copied from the source; paragraph layout
+     * inside each request may be freely normalized by the translation provider.
      */
     @Override
     public String translate(String text) throws Exception {
