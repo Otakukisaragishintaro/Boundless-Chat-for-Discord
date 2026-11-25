@@ -215,8 +215,12 @@ public final class ContentNodes {
                         String right = replacement.parts.get(next);
                         if (left.isEmpty() || right.isEmpty()) return null;
                         String separator = replacement.separatorBetween(left, right);
-                        if (replacement.isHeadingBoundary(next) && separator != null
-                                && !separator.contains("\n\n")) return null;
+                        int sourceNewlines = 0;
+                        for (int i = 0; i < original.length(); i++) {
+                            if (original.charAt(i) == '\n') sourceNewlines++;
+                        }
+                        if (sourceNewlines >= 2 && replacement.isHeadingBoundary(next)
+                                && separator != null && !separator.contains("\n\n")) return null;
                     }
                 }
                 return node;
