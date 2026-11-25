@@ -409,7 +409,9 @@ public class TranslationScopeBridgeTest {
         bridge.onTranslationRendered(ROW, "current generation");
         assertEquals("text conversion alone must not replace the retained cache entry",
                 "retained API result", TranslationCache.get().get(hash));
-        bridge.onMessageRenderCompleted(ROW);
+        bridge.onMessageRenderCompleted(ROW, false);
+            assertNull("detached message views must not commit pending cache", TranslationCache.get().get(hash));
+            onMessageRenderCompleted(ROW, true);
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
 
@@ -477,7 +479,9 @@ public class TranslationScopeBridgeTest {
         assertNull(TranslationCache.get().get("hash"));
         bridge.onTranslationRendered(ROW, "completed after display-only edit");
         assertNull("text conversion alone must not persist", TranslationCache.get().get("hash"));
-        bridge.onMessageRenderCompleted(ROW);
+        bridge.onMessageRenderCompleted(ROW, false);
+            assertNull("detached message views must not commit pending cache", TranslationCache.get().get(hash));
+            onMessageRenderCompleted(ROW, true);
         assertEquals("completed after display-only edit", TranslationCache.get().get("hash"));
     }
 
