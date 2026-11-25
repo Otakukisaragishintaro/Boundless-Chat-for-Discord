@@ -521,22 +521,32 @@ public final class HookBridge {
     }
 
     /**
-     * Persist only after Discord's native text conversion has returned the translated
-     * content successfully. Receiving an API result or queuing a rerender is not enough.
+     * Text conversion succeeded, but cache persistence waits for the enclosing native
+     * message-render method to return. This avoids committing from an intermediate
+     * text conversion that Discord later replaces or abandons.
      */
     void onTranslationRendered(String messageId, String translated) {
-        StateStore.Entry entry = StateStore.get().peek(messageId);
-        if (entry == null || entry.status != StateStore.Status.TRANSLATED
-                || !translated.equals(entry.translatedText)) {
-            ProjectLog.info("local translation cache write skipped reason=render_state_changed");
-            return;
-        }
         if (!config.cacheEnabled) {
             ProjectLog.info("local translation cache write skipped reason=disabled");
             return;
         }
-        ProjectLog.info("native translated content rendered; persistent cache write requested");
-        TranslationCache.get().put(entry.contentHash, translated);
+        if (!StateStore.get().markCachePending(messageId, translated)) {
+            ProjectLog.info("local translation cache write skipped reason=render_state_changed");
+            return;
+        }
+        ProjectLog.info("translation text conversion complete; cache pending outer message render");
+    }
+
+    /** Called only after the enclosing Discord message-render chain has returned normally. */
+    void onMessageRenderCompleted(String messageId) {
+        if (!config.cacheEnabled) {
+            ProjectLog.info("local translation cache write skipped reason=disabled");
+            return;
+        }
+        StateStore.Entry entry = StateStore.get().claimCacheCommit(messageId);
+        if (entry == null) return;
+        ProjectLog.info("native message render completed; persistent cache write requested");
+        TranslationCache.get().put(entry.contentHash, entry.translatedText);
     }
 
     /** A segment update also refreshes its card's aggregate progress/error icon. */
