@@ -35,7 +35,6 @@ public class ProtectionPromptConfigTest {
             assertTrue(enabledSystem.contains("<keepN/>"));
             assertFalse(disabledSystem.contains("opaque, immovable placeholder"));
             assertFalse(disabledSystem.contains("<keepN/>"));
-            assertFalse(disabledSystem.contains("<keepN/>"));
             assertTrue(disabledSystem.contains("Translate only the text between"));
         }
     }
