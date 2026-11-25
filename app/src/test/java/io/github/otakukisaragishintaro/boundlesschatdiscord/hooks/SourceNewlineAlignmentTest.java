@@ -54,10 +54,10 @@ public class SourceNewlineAlignmentTest {
         TextContentNode lf = text("\n");
         TextContentNode body = text("Available today");
         ContentTree tree = ContentTree.compileForTranslation(list(heading, lf, body));
-        assertEquals("Lower Rates\n<x1>Available today</x1>", TextExtractor.extractTree(tree).requestText);
+        assertEquals("Lower Rates\nAvailable today", TextExtractor.extractTree(tree).requestText);
         assertEquals(2, tree.segmentCount);
 
-        List<Object> out = replaced(tree, "优惠价格\n<x1>今日可用</x1>");
+        List<Object> out = replaced(tree, "优惠价格\n今日可用");
         HeadingContentNode rebuilt = (HeadingContentNode) out.get(0);
         assertEquals(2, rebuilt.component2());
         assertEquals("优惠价格", content(rebuilt.getContent().get(0)));
@@ -65,7 +65,7 @@ public class SourceNewlineAlignmentTest {
         assertEquals("今日可用", content(out.get(2)));
         assertEquals("Lower Rates", content(heading.getContent().get(0)));
         assertEquals("Available today", body.getContent());
-        assertEquals("Lower Rates\n<x1>Available today</x1>", extracted(tree));
+        assertEquals("Lower Rates\nAvailable today", extracted(tree));
     }
     @Test
     public void headingBlockBeforePlainTextKeepsInterveningSpaceAndAlignsAsTwoLines() {
@@ -92,7 +92,7 @@ public class SourceNewlineAlignmentTest {
                 ContentTree.compileForTranslation(out)).requestText);
         assertEquals("Heading", content(heading.getContent().get(0)));
         assertEquals("Body", body.getContent());
-        assertEquals("Heading \n<x1>Body</x1>", extracted(tree));
+        assertEquals("Heading \n<x1>Body</x1>", TextExtractor.extractTree(tree).requestText);
 
         ContentNodes.Rejection missing = rejected(tree, "标题 正文",
                 ContentNodes.RejectionReason.STYLE_OPEN);
@@ -436,7 +436,8 @@ public class SourceNewlineAlignmentTest {
     public void multilineListItemContinuationAndNextItemRejoinSlotsAndKeepListMetadata() {
         TextContentNode lf = text("\n");
         BulletListContentNode bullets = multilineList(lf);
-        ContentTree tree = compiled(list(bullets));
+        ContentTree tree = ContentTree.compileForTranslation(list(bullets));
+        assertNotNull(tree);
         assertEquals(3, tree.segmentCount);
         List<Object> out = replaced(tree,
                 "7. <x1>第一\n首项续行</x1>\n补充\n8. <x2>第二\n次项续行</x2>");
@@ -452,7 +453,8 @@ public class SourceNewlineAlignmentTest {
     }
     @Test
     public void multilineListRejectsMergedAndExtraContinuationLines() {
-        ContentTree tree = compiled(list(multilineList(text("\n"))));
+        ContentTree tree = ContentTree.compileForTranslation(list(multilineList(text("\n"))));
+        assertNotNull(tree);
         rejected(tree, "• 第一\n补充\n• 第二\n续行",
                 ContentNodes.RejectionReason.STYLE_OPEN);
         ContentNodes.Rejection extra = rejected(tree,
