@@ -135,8 +135,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
             ProjectLog.info("translation.chunking skipped reason=paragraphs_fit_one_request"
                     + " sourceChars=" + requestText.length()
                     + " paragraphs=" + paragraphs.size());
-            return protection.restore(executeSingleRequestPreservingParagraphs(
-                    requestText, logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics,
+                    !logFailureDiagnostics).translated);
         }
 
         StringBuilder combined = new StringBuilder(requestText.length());
