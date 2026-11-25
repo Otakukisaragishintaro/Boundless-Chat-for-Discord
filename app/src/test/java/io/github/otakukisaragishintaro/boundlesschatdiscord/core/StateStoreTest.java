@@ -14,10 +14,26 @@ public class StateStoreTest {
         assertTrue(store.complete(task, true, "译文", null));
 
         assertTrue(store.markCachePending("row", "译文"));
-        assertSame("outer render completion claims the current entry", entry,
-                store.claimCacheCommit("row"));
-        assertNull("a duplicate outer render must not claim a second write",
-                store.claimCacheCommit("row"));
+        java.util.List<StateStore.Entry> first = store.claimCacheCommitsForRow("row");
+        assertEquals(1, first.size());
+        assertSame("outer render completion claims the current entry", entry, first.get(0));
+        assertTrue("a duplicate outer render must not claim a second write",
+                store.claimCacheCommitsForRow("row").isEmpty());
+    }
+
+    @Test public void outerRowRenderClaimsPendingEmbedAndPollKeys() {
+        StateStore.Entry embed = translated("12345678901234567\u0000embed\u0000card\u0000hash");
+        StateStore.Entry poll = translated("12345678901234567\u0000poll\u0000question\u0000hash");
+        assertTrue(store.markCachePending(embed.messageId, embed.translatedText));
+        assertTrue(store.markCachePending(poll.messageId, poll.translatedText));
+        assertEquals(2, store.claimCacheCommitsForRow("12345678901234567").size());
+    }
+
+    private StateStore.Entry translated(String id) {
+        StateStore.Entry entry = store.obtain(id, "hash-" + id);
+        TranslationTaskId task = store.begin(entry);
+        assertTrue(store.complete(task, true, "译文", null));
+        return entry;
     }
 
     @Test public void changedContentCannotInheritPendingCacheCommit() {
