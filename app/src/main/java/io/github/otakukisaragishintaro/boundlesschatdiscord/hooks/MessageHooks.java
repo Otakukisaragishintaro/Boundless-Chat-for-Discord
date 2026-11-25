@@ -385,10 +385,13 @@ public final class MessageHooks {
                                         && e.status == StateStore.Status.TRANSLATED
                                         && !HookBridge.get().showingOriginal(messageId, e)) ? e.translatedText : null;
                                 if (translated != null) {
+                                    boolean[] degraded = new boolean[1];
                                     Object replacement = StructurableTextFactory.forPlannedTranslation(
-                                            original, translated, extracted);
+                                            original, translated, extracted, degraded);
                                     if (replacement != null) {
+                                        if (e != null) e.renderDegraded = degraded[0];
                                         ProjectLog.info("message translation replacement applied"
+                                                + " formattingDegraded=" + degraded[0]
                                                 + " route=" + (replyConversion ? "reply-canonical" : "body")
                                                 + " sourceClass=" + original.getClass().getName()
                                                 + " replacementClass=" + replacement.getClass().getName());
