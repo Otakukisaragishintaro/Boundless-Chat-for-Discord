@@ -132,8 +132,8 @@ public class JsonApiEngineTest {
         String source = first + "\n\n" + second;
 
         AtomicInteger normalOpens = new AtomicInteger();
-        FakeConnection normalConnection = new FakeConnection(structuredChatJson(
-                "s0", repeat("z", 250), "s1", repeat("z", 252)));
+        FakeConnection normalConnection = new FakeConnection(chatJson(
+                repeat("z", 250) + "<keep1/>" + repeat("z", 252)));
         JsonApiEngine normal = new JsonApiEngine(config(
                 Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
                     normalOpens.incrementAndGet();
@@ -198,9 +198,8 @@ public class JsonApiEngineTest {
                 separatorProtection.restore(separatorProtection.text));
 
         AtomicInteger raisedThresholdOpens = new AtomicInteger();
-        FakeConnection raisedThresholdConnection =
-                new FakeConnection(structuredChatJson(
-                        "s0", repeat("q", 250), "s1", repeat("q", 252)));
+        FakeConnection raisedThresholdConnection = new FakeConnection(chatJson(
+                repeat("q", 250) + "<keep1/>" + repeat("q", 252)));
         Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
                 .put(Config.KEY_API_URL, "https://fake.invalid/v1")
                 .put(Config.KEY_API_KEY, "key")
@@ -217,33 +216,32 @@ public class JsonApiEngineTest {
     }
 
     @Test
-    public void literalDiscordMentionsChannelTokensAndUrlsAreShieldedAndRestored() throws Exception {
+    public void literalDiscordTokensUseFullContextAndMayChangeOrder() throws Exception {
         String source = "Please contact <@403924274437685248> and visit "
                 + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
-        // Deliberately return the segment IDs in reverse order. The engine must rebuild
-        // the original source order before the existing marker and placeholder validators run.
-        FakeConnection connection = new FakeConnection(structuredChatJson(
-                "s4", "", "s3", " ", "s2", " ", "s1", " 并访问 ", "s0", "请联系 "));
+        String translated = "请联系 ⟦BC_TOKEN_1⟧ 并访问 ⟦BC_TOKEN_4⟧ ⟦BC_TOKEN_3⟧ ⟦BC_TOKEN_2⟧";
+        FakeConnection connection = new FakeConnection(chatJson(translated));
         JsonApiEngine engine = new JsonApiEngine(
                 config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
 
-        assertEquals("请联系 <@403924274437685248> 并访问 <#1570408648533082167> @everyone "
-                        + "https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4",
+        assertEquals("请联系 <@403924274437685248> 并访问 "
+                        + "https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4 "
+                        + "@everyone <#1570408648533082167>",
                 engine.translate(source));
 
         JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
         String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
-        assertFalse(userContent.contains("<keep"));
+        assertEquals(Protocols.WRAPPER_OPEN
+                        + "Please contact ⟦BC_TOKEN_1⟧ and visit ⟦BC_TOKEN_2⟧ "
+                        + "⟦BC_TOKEN_3⟧ ⟦BC_TOKEN_4⟧"
+                        + Protocols.WRAPPER_CLOSE, userContent);
+        assertFalse(userContent.contains("segments"));
         assertFalse(userContent.contains("403924274437685248"));
         assertFalse(userContent.contains("1570408648533082167"));
         assertFalse(userContent.contains("@everyone"));
         assertFalse(userContent.contains("github.com/YusufOzmen01"));
-        JSONObject segmentRequest = new JSONObject(
-                io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments
-                        .stripOuterResponseWrapper(userContent, source));
-        assertEquals(5, segmentRequest.getJSONArray("segments").length());
-        assertTrue(request.getJSONArray("messages").getJSONObject(0).getString("content")
-                .contains("original id"));
+        String system = request.getJSONArray("messages").getJSONObject(0).getString("content");
+        assertTrue(system.contains("may move it"));
         assertTrue(connection.disconnected);
         assertTrue(active(engine).isEmpty());
     }
@@ -268,7 +266,7 @@ public class JsonApiEngineTest {
                 + "<:openhouse:123456789012345678> 😀 @everyone https://example.com/path";
         DiscordTokenMarkers.Protection selected = DiscordTokenMarkers.protect(
                 source, false, true, false);
-        assertEquals("<@403924274437685248> <keep1/> <keep2/> <keep3/> @everyone https://example.com/path",
+        assertEquals("<@403924274437685248> ⟦BC_TOKEN_1⟧ ⟦BC_TOKEN_2⟧ ⟦BC_TOKEN_3⟧ @everyone https://example.com/path",
                 selected.text);
         assertEquals(source, selected.restore(selected.text));
         DiscordTokenMarkers.Protection emojiDisabled = DiscordTokenMarkers.protect(
@@ -276,7 +274,7 @@ public class JsonApiEngineTest {
         assertEquals("😀", emojiDisabled.text);
         DiscordTokenMarkers.Protection emojiEnabled = DiscordTokenMarkers.protect(
                 "😀", true, true, true);
-        assertEquals("<keep1/>", emojiEnabled.text);
+        assertEquals("⟦BC_TOKEN_1⟧", emojiEnabled.text);
         assertEquals("😀", emojiEnabled.restore(emojiEnabled.text));
 
         Config.Snapshot disabled = Config.read(new MemoryPrefs()
@@ -307,17 +305,14 @@ public class JsonApiEngineTest {
                     .put(Config.KEY_PROTECT_URLS, option[2]));
             DiscordTokenMarkers.Protection expected = DiscordTokenMarkers.protect(
                     source, option[0], option[1], option[2]);
-            io.github.otakukisaragishintaro.boundlesschatdiscord.core.StructuredTranslation.Source
-                    structured = io.github.otakukisaragishintaro.boundlesschatdiscord.core.StructuredTranslation
-                            .split(expected.text);
-            FakeConnection connection = new FakeConnection(chatJson(
-                    Protocols.WRAPPER_OPEN + structured.requestJson + Protocols.WRAPPER_CLOSE));
+            FakeConnection connection = new FakeConnection(chatJson(expected.text));
             JsonApiEngine engine = new JsonApiEngine(snapshot, http(url -> connection));
             assertEquals(source, engine.translate(source));
             JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
             String user = request.getJSONArray("messages").getJSONObject(1).getString("content");
-            assertEquals(Protocols.WRAPPER_OPEN + structured.requestJson + Protocols.WRAPPER_CLOSE, user);
+            assertEquals(Protocols.WRAPPER_OPEN + expected.text + Protocols.WRAPPER_CLOSE, user);
             assertFalse(user.contains("<keep"));
+            assertFalse(user.contains("segments"));
         }
     }
 
@@ -341,7 +336,7 @@ public class JsonApiEngineTest {
             JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
             String system = request.getJSONArray("messages").getJSONObject(0).getString("content");
             assertTrue(system.contains("Translate only the text between"));
-            assertEquals(enabled, system.contains("<keepN/>"));
+            assertEquals(enabled, system.contains("⟦BC_TOKEN_N⟧"));
         }
     }
 
@@ -443,18 +438,6 @@ public class JsonApiEngineTest {
     private static String chatJson(String text) {
         return "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\","
                 + "\"content\":" + JSONObject.quote(text) + "}}]}";
-    }
-
-    private static String structuredJson(String... idAndText) throws Exception {
-        JSONArray segments = new JSONArray();
-        for (int i = 0; i < idAndText.length; i += 2) {
-            segments.put(new JSONObject().put("id", idAndText[i]).put("text", idAndText[i + 1]));
-        }
-        return new JSONObject().put("segments", segments).toString();
-    }
-
-    private static String structuredChatJson(String... idAndText) throws Exception {
-        return chatJson("<translate>" + structuredJson(idAndText) + "</translate>");
     }
 
     private static String anthropicJson(String text) {
