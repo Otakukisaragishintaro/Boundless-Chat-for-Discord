@@ -159,6 +159,26 @@ public class StructurableTextFactoryTest {
     }
 
     @Test
+    public void degradedPlainRenderingRestoresProtectedNodesEvenWhenModelDropsAnchors() {
+        OpaqueNodeTranslationTest.UserOrRoleMentionContentNode mention =
+                new OpaqueNodeTranslationTest.UserOrRoleMentionContentNode(
+                        list(new TextContentNode("ExampleUser")));
+        EmojiContentNode emoji = new EmojiContentNode("1");
+        AnnotatedStructurableText original = new AnnotatedStructurableText(
+                list(mention, new TextContentNode("hello world"), emoji));
+        TextExtractor.Result extracted = TextExtractor.extract(original);
+        assertNotNull(extracted);
+
+        List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(
+                extracted.tree, "你好世界");
+
+        assertNotNull(flattened);
+        assertEquals("你好世界", ((TextContentNode) flattened.get(0)).getContent());
+        assertSame(mention, flattened.get(1));
+        assertSame(emoji, flattened.get(2));
+    }
+
+    @Test
     public void emojiOnlyStructureIsNotOverwrittenByUnrelatedTranslation() {
         EmojiContentNode emoji = new EmojiContentNode("1");
         AnnotatedStructurableText original = new AnnotatedStructurableText(list(emoji));
