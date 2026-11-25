@@ -81,6 +81,127 @@ public final class ContentNodes {
         return new Rejection(reason, -1, -1);
     }
 
+    /**
+     * Flatten translated text while restoring every native node at the position of its
+     * identity anchor. Native anchors may be reordered by translation; their occurrence
+     * identity is captured from the source tree, then their returned positions determine
+     * the order of the restored native nodes.
+     */
+    @Nullable
+    public static List<Object> flattenPreservingNativeNodes(ContentTree tree, String translated) {
+        if (tree == null || translated == null) return null;
+        Object textPrototype = null;
+        List<NativeToken> tokens = new ArrayList<>();
+        int segmentsBefore = 0;
+        for (ContentTree.Event event : tree.events) {
+            if (event.kind != ContentTree.EventKind.NODE) continue;
+            ContentTree.Node node = event.node;
+            if (node.kind == ContentTree.Kind.TEXT) {
+                if (textPrototype == null) textPrototype = node.original;
+                segmentsBefore += node.segmentCount;
+                continue;
+            }
+            switch (node.kind) {
+                case INLINE_CODE:
+                case CODE_BLOCK:
+                case OPAQUE:
+                    tokens.add(new NativeToken(event.retainedMarker, node.original, segmentsBefore));
+                    break;
+                case URL:
+                case EMOJI:
+                    if (node.text != null && !node.text.isEmpty()) {
+                        tokens.add(new NativeToken(node.text, node.original, segmentsBefore));
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (textPrototype == null) return null;
+
+        String plain = translated.replaceAll("</?x[0-9]+>", "");
+        java.util.regex.Pattern reserved = java.util.regex.Pattern.compile(
+                "<\\s*/?\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
+        java.util.Map<String, Integer> nextSearch = new java.util.HashMap<>();
+        List<PositionedNativeToken> positioned = new ArrayList<>(tokens.size());
+        int ordinal = 0;
+        for (NativeToken token : tokens) {
+            int searchFrom = nextSearch.getOrDefault(token.anchor, 0);
+            int at = plain.indexOf(token.anchor, searchFrom);
+            boolean found = at >= 0;
+            if (found) {
+                nextSearch.put(token.anchor, at + token.anchor.length());
+            } else {
+                at = estimatedInsertionPoint(plain, 0, token.beforeSegments,
+                        tree.segmentCount);
+            }
+            positioned.add(new PositionedNativeToken(token, at, found, ordinal++));
+        }
+        positioned.sort((a, b) -> {
+            int byPosition = Integer.compare(a.position, b.position);
+            return byPosition != 0 ? byPosition : Integer.compare(a.ordinal, b.ordinal);
+        });
+
+        List<Object> result = new ArrayList<>();
+        int cursor = 0;
+        for (PositionedNativeToken item : positioned) {
+            int at = Math.max(cursor, Math.min(plain.length(), item.position));
+            if (!appendPlainText(result, textPrototype,
+                    reserved.matcher(plain.substring(cursor, at)).replaceAll(""))) return null;
+            result.add(item.token.original);
+            cursor = item.found ? Math.min(plain.length(), at + item.token.anchor.length()) : at;
+        }
+        if (!appendPlainText(result, textPrototype,
+                reserved.matcher(plain.substring(cursor)).replaceAll(""))) return null;
+        return result;
+    }
+
+    private static int estimatedInsertionPoint(String text, int cursor, int beforeSegments,
+                                               int totalSegments) {
+        if (beforeSegments <= 0) return cursor;
+        if (beforeSegments >= totalSegments || totalSegments <= 0) return text.length();
+        int estimate = Math.max(cursor, Math.min(text.length(),
+                (int) (((long) text.length() * beforeSegments) / totalSegments)));
+        int after = estimate;
+        while (after < text.length() && !Character.isWhitespace(text.charAt(after))) after++;
+        int before = estimate;
+        while (before > cursor && !Character.isWhitespace(text.charAt(before - 1))) before--;
+        if (after >= text.length()) return before > cursor ? before : text.length();
+        return estimate - before <= after - estimate ? before : after;
+    }
+
+    private static boolean appendPlainText(List<Object> output, Object prototype, String text) {
+        if (text.isEmpty()) return true;
+        Object node = createTextNode(prototype, text);
+        if (node == null) return false;
+        output.add(node);
+        return true;
+    }
+
+    private static final class NativeToken {
+        final String anchor;
+        final Object original;
+        final int beforeSegments;
+        NativeToken(String anchor, Object original, int beforeSegments) {
+            this.anchor = anchor;
+            this.original = original;
+            this.beforeSegments = beforeSegments;
+        }
+    }
+
+    private static final class PositionedNativeToken {
+        final NativeToken token;
+        final int position;
+        final boolean found;
+        final int ordinal;
+        PositionedNativeToken(NativeToken token, int position, boolean found, int ordinal) {
+            this.token = token;
+            this.position = position;
+            this.found = found;
+            this.ordinal = ordinal;
+        }
+    }
+
     /** Rebuild only from the caller's captured, identity-verified occurrence plan. */
     @Nullable
     public static List<Object> replacePlanned(ContentTree tree, String translated) {
@@ -102,7 +223,7 @@ public final class ContentNodes {
         if (targetCount == 0) {
             throw reject(RejectionReason.NO_TRANSLATABLE_SEGMENTS);
         }
-        // 锚点必须按原数量及顺序出现；各间隔只执行所属结构的唯一切分规则。
+        // 富文本回填按捕获顺序对齐结构锚点；keep 身份与数量已由请求校验，换序时由纯文本路径按译文位置恢复。
         if (Segments.hasSegmentMarkers(translated)) {
             throw reject(RejectionReason.SEGMENT_MARKER);
         }
@@ -408,10 +529,13 @@ public final class ContentNodes {
                 java.util.Collections.nCopies(plan.groupIds.size(), ""));
         List<Integer> pending = new ArrayList<>();
         int cursor = 0;
+        int anchorOrdinal = 0;
         for (PlanToken t : plan.tokens) {
             if (t.anchor != null) {
                 int at = plain.indexOf(t.anchor, cursor);
-                if (at < 0) throw reject(RejectionReason.ANCHOR_ORDER);
+                if (at < 0) throw anchorOrderFailure(plain, t.anchor, cursor,
+                        ++anchorOrdinal, plan);
+                anchorOrdinal++;
                 String prefix = itemPrefix(plain.substring(cursor, at), t);
                 assignRun(prefix, pending, parts, plan);
                 pending.clear();
@@ -426,8 +550,10 @@ public final class ContentNodes {
                 int end = plain.indexOf(close, at + open.length());
                 if (end < 0) throw reject(RejectionReason.STYLE_CLOSE);
                 String styled = plain.substring(at + open.length(), end).trim();
-                if (styled.isEmpty()) throw reject(RejectionReason.STYLE_EMPTY);
-                parts.set(t.segIndex, styled);
+                // An empty style span must not downgrade the entire message. Preserve that
+                // source slot verbatim while translating and rebuilding all other slots.
+                // This is a local, non-lossy fallback: no text is silently discarded.
+                parts.set(t.segIndex, styled.isEmpty() ? t.sourceText : styled);
                 cursor = end + close.length();
             } else {
                 pending.add(t.segIndex);
@@ -467,6 +593,21 @@ public final class ContentNodes {
         }
     }
 
+    /** Safe diagnostics for an order mismatch; never logs the anchor or message content. */
+    private static Rejection anchorOrderFailure(String plain, String anchor, int cursor,
+                                                 int ordinal, AlignmentPlan plan) {
+        int earlier = plain.indexOf(anchor);
+        String type = plan.retainedMarkers.contains(anchor) ? "RETAINED"
+                : plan.urls.contains(anchor) ? "URL" : "EMOJI";
+        Rejection rejection = new Rejection(RejectionReason.ANCHOR_ORDER, ordinal, earlier);
+        rejection.structure = " anchorType=" + type
+                + " tokenOrdinal=" + ordinal
+                + " cursor=" + cursor
+                + " plainLength=" + plain.length()
+                + " earlierMatch=" + (earlier >= 0);
+        return rejection;
+    }
+
     /** Verify multiplicity without ever emitting the anchor itself. */
     private static void requireAnchorCounts(String plain, List<String> anchors,
                                              RejectionReason reason) {
@@ -495,13 +636,16 @@ public final class ContentNodes {
                 java.util.Collections.nCopies(plan.groupIds.size(), ""));
         int from = 0;
         int segStart = 0;
+        int anchorOrdinal = 0;
         for (PlanToken t : plan.tokens) {
             if (t.anchor == null) {
                 continue;
             }
             String anchor = t.anchor;
             int at = plain.indexOf(anchor, from);
-            if (at < 0) throw reject(RejectionReason.ANCHOR_ORDER);
+            if (at < 0) throw anchorOrderFailure(plain, anchor, from,
+                    ++anchorOrdinal, plan);
+            anchorOrdinal++;
             int segEnd = t.segIndex;
             String prefix = itemPrefix(plain.substring(from, at), t);
             List<String> spanParts = alignInterval(prefix, plan, segStart, segEnd);
@@ -796,6 +940,8 @@ public final class ContentNodes {
         final String anchor; // Non-null anchors consume no text slot.
         final int segIndex; // Anchor boundary or text-slot index, captured in tree order.
         final int styleId;
+        /** Original source chunk used only if the model returns an empty styled span. */
+        final String sourceText;
         /** True only for the first anchor or translatable slot after captured ITEM_START. */
         final boolean listPrefix;
 
@@ -803,19 +949,22 @@ public final class ContentNodes {
             this.anchor = anchor;
             this.segIndex = segIndex;
             this.styleId = 0;
+            this.sourceText = null;
             this.listPrefix = listPrefix;
         }
 
-        PlanToken(int segIndex, int styleId, boolean listPrefix) {
+        PlanToken(int segIndex, int styleId, boolean listPrefix, String sourceText) {
             this.anchor = null;
             this.segIndex = segIndex;
             this.styleId = styleId;
+            this.sourceText = sourceText;
             this.listPrefix = listPrefix;
         }
     }
 
     private static AlignmentPlan buildPlan(ContentTree tree) {
         PlanWalk w = new PlanWalk();
+        int segmentIndex = 0;
         java.util.ArrayDeque<Integer> listStarts = new java.util.ArrayDeque<>();
         for (ContentTree.Event event : tree.events) {
             if (event.headingBreakBefore) {
@@ -876,11 +1025,12 @@ public final class ContentNodes {
                         addUrlToken(w, chunk.trim());
                         continue;
                     }
+                    boolean structuralBoundary = tree.segmentBoundaryBefore.get(segmentIndex++);
                     int styleId = 0;
-                    if (event.styled) {
+                    if (event.styled || (tree.explicitBoundaryMarkers && structuralBoundary)) {
                         styleId = ++w.plan.styleMarkers;
                     }
-                    addSegment(w, event, node.chunkLineCounts.get(i), styleId);
+                    addSegment(w, event, node.chunkLineCounts.get(i), styleId, chunk);
                 }
                 addSourceWhitespace(w, s, tail, s.length());
                 continue;
@@ -954,8 +1104,10 @@ public final class ContentNodes {
      * <p>URL 与 emoji 都作为必须保留的定位标记；列表项按独立行分组。
      * {@code forceNewGroup} 由列表项边界推进段落组。</p>
      */
-    private static void addSegment(PlanWalk w, ContentTree.Event event, int sourceLines, int styleId) {
-        PlanToken token = new PlanToken(w.plan.groupIds.size(), styleId, w.pendingListPrefix);
+    private static void addSegment(PlanWalk w, ContentTree.Event event, int sourceLines,
+                                   int styleId, String sourceText) {
+        PlanToken token = new PlanToken(w.plan.groupIds.size(), styleId,
+                w.pendingListPrefix, styleId > 0 ? sourceText : null);
         w.plan.tokens.add(token);
         w.plan.listPrefixes.add(token.listPrefix);
         w.pendingListPrefix = false;

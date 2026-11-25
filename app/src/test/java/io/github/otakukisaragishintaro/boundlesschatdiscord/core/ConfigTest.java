@@ -48,11 +48,15 @@ public class ConfigTest {
         assertEquals(Config.DEF_MODEL, s.model);
         assertEquals(Config.DEF_TARGET_LANG, s.targetLang);
         assertEquals(Config.DEF_SEND_TARGET_LANG, s.sendTargetLang);
-        assertEquals(Config.DEF_SYSTEM_PROMPT, s.systemPrompt);
-        assertEquals(Config.DEF_SEND_SYSTEM_PROMPT, s.sendSystemPrompt);
+        assertEquals(LanguagePromptConfig.defaultPrompt(Config.DEF_TARGET_LANG), s.systemPrompt);
+        assertTrue(s.sendSystemPrompt.contains("into English"));
+        assertFalse(s.sendSystemPrompt.contains("{{target_language}}"));
+        assertEquals(LanguagePromptConfig.LANGUAGES.size(), s.incomingPrompts.size());
+        assertEquals(LanguagePromptConfig.LANGUAGES.size(), s.outboundPrompts.size());
         assertEquals(Config.DEF_PROTOCOL, s.protocol);
         assertEquals(Config.DEF_TIMEOUT_MS, s.timeoutMs);
         assertEquals(Config.DEF_MAX_CONCURRENCY, s.maxConcurrency);
+        assertTrue(s.protectionPromptEnabled);
     }
 
     @Test
@@ -121,7 +125,7 @@ public class ConfigTest {
         assertEquals("日本語", sendJapanese.sendTargetLang);
         assertEquals(defaults.targetLang, sendJapanese.targetLang);
         assertEquals(defaults.version(), sendEnglish.version());
-        assertEquals(defaults.version(), sendJapanese.version());
+        assertNotEquals(defaults.version(), sendJapanese.version());
     }
 
     @Test
@@ -137,9 +141,8 @@ public class ConfigTest {
         assertEquals("Incoming-only custom prompt", incoming.systemPrompt);
         assertEquals("English", outbound.targetLang);
         assertEquals("English", outbound.sendTargetLang);
-        assertEquals(Config.DEF_SEND_SYSTEM_PROMPT, outbound.systemPrompt);
-        assertTrue(outbound.systemPrompt.replace("{{target_language}}", outbound.targetLang)
-                .contains("into English"));
+        assertTrue(outbound.systemPrompt.contains("into English"));
+        assertFalse(outbound.systemPrompt.contains("{{target_language}}"));
         assertNotEquals(incoming.version(), outbound.version());
     }
 
@@ -160,10 +163,59 @@ public class ConfigTest {
     public void defaultPromptUsesConfiguredTargetLanguage() {
         Config.Snapshot japanese = Config.read(new MemoryPrefs()
                 .put(Config.KEY_TARGET_LANG, "日本語"));
-        assertEquals(Config.DEF_SYSTEM_PROMPT, japanese.systemPrompt);
+        assertTrue(japanese.systemPrompt.contains("into 日本語"));
+        assertFalse(japanese.systemPrompt.contains("Simplified Chinese"));
         assertTrue(Config.defaultSystemPromptFor(japanese.targetLang).contains("into 日本語"));
         assertFalse(Config.defaultSystemPromptFor(japanese.targetLang)
                 .contains("Simplified Chinese"));
+    }
+
+    @Test
+    public void everyBooleanSettingHasAnIndependentPersistedSnapshotValue() {
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_ENABLED, false)
+                .put(Config.KEY_LOGGING_ENABLED, true)
+                .put(Config.KEY_CACHE_ENABLED, true)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false)
+                .put(Config.KEY_CHECK_WRAPPER, false)
+                .put(Config.KEY_STRIP_OUTER_WRAPPER, false)
+                .put(Config.KEY_CHECK_SEGMENT_MARKERS, false)
+                .put(Config.KEY_CHECK_PLACEHOLDERS, false)
+                .put(Config.KEY_CHECK_RETAINED_MARKERS, false)
+                .put(Config.KEY_CHECK_LENGTH, false)
+                .put(Config.KEY_PROTECT_MENTIONS, false)
+                .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, false)
+                .put(Config.KEY_PROTECT_URLS, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        assertTrue(snapshot.isUsable());
+        assertFalse(snapshot.enabled);
+        assertTrue(snapshot.loggingEnabled);
+        assertTrue(snapshot.cacheEnabled);
+        assertFalse(snapshot.streaming);
+        assertFalse(snapshot.protectionPromptEnabled);
+        assertFalse(snapshot.checkWrapper);
+        assertFalse(snapshot.stripOuterWrapper);
+        assertFalse(snapshot.checkSegmentMarkers);
+        assertFalse(snapshot.checkPlaceholders);
+        assertFalse(snapshot.checkRetainedMarkers);
+        assertFalse(snapshot.checkLength);
+        assertFalse(snapshot.protectMentions);
+        assertFalse(snapshot.protectChannelsEmojis);
+        assertFalse(snapshot.protectUrls);
+        assertTrue(snapshot.experimentalLongMessageChunking);
+    }
+
+    @Test
+    public void protectionPromptToggleIsStrictlyTypedAndChangesRequestVersion() {
+        Config.Snapshot defaults = Config.read(new MemoryPrefs());
+        Config.Snapshot disabled = Config.read(new MemoryPrefs()
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false));
+        assertTrue(defaults.protectionPromptEnabled);
+        assertFalse(disabled.protectionPromptEnabled);
+        assertNotEquals(defaults.version(), disabled.version());
+        assertTrue(Config.read(new MemoryPrefs()
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, "false")).configError != null);
     }
 
     @Test

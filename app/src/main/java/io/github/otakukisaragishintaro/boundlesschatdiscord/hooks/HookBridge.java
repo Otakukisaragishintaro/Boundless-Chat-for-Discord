@@ -7,7 +7,6 @@ import android.view.View;
 import androidx.annotation.Nullable;
 
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.EnglishDetector;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.StateStore;
@@ -288,7 +287,7 @@ public final class HookBridge {
         StringBuilder identity = new StringBuilder();
         for (Object text : texts) {
             TextExtractor.Result ex = TextExtractor.extract(text);
-            String hash = ex == null || ex.text.trim().isEmpty() ? null : contentHashOf(ex, config);
+            String hash = ex == null || ex.text.trim().isEmpty() ? null : contentHashOf(ex, config, rowMessageId);
             hashes.add(hash);
             identity.append(hash == null ? "EMPTY" : hash).append('\u0000');
         }
@@ -315,7 +314,7 @@ public final class HookBridge {
     StateStore.Entry matchingState(String key, @Nullable TextExtractor.Result extracted) {
         StateStore.Entry entry = StateStore.get().peek(key);
         return entry != null && extracted != null
-                && contentHashOf(extracted, config).equals(entry.contentHash) ? entry : null;
+                && contentHashOf(extracted, config, key).equals(entry.contentHash) ? entry : null;
     }
 
     /** Poll question/answer slots share the same hash, scheduler and state pipeline. */
@@ -328,7 +327,7 @@ public final class HookBridge {
         TextExtractor.Result ex = TextExtractor.extract(structurable);
         return ex == null || ex.text.trim().isEmpty() ? null
                 : stateKey(rowMessageId, POLL_KEY_PREFIX + slot + "\u0000",
-                        contentHashOf(ex, config));
+                        contentHashOf(ex, config, rowMessageId));
     }
 
     static boolean isPollKey(@Nullable String key) {
@@ -378,9 +377,18 @@ public final class HookBridge {
     }
 
     /** 与 {@link #onMessageBound} 同口径的内容哈希（含多片段缓存命名空间）。 */
-    private static String contentHashOf(TextExtractor.Result ex, Config.Snapshot cfg) {
-        String hashInput = ex.segmentCount >= 2 ? ex.text + SEGMENT_CACHE_SUFFIX : ex.text;
-        return Scheduler.contentHash(hashInput, cfg.version());
+    private Config.Snapshot configForMessage(String key, Config.Snapshot snapshot) {
+        MessageLocation location = messageLocations.get(cardRowOf(key));
+        return location == null ? snapshot
+                : snapshot.forIncomingTranslation(location.guildId, location.channelId);
+    }
+
+    private String contentHashOf(TextExtractor.Result ex, Config.Snapshot cfg, String messageKey) {
+        // Structural request anchors change the translation protocol; include them in the
+        // identity only when present so old list/heading cache entries cannot bypass them.
+        String identityText = ex.requestText.equals(ex.text) ? ex.text : ex.requestText;
+        String hashInput = ex.segmentCount >= 2 ? identityText + SEGMENT_CACHE_SUFFIX : identityText;
+        return Scheduler.contentHash(hashInput, configForMessage(messageKey, cfg).version());
     }
 
     /**
@@ -432,8 +440,9 @@ public final class HookBridge {
         }
         // The single captured request keeps style ranges and retained-node anchors.
         // The segment suffix is only a cache namespace, not another request protocol.
-        String requestText = ex.text;
-        String hash = contentHashOf(ex, cfg);
+        String requestText = ex.requestText;
+        Config.Snapshot requestConfig = configForMessage(messageId, cfg);
+        String hash = contentHashOf(ex, requestConfig, messageId);
         StateStore.Entry entry = StateStore.get().obtain(messageId, hash);
         rememberCanonicalContent(messageId, structurableText);
         if (entry.status == StateStore.Status.TRANSLATING
@@ -461,12 +470,8 @@ public final class HookBridge {
             return;
         }
 
-        // Apply the same literal Discord-token shielding before language detection
-        // that the request engine applies before sending text to the provider.
-        String detectionText = DiscordTokenMarkers.protect(ex.text,
-                cfg.protectMentions, cfg.protectChannelsEmojis, cfg.protectUrls).text;
         EnglishDetector.Verdict v = EnglishDetector.evaluate(
-                detectionText, ex.textNodeCount, cfg.targetLang);
+                ex.text, ex.textNodeCount, cfg.targetLang);
         if (!v.shouldTranslate) {
             ProjectLog.infoOnce("translation.languageSkip." + v.reason.name(),
                     "translation skipped by language detector"
@@ -480,7 +485,8 @@ public final class HookBridge {
         TranslationTaskId task = StateStore.get().begin(entry);
         if (task == null) return;
         refreshTranslation(messageId);
-        Scheduler.get().submit(task, requestText, engine,
+        Scheduler.Engine requestEngine = requestConfig == cfg ? engine : new JsonApiEngine(requestConfig);
+        Scheduler.get().submit(task, requestText, requestEngine,
                 identity -> HookRuntime.isActive() && translationAllowed(identity.messageId, config)
                         && StateStore.get().owns(identity),
                 (identity, accepted, translated, error) -> {
@@ -509,14 +515,44 @@ public final class HookBridge {
             return;
         }
         if (success) {
-            if (resultConfig.cacheEnabled) {
-                ProjectLog.info("translation result accepted; persistent cache write requested");
-                TranslationCache.get().put(task.contentHash, translated);
-            } else {
-                ProjectLog.info("translation result accepted; cache skipped reason=disabled");
-            }
+            ProjectLog.info("translation result accepted; cache pending native display confirmation");
         }
         refreshTranslation(task.messageId);
+    }
+
+    /**
+     * Text conversion succeeded, but cache persistence waits for the enclosing native
+     * message-render method to return. This avoids committing from an intermediate
+     * text conversion that Discord later replaces or abandons.
+     */
+    void onTranslationRendered(String messageId, String translated) {
+        if (!config.cacheEnabled) {
+            ProjectLog.info("local translation cache write skipped reason=disabled");
+            return;
+        }
+        if (!StateStore.get().markCachePending(messageId, translated)) {
+            ProjectLog.info("local translation cache write skipped reason=render_state_changed");
+            return;
+        }
+        ProjectLog.info("translation text conversion complete; cache pending outer message render");
+    }
+
+    /** Called only after the enclosing Discord message-render chain has returned normally. */
+    void onMessageRenderCompleted(String messageId, boolean viewAttached) {
+        if (!config.cacheEnabled) {
+            ProjectLog.info("local translation cache write skipped reason=disabled");
+            return;
+        }
+        if (!viewAttached) {
+            ProjectLog.info("local translation cache write deferred reason=view_detached");
+            return;
+        }
+        java.util.List<StateStore.Entry> entries =
+                StateStore.get().claimCacheCommitsForRow(messageId);
+        for (StateStore.Entry entry : entries) {
+            ProjectLog.info("native message render completed; persistent cache write requested");
+            TranslationCache.get().put(entry.contentHash, entry.translatedText);
+        }
     }
 
     /** A segment update also refreshes its card's aggregate progress/error icon. */
@@ -600,6 +636,19 @@ public final class HookBridge {
                 // 翻译中或未开始：忽略，避免重复触发。
                 break;
         }
+    }
+
+    /** Retry a successful translation whose rich formatting was degraded. */
+    public void onFormattingWarningClicked(String messageId) {
+        if (messageId == null || isCardKey(messageId)) return;
+        StateStore.Entry entry = StateStore.get().peek(messageId);
+        if (entry == null || entry.status != StateStore.Status.TRANSLATED
+                || !entry.renderDegraded || entry.translatedText == null) return;
+        String previous = entry.translatedText;
+        if (config.cacheEnabled) TranslationCache.get().remove(entry.contentHash);
+        if (!StateStore.get().rejectRender(messageId, previous)) return;
+        ProjectLog.info("formatting warning clicked; retrying translation without cached result");
+        retry(messageId);
     }
 
     /** 失败后重试：由图标点击触发（需求 §2.6）。 */

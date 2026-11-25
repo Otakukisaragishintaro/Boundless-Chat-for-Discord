@@ -27,6 +27,16 @@ public final class IconClickSpanFactory {
 
     @Nullable
     public static Object create(@Nullable ClassLoader hostCl, @Nullable String messageId) {
+        return create(hostCl, messageId, "toggleTranslation");
+    }
+
+    public static Object createFormattingRetry(@Nullable ClassLoader hostCl,
+                                               @Nullable String messageId) {
+        return create(hostCl, messageId, "retryFormatting");
+    }
+
+    private static Object create(@Nullable ClassLoader hostCl, @Nullable String messageId,
+                                 String action) {
         HookConfiguration configuration = HookConfiguration.activeConfiguration();
         JSONObject spec = configuration == null ? null : configuration.iconClickConfiguration();
         if (hostCl == null || messageId == null || spec == null
@@ -37,7 +47,7 @@ public final class IconClickSpanFactory {
             if (!"constructorProxy".equals(spec.optString("protocol", ""))) {
                 throw new IllegalArgumentException("Unsupported icon click protocol");
             }
-            Object span = createByConstructor(hostCl, messageId, spec);
+            Object span = createByConstructor(hostCl, messageId, spec, action);
             if (span == null) {
                 ProjectLog.warnOnce("icon.click.span-unavailable",
                         "icon click span unavailable: configured protocol could not be created");
@@ -53,6 +63,11 @@ public final class IconClickSpanFactory {
     @Nullable
     static Object createByConstructor(ClassLoader hostCl, String messageId,
                                                JSONObject spec) throws Exception {
+        return createByConstructor(hostCl, messageId, spec, "toggleTranslation");
+    }
+
+    static Object createByConstructor(ClassLoader hostCl, String messageId,
+                                               JSONObject spec, String action) throws Exception {
         Class<?> spanClass = configuredClass(hostCl, spec.optString("spanClass", ""));
         Class<?> expectedSuperclass = configuredClass(
                 hostCl, spec.optString("requiredSuperclass", ""));
@@ -84,7 +99,7 @@ public final class IconClickSpanFactory {
         Object[] arguments = new Object[argumentSpecs.length()];
         for (int i = 0; i < parameterTypes.length; i++) {
             parameterTypes[i] = resolveType(hostCl, parameterNames.optString(i, ""));
-            arguments[i] = resolveArgument(hostCl, messageId, argumentSpecs.optJSONObject(i));
+            arguments[i] = resolveArgument(hostCl, messageId, argumentSpecs.optJSONObject(i), action);
             if (parameterTypes[i] == null || arguments[i] == INVALID_ARGUMENT
                     || !accepts(parameterTypes[i], arguments[i])) {
                 return null;
@@ -100,7 +115,7 @@ public final class IconClickSpanFactory {
 
     @Nullable
     private static Object resolveArgument(ClassLoader hostCl, String messageId,
-                                          @Nullable JSONObject argument) throws Exception {
+                                          @Nullable JSONObject argument, String action) throws Exception {
         if (argument == null) {
             return INVALID_ARGUMENT;
         }
@@ -130,7 +145,11 @@ public final class IconClickSpanFactory {
                                 if (lease == null) return null;
                                 ProjectLog.infoOnce("icon.click.callback-reached",
                                         "icon click callback reached configured host span handler");
-                                HookBridge.get().onIconClicked(messageId);
+                                if ("retryFormatting".equals(action)) {
+                                    HookBridge.get().onFormattingWarningClicked(messageId);
+                                } else {
+                                    HookBridge.get().onIconClicked(messageId);
+                                }
                                 return null;
                             }
                         });

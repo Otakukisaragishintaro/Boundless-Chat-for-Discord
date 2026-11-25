@@ -98,6 +98,15 @@ public final class JsonApiEngine implements Scheduler.Engine {
     }
 
     private String translateInternal(String text, boolean logFailureDiagnostics) throws Exception {
+        String previousRequestId = ProjectLog.beginRequest();
+        try {
+            return translateWithRequestContext(text, logFailureDiagnostics);
+        } finally {
+            ProjectLog.endRequest(previousRequestId);
+        }
+    }
+
+    private String translateWithRequestContext(String text, boolean logFailureDiagnostics) throws Exception {
         // Literal Discord syntax can also arrive inside ordinary text nodes or primitive
         // StructurableText. Shield it before every provider request and restore it only
         // after the same retained-marker integrity check used for native opaque nodes.
@@ -277,10 +286,10 @@ public final class JsonApiEngine implements Scheduler.Engine {
             }
             translated = translated.trim();
             if (validateTranslation) {
-                // Optional normalization: remove only one exact outer wrapper pair.
-                // Embedded, partial, and nested markers remain available to the checks below.
+                // Normalize only protocol framing that can be distinguished from source text.
+                // Any embedded, repeated, partial, or source-authored wrapper remains invalid.
                 if (cfg.stripOuterWrapper) {
-                    translated = Segments.stripOuterResponseWrapper(translated);
+                    translated = Segments.stripOuterResponseWrapper(translated, text);
                 }
                 String violation = Segments.plainTextViolation(translated, text,
                         cfg.checkWrapper, cfg.checkSegmentMarkers, cfg.checkPlaceholders,
@@ -375,7 +384,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
     /** Sends exactly once and retains the decoded response status for post-request validation. */
     private Http.Response requestOnce(String text, Http.Request request, Http.Headers headers)
             throws Exception {
-        // 1) 单一输入按协议构造请求体；已保存提示词也追加原样保留结构标记的规则。
+        // 1) 单一输入按协议构造请求体；保留节点统一使用 <keepN/> 标记。
         boolean sse = cfg.streaming;
         String systemPrompt;
         if (cfg.systemPrompt.contains("{{target_language}}")) {
@@ -386,7 +395,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             systemPrompt = cfg.systemPrompt;
         }
         String body = Protocols.requestBody(cfg.protocol, text, systemPrompt, cfg.model,
-                sse);
+                sse, cfg.protectionPromptEnabled, cfg.targetLang);
         buildHeaders(headers);
 
         // Decoder selection is fixed for this request; no reparsing or mode detection.

@@ -53,6 +53,9 @@ public class ConfigurationSyncTest {
     public void sendTargetLanguageUsesTheSameImportAndSaveTransactionChain() {
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_TARGET_LANG));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_SEND_SYSTEM_PROMPT));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_INCOMING_STYLES));
+        assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_OUTBOUND_PROMPTS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_MENTIONS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_CHANNELS_EMOJIS));
         assertTrue(ConfigurationSync.CONFIG_KEYS.contains(Config.KEY_PROTECT_URLS));
@@ -82,6 +85,66 @@ public class ConfigurationSyncTest {
         assertEquals("Français", remote.disk.get(Config.KEY_SEND_TARGET_LANG));
         assertEquals("Saved {{target_language}} prompt", local.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
         assertEquals("Saved {{target_language}} prompt", remote.disk.get(Config.KEY_SEND_SYSTEM_PROMPT));
+        assertTrue(local.disk.containsKey(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(local.disk.containsKey(Config.KEY_INCOMING_STYLES));
+        assertTrue(local.disk.containsKey(Config.KEY_OUTBOUND_PROMPTS));
+        assertTrue(remote.disk.containsKey(Config.KEY_INCOMING_PROMPTS));
+        assertTrue(remote.disk.containsKey(Config.KEY_INCOMING_STYLES));
+        assertTrue(remote.disk.containsKey(Config.KEY_OUTBOUND_PROMPTS));
+    }
+
+    @Test
+    public void everyUserFacingToggleIsIncludedInTheAtomicSaveAndRemoteSync() {
+        String[] toggleKeys = {
+                Config.KEY_ENABLED, Config.KEY_LOGGING_ENABLED, Config.KEY_CACHE_ENABLED,
+                Config.KEY_STREAMING, Config.KEY_PROTECTION_PROMPT_ENABLED,
+                Config.KEY_CHECK_WRAPPER, Config.KEY_STRIP_OUTER_WRAPPER,
+                Config.KEY_CHECK_SEGMENT_MARKERS, Config.KEY_CHECK_PLACEHOLDERS,
+                Config.KEY_CHECK_RETAINED_MARKERS, Config.KEY_CHECK_LENGTH,
+                Config.KEY_PROTECT_MENTIONS, Config.KEY_PROTECT_CHANNELS_EMOJIS,
+                Config.KEY_PROTECT_URLS, Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING
+        };
+        for (String key : toggleKeys) {
+            assertTrue("Missing configuration sync key: " + key,
+                    ConfigurationSync.CONFIG_KEYS.contains(key));
+        }
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_ENABLED, false)
+                .put(Config.KEY_LOGGING_ENABLED, true)
+                .put(Config.KEY_CACHE_ENABLED, true)
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false)
+                .put(Config.KEY_CHECK_WRAPPER, false)
+                .put(Config.KEY_STRIP_OUTER_WRAPPER, false)
+                .put(Config.KEY_CHECK_SEGMENT_MARKERS, false)
+                .put(Config.KEY_CHECK_PLACEHOLDERS, false)
+                .put(Config.KEY_CHECK_RETAINED_MARKERS, false)
+                .put(Config.KEY_CHECK_LENGTH, false)
+                .put(Config.KEY_PROTECT_MENTIONS, false)
+                .put(Config.KEY_PROTECT_CHANNELS_EMOJIS, false)
+                .put(Config.KEY_PROTECT_URLS, false)
+                .put(Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING, true));
+        FakePrefs local = localBeforeImport();
+        FakePrefs remote = remoteValues();
+        local.outcomes.add(true);
+        remote.outcomes.add(true);
+        assertTrue(ConfigurationSync.save(local.prefs, remote.prefs, snapshot).succeeded());
+        Config.Snapshot restored = ConfigurationSync.loadLocal(local.prefs).snapshot;
+        assertFalse(restored.enabled);
+        assertTrue(restored.loggingEnabled);
+        assertTrue(restored.cacheEnabled);
+        assertFalse(restored.streaming);
+        assertFalse(restored.protectionPromptEnabled);
+        assertFalse(restored.checkWrapper);
+        assertFalse(restored.stripOuterWrapper);
+        assertFalse(restored.checkSegmentMarkers);
+        assertFalse(restored.checkPlaceholders);
+        assertFalse(restored.checkRetainedMarkers);
+        assertFalse(restored.checkLength);
+        assertFalse(restored.protectMentions);
+        assertFalse(restored.protectChannelsEmojis);
+        assertFalse(restored.protectUrls);
+        assertTrue(restored.experimentalLongMessageChunking);
     }
 
     @Test

@@ -36,6 +36,19 @@ public class BoundaryDiagnosticsTest {
         return rejection;
     }
 
+    private ContentNodes.Rejection ambiguousTranslation(List<?> nodes, String translated) {
+        ContentTree tree = ContentTree.compileForTranslation(nodes);
+        assertNotNull(tree);
+        ContentNodes.Rejection rejection = assertThrows(ContentNodes.Rejection.class,
+                () -> ContentNodes.replaceChecked(tree, translated));
+        assertEquals(ContentNodes.RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS, rejection.reason);
+        assertEquals("SOURCE_BOUNDARY_AMBIGUOUS", rejection.getMessage());
+        assertNull(rejection.getCause());
+        assertFalse(rejection.structure.isEmpty());
+        assertNull(ContentNodes.replacePlanned(tree, translated));
+        return rejection;
+    }
+
     @Test public void rootSameLineReportsZeroSourceLfAndNoContainers() {
         String structure = ambiguous(Arrays.asList(new TextContentNode("private-source-a"),
                 new TextContentNode(" "), new TextContentNode("private-source-b")),
@@ -75,7 +88,7 @@ public class BoundaryDiagnosticsTest {
         TextContentNode first = new TextContentNode("first");
         ParagraphContentNode nested = new ParagraphContentNode(Arrays.asList(first,
                 new StrongContentNode(Arrays.asList(new TextContentNode("second")))));
-        ContentTree tree = ContentTree.compile(Arrays.asList(nested));
+        ContentTree tree = ContentTree.compileForTranslation(Arrays.asList(nested));
         assertNotNull(tree);
         assertEquals(2, tree.events.size());
         assertEquals(ContentTree.EventKind.NODE, tree.events.get(0).kind);
@@ -182,15 +195,16 @@ public class BoundaryDiagnosticsTest {
         assertTrue(structure.contains("rightStyled=false"));
     }
 
-    @Test public void listSameLineSlotsKeepCapturedListPathAndDepth() {
+    @Test public void listItemAnchorDisambiguatesSameLineSlots() {
         BulletListContentNode list = new BulletListContentNode(null, false,
                 Arrays.asList(Arrays.asList(new TextContentNode("first"), new TextContentNode("second"))));
-        String structure = ambiguous(Arrays.asList(list), "• 译文").structure;
-        assertTrue(structure.contains("leftPath=BulletListContentNode"));
-        assertTrue(structure.contains("rightListDepth=1"));
-        assertTrue(structure.contains("leftGapItemStarts=1"));
-        assertTrue(structure.contains("rightGapItemStarts=0"));
-        assertTrue(structure.contains("sameContainerPath=true"));
+        ContentTree tree = ContentTree.compileForTranslation(Arrays.asList(list));
+        assertNotNull(tree);
+        List<Object> restored = ContentNodes.replaceChecked(tree, "• <x1>第一</x1>第二");
+        assertNotNull("首项边界标记应使同一列表项内的两个文本槽可确定回填", restored);
+        BulletListContentNode rebuilt = (BulletListContentNode) restored.get(0);
+        assertEquals("第一", ((TextContentNode) rebuilt.getItems().get(0).get(0)).getContent());
+        assertEquals("第二", ((TextContentNode) rebuilt.getItems().get(0).get(1)).getContent());
     }
 
     @Test public void otherRejectionsDoNotAcquireUnrelatedStructureAndSuccessRemainsUnchanged() {
@@ -208,21 +222,25 @@ public class BoundaryDiagnosticsTest {
         assertEquals("二", ((TextContentNode) output.get(2)).getContent());
     }
 
-    @Test public void lineCountDiagnosticNamesCapturedHeadingBoundaryWithoutText() {
-        ContentTree tree = ContentTree.compile(Arrays.asList(
+    @Test public void structuralMarkerKeepsHeadingBoundaryExplicitWithoutTextInDiagnostics() {
+        ContentTree tree = ContentTree.compileForTranslation(Arrays.asList(
                 new ContentNodesTest.HeadingContentNode(Arrays.asList(new TextContentNode("private-title")), 1),
                 new TextContentNode("private-body")));
         ContentNodes.Rejection rejection = assertThrows(ContentNodes.Rejection.class,
                 () -> ContentNodes.replaceChecked(tree, "私密译文"));
-        assertEquals(ContentNodes.RejectionReason.LINE_COUNT, rejection.reason);
-        assertEquals(2, rejection.expected);
-        assertEquals(1, rejection.actual);
-        assertTrue(rejection.structure.contains("runSlots=2 firstSlot=0 lastSlot=1"));
-        assertTrue(rejection.structure.contains("firstPath=HeadingContentNode"));
-        assertTrue(rejection.structure.contains("lastGapHeadingBreaks=1"));
+        assertEquals(ContentNodes.RejectionReason.STYLE_OPEN, rejection.reason);
+        assertEquals("", rejection.structure);
         assertFalse(rejection.structure.contains("private-"));
         assertFalse(rejection.structure.contains("私密译文"));
-        assertNull(ContentNodes.replacePlanned(tree, "私密译文"));
+
+        List<Object> restored = ContentNodes.replaceChecked(tree,
+                "标题译文<x1>正文译文</x1>");
+        assertNotNull(restored);
+        ContentNodesTest.HeadingContentNode heading =
+                (ContentNodesTest.HeadingContentNode) restored.get(0);
+        assertEquals("标题译文",
+                ((TextContentNode) heading.getContent().get(0)).getContent());
+        assertEquals("正文译文", ((TextContentNode) restored.get(1)).getContent());
     }
 
     @Test public void lineCountLocalRunMapsToGlobalSlotsAfterInlineCodeAnchor() {

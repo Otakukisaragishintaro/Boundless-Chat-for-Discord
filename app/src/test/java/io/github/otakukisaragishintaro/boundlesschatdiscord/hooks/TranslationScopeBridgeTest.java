@@ -23,6 +23,8 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.lang.reflect.Field;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import java.util.Arrays;
 import java.util.Collections;
 
@@ -173,6 +175,27 @@ public class TranslationScopeBridgeTest {
         bridge.forgetMessageLocation(ROW);
         for (String key : keys(ROW)) assertDeniedCallback(key);
         for (String key : keys(OTHER_ROW)) assertDeniedCallback(key);
+    }
+
+    @Test
+    public void disabledCacheSkipsAnExistingHitAndUsesTheTranslationEngine() throws Exception {
+        Config.Snapshot config = snapshot(true, false, TranslationScope.ALL);
+        bridge.updateConfig(config);
+        bridge.rememberMessageLocation(ROW, new MessageLocation(null, "20"));
+        Object input = new PrimitiveStructurableText("English text with a cached translation");
+        TextExtractor.Result extracted = TextExtractor.extract(input);
+        assertNotNull(extracted);
+        String hash = Scheduler.contentHash(extracted.text, config.version());
+        TranslationCache.get().put(hash, "stale cached translation");
+
+        CountDownLatch engineCalled = new CountDownLatch(1);
+        bridgeField("engine").set(bridge, (Scheduler.Engine) text -> {
+            engineCalled.countDown();
+            return "fresh translation";
+        });
+        bridge.onMessageBound(ROW, input);
+        assertTrue("cache disabled must bypass the stored entry and submit a request",
+                engineCalled.await(5, TimeUnit.SECONDS));
     }
 
     @Test
@@ -382,6 +405,14 @@ public class TranslationScopeBridgeTest {
         assertEquals("retained API result", TranslationCache.get().get(hash));
         bridge.onTranslateResult(task, true, "current generation", null);
         assertEquals(StateStore.Status.TRANSLATED, current.status);
+        assertEquals("retained API result", TranslationCache.get().get(hash));
+        bridge.onTranslationRendered(ROW, "current generation");
+        assertEquals("text conversion alone must not replace the retained cache entry",
+                "retained API result", TranslationCache.get().get(hash));
+        bridge.onMessageRenderCompleted(ROW, false);
+        assertEquals("detached message views must not overwrite the retained cache",
+                "retained API result", TranslationCache.get().get(hash));
+        bridge.onMessageRenderCompleted(ROW, true);
         assertEquals("current generation", TranslationCache.get().get(hash));
     }
 
@@ -446,6 +477,12 @@ public class TranslationScopeBridgeTest {
         bridge.onTranslateResult(task, true, "completed after display-only edit", null);
         assertEquals(StateStore.Status.TRANSLATED, entry.status);
         assertEquals("completed after display-only edit", entry.translatedText);
+        assertNull(TranslationCache.get().get("hash"));
+        bridge.onTranslationRendered(ROW, "completed after display-only edit");
+        assertNull("text conversion alone must not persist", TranslationCache.get().get("hash"));
+        bridge.onMessageRenderCompleted(ROW, false);
+        assertNull("detached message views must not commit pending cache", TranslationCache.get().get("hash"));
+        bridge.onMessageRenderCompleted(ROW, true);
         assertEquals("completed after display-only edit", TranslationCache.get().get("hash"));
     }
 
@@ -477,9 +514,14 @@ public class TranslationScopeBridgeTest {
     }
 
     private static Config.Snapshot snapshot(boolean enabled, TranslationScope scope) {
+        return snapshot(enabled, true, scope);
+    }
+
+    private static Config.Snapshot snapshot(boolean enabled, boolean cacheEnabled,
+                                            TranslationScope scope) {
         Config.Snapshot snapshot = Config.read(new MemoryPrefs()
                 .put(Config.KEY_ENABLED, enabled)
-                .put(Config.KEY_CACHE_ENABLED, true)
+                .put(Config.KEY_CACHE_ENABLED, cacheEnabled)
                 .put(Config.KEY_TRANSLATION_SCOPE, scope.toJson()));
         assertNull(snapshot.configError);
         return snapshot;

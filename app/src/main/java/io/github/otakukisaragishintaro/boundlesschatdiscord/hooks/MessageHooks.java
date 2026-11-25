@@ -279,16 +279,16 @@ public final class MessageHooks {
                                 ? safeArg(chain, viewArgument) : chain.getThisObject();
                         View view = asView(viewObject);
                         Object content = safeArg(chain, contentArgument);
+                        Object configuredId = safeArg(chain, messageIdArgument);
+                        String messageId = configuredId instanceof String
+                                && HookBridge.looksLikeSnowflake((String) configuredId)
+                                ? (String) configuredId : null;
                         InlineIconInjector.HostScope hostScope = InlineIconInjector.enterHost(view, null);
                         try {
                             if (!RenderDispatcher.isRerendering() && view != null) {
                                 RerenderRegistry.unregister(view);
                                 HookBridge.get().unbindView(view);
                                 Object[] renderArgs = chain.getArgs().toArray();
-                                Object configuredId = safeArg(chain, messageIdArgument);
-                                String messageId = configuredId instanceof String
-                                        && HookBridge.looksLikeSnowflake((String) configuredId)
-                                        ? (String) configuredId : null;
                                 ProjectLog.infoOnce("message.render", "message.render invoked host="
                                         + (view != null) + " idResolved=" + (messageId != null)
                                         + " idSource=" + identitySource
@@ -309,7 +309,11 @@ public final class MessageHooks {
                                     + t.getClass().getName());
                         }
                         try {
-                            return chain.proceed();
+                            Object rendered = chain.proceed();
+                            if (messageId != null) {
+                                HookBridge.get().onMessageRenderCompleted(messageId, view.isAttachedToWindow());
+                            }
+                            return rendered;
                         } finally {
                             hostScope.close();
                         }
@@ -365,6 +369,9 @@ public final class MessageHooks {
                                 "message.textConversion Discord callers="
                                         + discordCallers());
                         boolean replyTranslationApplied = false;
+                        boolean translationReplacementApplied = false;
+                        String acceptedTranslationId = null;
+                        String acceptedTranslation = null;
                         TextExtractor.Result extracted = null;
                         try {
                             String messageId = resolvedMessageId;
@@ -382,15 +389,21 @@ public final class MessageHooks {
                                         && e.status == StateStore.Status.TRANSLATED
                                         && !HookBridge.get().showingOriginal(messageId, e)) ? e.translatedText : null;
                                 if (translated != null) {
+                                    boolean[] degraded = new boolean[1];
                                     Object replacement = StructurableTextFactory.forPlannedTranslation(
-                                            original, translated, extracted);
+                                            original, translated, extracted, degraded);
                                     if (replacement != null) {
+                                        if (e != null) e.renderDegraded = degraded[0];
                                         ProjectLog.info("message translation replacement applied"
+                                                + " formattingDegraded=" + degraded[0]
                                                 + " route=" + (replyConversion ? "reply-canonical" : "body")
                                                 + " sourceClass=" + original.getClass().getName()
                                                 + " replacementClass=" + replacement.getClass().getName());
                                         renderArgs[contentArgument] = replacement;
                                         replyTranslationApplied = replyConversion;
+                                        translationReplacementApplied = true;
+                                        acceptedTranslationId = messageId;
+                                        acceptedTranslation = translated;
                                     } else {
                                         ProjectLog.info("message translation replacement rejected"
                                                 + " sourceClass=" + source.getClass().getName());
@@ -409,6 +422,11 @@ public final class MessageHooks {
 
                         // 宿主渲染只执行一次；图标注入失败时保留原始渲染结果。
                         Object rendered = chain.proceed(renderArgs);
+                        if (translationReplacementApplied && acceptedTranslationId != null
+                                && acceptedTranslation != null) {
+                            HookBridge.get().onTranslationRendered(
+                                    acceptedTranslationId, acceptedTranslation);
+                        }
                         if (replyTranslationApplied) {
                             // Native singleLine mode does not remove embedded LF or NewLine
                             // nodes. Project only after canonical alignment and rendering,

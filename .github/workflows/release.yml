@@ -30,7 +30,6 @@ env:
 
 permissions:
   contents: write
-  pull-requests: write
 
 # Stable and prerelease releases share this group. Both update tags and the versionCode high-water mark, so they must run one at a time.
 concurrency:
@@ -105,8 +104,8 @@ jobs:
           "$SDKMGR" "platforms;android-37.0" "build-tools;36.0.0"
           echo "ANDROID_HOME=$ANDROID_HOME" >> "$GITHUB_ENV"
 
-      # Resolve versions from tags. The release commit is tagged, then a PR syncs the
-      # resulting versionName/versionCode back to protected main.
+      # Resolve versions from tags. Each release stores versionName/versionCode in a
+      # commit referenced only by its tag; main stays unchanged, no release branches.
       # LSPosed 模块仓库要求：Release Tag 格式为 {versionCode}-{versionName}（如 1-1.0.0）。
       - name: Resolve version
         id: resolve
@@ -286,9 +285,8 @@ jobs:
           echo "使用 $APKSIGNER"
           "$APKSIGNER" verify --verbose --print-certs app/build/outputs/apk/release/app-release.apk
 
-      # The release commit is tagged and published. Stable releases also open a PR to
-      # sync app/build.gradle back to protected main; branch protection remains enforced.
-      # This workflow only publishes to this repository, never the upstream LSPosed repository.
+      # Version changes go in a commit referenced only by the tag, leaving main unchanged.
+      # This independent downstream publishes only to its own repository; it never writes to the upstream LSPosed module repository.
       - name: Tag and publish GitHub release
         shell: bash
         env:
@@ -307,7 +305,7 @@ jobs:
 
           git add app/build.gradle
           git commit -m "chore(release): $TAG"
-          echo "版本号提交：$(git rev-parse --short HEAD)（由 tag $TAG 引用；正式版随后通过 PR 同步到 main）"
+          echo "版本号提交：$(git rev-parse --short HEAD)（仅被 tag $TAG 引用，main 不变）"
 
           git tag -a "$TAG" -m "Release $TAG (versionCode $VERSION_CODE)"
           git push origin "refs/tags/$TAG"
@@ -318,16 +316,6 @@ jobs:
               --title "$APP_NAME $VERSION" \
               --notes-file "$RUNNER_TEMP/release-notes.md" \
               "$APP_NAME.apk"
-
-            # Keep the protected main branch Gradle version aligned with the
-            # stable release. Never push directly to main; use a normal PR.
-            SYNC_BRANCH="chore/sync-release-version-$TAG"
-            git push origin "HEAD:refs/heads/$SYNC_BRANCH"
-            gh pr create \
-              --base main \
-              --head "$SYNC_BRANCH" \
-              --title "chore: sync version to $VERSION" \
-              --body "Automated version synchronization after stable release [$TAG](https://github.com/$GITHUB_REPOSITORY/releases/tag/$TAG). This PR updates only app/build.gradle so future development branches start from the latest released version. The release APK was built and published from source commit ${{ steps.resolve.outputs.sourceSha }}."
 
           else
             gh release create "$TAG" \

@@ -134,8 +134,12 @@ public class StructurableTextFactoryTest {
                 list(new TextContentNode("first"))), text, emoji);
         AnnotatedStructurableText original = new AnnotatedStructurableText(nodes);
 
-        // 返回 null 是计划重建的“不替换”协议，所有 Hook 调用方保留 original。
-        assertNull(planned(original, "第一\n你好<keep1/>"));
+        // Rich reconstruction may fail, but the translated body must remain visible.
+        Object replacement = planned(original, "第一\n你好<keep1/>");
+        assertTrue(replacement instanceof AnnotatedStructurableText);
+        List<?> flattened = ((AnnotatedStructurableText) replacement).getContent();
+        assertEquals("第一\n你好", ((TextContentNode) flattened.get(0)).getContent());
+        assertSame(emoji, flattened.get(1));
         assertSame(nodes, original.getContent());
         assertSame(emoji, original.getContent().get(2));
         assertEquals("hello", text.getContent());
@@ -148,8 +152,31 @@ public class StructurableTextFactoryTest {
         AnnotatedStructurableText original = new AnnotatedStructurableText(
                 list(new TextContentNode("hello"), emoji));
 
-        assertNull(planned(original, "你好<keep1/>"));
+        Object replacement = planned(original, "你好<keep1/>");
+        assertNull("Protected native nodes must not be discarded when Annotated construction is unavailable",
+                replacement);
         assertSame(emoji, original.getContent().get(1));
+    }
+
+    @Test
+    public void degradedPlainRenderingRestoresProtectedNodesEvenWhenModelDropsAnchors() {
+        OpaqueNodeTranslationTest.UserOrRoleMentionContentNode mention =
+                new OpaqueNodeTranslationTest.UserOrRoleMentionContentNode(
+                        list(new TextContentNode("ExampleUser")));
+        EmojiContentNode emoji = new EmojiContentNode("1");
+        AnnotatedStructurableText original = new AnnotatedStructurableText(
+                list(mention, new TextContentNode("hello world"), emoji));
+        TextExtractor.Result extracted = TextExtractor.extract(original);
+        assertNotNull(extracted);
+
+        List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(
+                extracted.tree, "你好世界");
+
+        assertNotNull(flattened);
+        assertSame("A missing leading mention anchor must remain before translated text",
+                mention, flattened.get(0));
+        assertEquals("你好世界", ((TextContentNode) flattened.get(1)).getContent());
+        assertSame(emoji, flattened.get(2));
     }
 
     @Test

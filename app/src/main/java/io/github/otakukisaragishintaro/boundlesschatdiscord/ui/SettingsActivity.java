@@ -1,6 +1,7 @@
 package io.github.otakukisaragishintaro.boundlesschatdiscord.ui;
 
 import android.app.Activity;
+import android.app.Application;
 import android.app.AlertDialog;
 import android.app.Dialog;
 import android.content.SharedPreferences;
@@ -34,6 +35,9 @@ import androidx.annotation.Nullable;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.R;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Config;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.CacheCountProvider;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiagnosticLogStore;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.LanguagePromptConfig;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.IncomingPromptStyles;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.OutboundButtonConfig;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationScope;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ConfigurationSync;
@@ -47,6 +51,8 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.IdentityHashMap;
+import java.util.Date;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.ExecutionException;
@@ -142,9 +148,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private EditText modelInput;
     private EditText headersInput;
     private EditText systemPromptInput;
+    private EditText incomingStylesInput;
     private EditText sendSystemPromptInput;
-    private Button resetSystemPromptButton;
-    private Button resetSendSystemPromptButton;
     private EditText timeoutInput;
     private EditText concurrencyInput;
     private EditText minLengthPercentInput;
@@ -154,6 +159,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private Switch checkSegmentMarkersInput;
     private Switch checkPlaceholdersInput;
     private Switch checkRetainedMarkersInput;
+    private Switch protectionPromptEnabledInput;
     private Switch checkLengthInput;
     private Switch protectMentionsInput;
     private Switch protectChannelsEmojisInput;
@@ -189,6 +195,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     private TextView streamingHint;
     private TextView statusText;
     private TextView resultText;
+    private TextView testDiagnosticLogText;
     private EditText testTextInput;
     private EditText testGuildIdInput;
     private EditText testChannelIdInput;
@@ -316,6 +323,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         draft.putBoolean("cache_enabled", cacheEnabledInput.isChecked());
         draft.putString("cache_limit", cacheLimitInput.getText().toString());
         draft.putBoolean("streaming", streamingInput.isChecked());
+        draft.putBoolean("protection_prompt_enabled", protectionPromptEnabledInput.isChecked());
         draft.putBoolean("check_wrapper", checkWrapperInput.isChecked());
         draft.putBoolean("strip_outer_wrapper", stripOuterWrapperInput.isChecked());
         draft.putBoolean("check_segments", checkSegmentMarkersInput.isChecked());
@@ -359,6 +367,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             cacheLimitInput.setText(draft.getString("cache_limit", String.valueOf(Config.DEF_CACHE_LIMIT)));
             protocolSpinner.setSelection(draft.getInt("protocol"));
             streamingInput.setChecked(draft.getBoolean("streaming"));
+            protectionPromptEnabledInput.setChecked(draft.getBoolean("protection_prompt_enabled",
+                    Config.DEF_PROTECTION_PROMPT_ENABLED));
             checkWrapperInput.setChecked(draft.getBoolean("check_wrapper", Config.DEF_CHECK_WRAPPER));
             stripOuterWrapperInput.setChecked(draft.getBoolean("strip_outer_wrapper",
                     Config.DEF_STRIP_OUTER_WRAPPER));
@@ -389,7 +399,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             if (buttonJson != null) {
                 outboundButtonsDraft.clear();
                 outboundButtonsDraft.addAll(OutboundButtonConfig.parse(buttonJson,
-                        sendLanguage, sendSystemPromptInput.getText().toString()));
+                        sendLanguage, Config.DEF_SEND_SYSTEM_PROMPT));
             }
             updateOutboundButtonsSummary();
             baselineProtocol = draft.getString("baseline_protocol");
@@ -791,6 +801,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         manageOutboundButtonsButton.setText(getString(R.string.button_manage_outbound));
         manageOutboundButtonsButton.setOnClickListener(v -> openOutboundButtonsEditor());
         root.addView(manageOutboundButtonsButton, matchWrap());
+        Button manageLanguagePromptsButton = new Button(this);
+        manageLanguagePromptsButton.setText("管理 22 种语言的独立提示词");
+        manageLanguagePromptsButton.setOnClickListener(v -> openLanguagePromptsEditor());
+        root.addView(manageLanguagePromptsButton, matchWrap());
         advancedSettingsButton = new Button(this);
         advancedSettingsButton.setText(getString(R.string.button_advanced_settings));
         advancedSettingsButton.setOnClickListener(v -> openAdvancedSettings());
@@ -805,14 +819,14 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                 getString(R.string.label_incoming_prompt),
                 getString(R.string.hint_system_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        resetSystemPromptButton = addPromptResetButton(advancedBacking, systemPromptInput,
-                Config.DEF_SYSTEM_PROMPT);
+        protectionPromptEnabledInput = addValidationSwitch(advancedBacking,
+                "启用必要保护提示词（默认开启）", Config.DEF_PROTECTION_PROMPT_ENABLED);
+        incomingStylesInput = new EditText(this);
+        advancedBacking.addView(incomingStylesInput, matchWrap());
         sendSystemPromptInput = addField(advancedBacking,
                 getString(R.string.label_new_outbound_prompt),
                 getString(R.string.hint_default_outbound_prompt),
                 InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        resetSendSystemPromptButton = addPromptResetButton(advancedBacking, sendSystemPromptInput,
-                Config.DEF_SEND_SYSTEM_PROMPT);
         checkWrapperInput = addValidationSwitch(advancedBacking,
                 getString(R.string.validation_check_wrapper), Config.DEF_CHECK_WRAPPER);
         stripOuterWrapperInput = addValidationSwitch(advancedBacking,
@@ -916,11 +930,28 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         resultText.setTextSize(12f);
         resultText.setPadding(0, dp(8), 0, 0);
         root.addView(resultText, matchWrap());
+
+        TextView testLogTitle = new TextView(this);
+        testLogTitle.setText("本次测试诊断日志");
+        testLogTitle.setTextSize(14f);
+        testLogTitle.setPadding(0, dp(12), 0, dp(4));
+        root.addView(testLogTitle, matchWrap());
+        testDiagnosticLogText = new TextView(this);
+        testDiagnosticLogText.setTextSize(12f);
+        testDiagnosticLogText.setText("尚未执行测试");
+        testDiagnosticLogText.setPadding(0, dp(4), 0, dp(8));
+        root.addView(testDiagnosticLogText, matchWrap());
+
         copyTestResultButton = new Button(this);
-        copyTestResultButton.setText(R.string.button_copy_test_result);
+        copyTestResultButton.setText("复制测试结果和日志");
         copyTestResultButton.setEnabled(false);
         copyTestResultButton.setOnClickListener(v -> copyTestResult());
         root.addView(copyTestResultButton, matchWrap());
+
+        Button diagnosticLogsButton = new Button(this);
+        diagnosticLogsButton.setText("查看跨进程诊断日志");
+        diagnosticLogsButton.setOnClickListener(v -> showDiagnosticLogs());
+        root.addView(diagnosticLogsButton, matchWrap());
 
         ScrollView scroll = new ScrollView(this);
         scroll.addView(root, new ViewGroup.LayoutParams(
@@ -965,7 +996,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         String[] labels = getResources().getStringArray(R.array.target_language_labels);
         outboundButtonsDialog = OutboundButtonsEditor.show(this,
                 new ArrayList<>(outboundButtonsDraft), TARGET_LANGUAGE_VALUES, labels,
-                promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT),
+                Config.DEF_SEND_SYSTEM_PROMPT,
                 updated -> {
                     outboundButtonsDraft.clear();
                     outboundButtonsDraft.addAll(updated);
@@ -979,6 +1010,305 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         outboundButtonsDialog.setOnDismissListener(dialog -> outboundButtonsDialog = null);
     }
 
+    /** Edit receive/send prompts for any supported language; defaults stay collapsed until requested. */
+    private void openLanguagePromptsEditor() {
+        if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
+                || persistence.isLoading() || saveInProgress || syncInProgress) return;
+
+        LinearLayout form = new LinearLayout(this);
+        form.setOrientation(LinearLayout.VERTICAL);
+        form.setPadding(dp(18), dp(8), dp(18), dp(8));
+        Spinner language = new Spinner(this);
+        String[] labels = getResources().getStringArray(R.array.target_language_labels);
+        ArrayAdapter<String> languageAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item, labels);
+        languageAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        language.setAdapter(languageAdapter);
+        form.addView(language, matchWrap());
+
+        Spinner direction = new Spinner(this);
+        ArrayAdapter<String> directionAdapter = new ArrayAdapter<>(this,
+                android.R.layout.simple_spinner_item,
+                new String[]{"接收翻译风格", "发送消息翻译提示词"});
+        directionAdapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        direction.setAdapter(directionAdapter);
+        form.addView(direction, matchWrap());
+
+        TextView explanation = new TextView(this);
+        explanation.setTextSize(12f);
+        explanation.setText("接收翻译支持多种风格：每种风格都包含 22 种语言各自的提示词，每种语言可独立指定全局默认风格。服务器和频道规则可以覆盖风格，频道优先于服务器。必要保护提示词独立于普通风格提示词。");
+        form.addView(explanation, matchWrap());
+
+        Switch protectionPromptToggle = new Switch(this);
+        protectionPromptToggle.setText("启用必要保护提示词（默认开启）");
+        protectionPromptToggle.setShowText(false);
+        protectionPromptToggle.setChecked(protectionPromptEnabledInput.isChecked());
+        form.addView(protectionPromptToggle, matchWrap());
+        final boolean[] protectionPromptEnabledDraft = {protectionPromptEnabledInput.isChecked()};
+        protectionPromptToggle.setOnCheckedChangeListener((button, checked) ->
+                protectionPromptEnabledDraft[0] = checked);
+
+        LinearLayout styleControls = new LinearLayout(this);
+        styleControls.setOrientation(LinearLayout.VERTICAL);
+        TextView styleLabel = new TextView(this);
+        styleLabel.setText("当前语言的接收翻译风格");
+        styleControls.addView(styleLabel, matchWrap());
+        Spinner styleSpinner = new Spinner(this);
+        styleControls.addView(styleSpinner, matchWrap());
+        LinearLayout styleActions = new LinearLayout(this);
+        styleActions.setOrientation(LinearLayout.HORIZONTAL);
+        Button addStyle = new Button(this);
+        addStyle.setText("新增风格");
+        styleActions.addView(addStyle, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button renameStyle = new Button(this);
+        renameStyle.setText("重命名");
+        styleActions.addView(renameStyle, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        Button deleteStyle = new Button(this);
+        deleteStyle.setText("删除");
+        styleActions.addView(deleteStyle, new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        styleControls.addView(styleActions, matchWrap());
+        Button setDefaultStyle = new Button(this);
+        setDefaultStyle.setText("设为此语言的全局默认风格");
+        styleControls.addView(setDefaultStyle, matchWrap());
+        form.addView(styleControls, matchWrap());
+
+        Button togglePrompt = new Button(this);
+        togglePrompt.setText("显示当前提示词");
+        form.addView(togglePrompt, matchWrap());
+        LinearLayout promptSection = new LinearLayout(this);
+        promptSection.setOrientation(LinearLayout.VERTICAL);
+        EditText prompt = new EditText(this);
+        prompt.setMinLines(8);
+        prompt.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+        prompt.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
+        promptSection.addView(prompt, matchWrap());
+        Button resetPrompt = new Button(this);
+        resetPrompt.setText("恢复当前风格在此语言下的默认提示词");
+        promptSection.addView(resetPrompt, matchWrap());
+        promptSection.setVisibility(View.GONE);
+        form.addView(promptSection, matchWrap());
+
+        Button toggleProtectionPrompt = new Button(this);
+        toggleProtectionPrompt.setText("显示当前语言的必要保护提示词");
+        form.addView(toggleProtectionPrompt, matchWrap());
+        TextView protectionPromptPreview = new TextView(this);
+        protectionPromptPreview.setTextSize(13f);
+        protectionPromptPreview.setTextIsSelectable(true);
+        protectionPromptPreview.setPadding(dp(8), dp(8), dp(8), dp(8));
+        protectionPromptPreview.setVisibility(View.GONE);
+        form.addView(protectionPromptPreview, matchWrap());
+        ScrollView scroll = new ScrollView(this);
+        scroll.addView(form);
+
+        Map<String, String> incomingLegacy = new LinkedHashMap<>(LanguagePromptConfig.read(
+                systemPromptInput.getText().toString(), selectedTargetLanguage(), null, false));
+        Map<String, String> outboundDraft = new LinkedHashMap<>(LanguagePromptConfig.read(
+                sendSystemPromptInput.getText().toString(), selectedSendTargetLanguage(), null, true));
+        final IncomingPromptStyles[] stylesDraft = {IncomingPromptStyles.read(
+                incomingStylesInput.getText().toString(), incomingLegacy)};
+        int initialPosition = targetLanguagePosition(selectedTargetLanguage());
+        if (initialPosition < 0 || initialPosition >= TARGET_LANGUAGE_VALUES.length) initialPosition = 0;
+        language.setSelection(initialPosition);
+        final String[] currentLanguage = {TARGET_LANGUAGE_VALUES[initialPosition]};
+        final boolean[] currentOutbound = {false};
+        final String[] currentStyleId = {stylesDraft[0].defaultStyleId(currentLanguage[0])};
+        final boolean[] expanded = {false};
+        final boolean[] loadingStyle = {false};
+        final List<String> styleIds = new ArrayList<>();
+
+        Runnable saveCurrentPrompt = () -> {
+            String value = prompt.getText().toString();
+            if (value.trim().isEmpty()) return;
+            if (currentOutbound[0]) {
+                outboundDraft.put(currentLanguage[0], value);
+            } else {
+                stylesDraft[0] = stylesDraft[0].withPrompt(
+                        currentStyleId[0], currentLanguage[0], value);
+            }
+        };
+        Runnable refreshStyleSpinner = () -> {
+            loadingStyle[0] = true;
+            styleIds.clear();
+            List<String> styleLabels = new ArrayList<>();
+            for (IncomingPromptStyles.Style style : stylesDraft[0].styles()) {
+                styleIds.add(style.id);
+                String suffix = style.id.equals(stylesDraft[0].defaultStyleId(currentLanguage[0]))
+                        ? "（本语言默认）" : "";
+                styleLabels.add(style.name + suffix);
+            }
+            ArrayAdapter<String> adapter = new ArrayAdapter<>(this,
+                    android.R.layout.simple_spinner_item, styleLabels);
+            adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+            styleSpinner.setAdapter(adapter);
+            int selected = styleIds.indexOf(currentStyleId[0]);
+            styleSpinner.setSelection(Math.max(0, selected));
+            loadingStyle[0] = false;
+        };
+        Runnable loadSelectedPrompt = () -> {
+            int position = language.getSelectedItemPosition();
+            if (position < 0 || position >= TARGET_LANGUAGE_VALUES.length) return;
+            saveCurrentPrompt.run();
+            String selectedLanguage = TARGET_LANGUAGE_VALUES[position];
+            boolean outbound = direction.getSelectedItemPosition() == 1;
+            boolean languageChanged = !selectedLanguage.equals(currentLanguage[0]);
+            boolean directionChanged = outbound != currentOutbound[0];
+            currentLanguage[0] = selectedLanguage;
+            currentOutbound[0] = outbound;
+            if (languageChanged || directionChanged) {
+                currentStyleId[0] = stylesDraft[0].defaultStyleId(currentLanguage[0]);
+            }
+            styleControls.setVisibility(outbound ? View.GONE : View.VISIBLE);
+            if (outbound) {
+                prompt.setText(outboundDraft.get(currentLanguage[0]));
+            } else {
+                refreshStyleSpinner.run();
+                prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+            }
+            protectionPromptPreview.setText(Protocols.protectionPromptFor(currentLanguage[0]));
+            promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
+            togglePrompt.setText(expanded[0] ? "隐藏当前提示词" : "显示当前提示词");
+        };
+        language.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                loadSelectedPrompt.run();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        direction.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                loadSelectedPrompt.run();
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        styleSpinner.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                if (loadingStyle[0] || position < 0 || position >= styleIds.size()
+                        || styleIds.get(position).equals(currentStyleId[0])) return;
+                saveCurrentPrompt.run();
+                currentStyleId[0] = styleIds.get(position);
+                prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+            }
+            @Override public void onNothingSelected(AdapterView<?> parent) { }
+        });
+        loadSelectedPrompt.run();
+
+        addStyle.setOnClickListener(view -> {
+            saveCurrentPrompt.run();
+            EditText name = new EditText(this);
+            name.setSingleLine(true);
+            name.setHint("例如：口语、正式、简洁");
+            new AlertDialog.Builder(this).setTitle("新增接收翻译风格").setView(name)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("创建", (dialog, which) -> {
+                        try {
+                            stylesDraft[0] = stylesDraft[0].addStyle(name.getText().toString());
+                            currentStyleId[0] = stylesDraft[0].styles()
+                                    .get(stylesDraft[0].styles().size() - 1).id;
+                            refreshStyleSpinner.run();
+                            prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+                            expanded[0] = true;
+                            promptSection.setVisibility(View.VISIBLE);
+                            togglePrompt.setText("隐藏当前提示词");
+                        } catch (IllegalArgumentException invalid) {
+                            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+        });
+        renameStyle.setOnClickListener(view -> {
+            saveCurrentPrompt.run();
+            EditText name = new EditText(this);
+            name.setSingleLine(true);
+            name.setText(stylesDraft[0].style(currentStyleId[0]).name);
+            new AlertDialog.Builder(this).setTitle("重命名翻译风格").setView(name)
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("保存", (dialog, which) -> {
+                        try {
+                            stylesDraft[0] = stylesDraft[0].renameStyle(
+                                    currentStyleId[0], name.getText().toString());
+                            refreshStyleSpinner.run();
+                        } catch (IllegalArgumentException invalid) {
+                            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+        });
+        deleteStyle.setOnClickListener(view -> {
+            String deleting = currentStyleId[0];
+            if (scopeDraft.usesPromptStyle(deleting)) {
+                Toast.makeText(this, "此风格仍被服务器或频道规则使用，不能删除", Toast.LENGTH_LONG).show();
+                return;
+            }
+            new AlertDialog.Builder(this).setTitle("删除翻译风格")
+                    .setMessage("确定删除“" + stylesDraft[0].style(deleting).name + "”？")
+                    .setNegativeButton(android.R.string.cancel, null)
+                    .setPositiveButton("删除", (dialog, which) -> {
+                        try {
+                            stylesDraft[0] = stylesDraft[0].deleteStyle(deleting);
+                            currentStyleId[0] = stylesDraft[0].defaultStyleId(currentLanguage[0]);
+                            refreshStyleSpinner.run();
+                            prompt.setText(stylesDraft[0].resolve(currentLanguage[0], currentStyleId[0]));
+                        } catch (IllegalArgumentException invalid) {
+                            Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                        }
+                    }).show();
+        });
+        setDefaultStyle.setOnClickListener(view -> {
+            saveCurrentPrompt.run();
+            stylesDraft[0] = stylesDraft[0].setDefault(currentLanguage[0], currentStyleId[0]);
+            refreshStyleSpinner.run();
+            Toast.makeText(this, "已将当前风格设为此语言的全局默认", Toast.LENGTH_SHORT).show();
+        });
+        togglePrompt.setOnClickListener(view -> {
+            expanded[0] = !expanded[0];
+            promptSection.setVisibility(expanded[0] ? View.VISIBLE : View.GONE);
+            togglePrompt.setText(expanded[0] ? "隐藏当前提示词" : "显示当前提示词");
+        });
+        final boolean[] protectionExpanded = {false};
+        toggleProtectionPrompt.setOnClickListener(view -> {
+            protectionExpanded[0] = !protectionExpanded[0];
+            protectionPromptPreview.setVisibility(protectionExpanded[0] ? View.VISIBLE : View.GONE);
+            toggleProtectionPrompt.setText(protectionExpanded[0]
+                    ? "隐藏当前语言的必要保护提示词" : "显示当前语言的必要保护提示词");
+        });
+        resetPrompt.setOnClickListener(view -> {
+            String value = currentOutbound[0] ? Config.DEF_SEND_SYSTEM_PROMPT
+                    : LanguagePromptConfig.defaultPrompt(currentLanguage[0]);
+            prompt.setText(value);
+            expanded[0] = true;
+            promptSection.setVisibility(View.VISIBLE);
+            togglePrompt.setText("隐藏当前提示词");
+        });
+
+        AlertDialog dialog = new AlertDialog.Builder(this)
+                .setTitle("按语言管理接收风格与发送提示词")
+                .setView(scroll)
+                .setNegativeButton(android.R.string.cancel, null)
+                .setPositiveButton("保存", null)
+                .create();
+        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setOnClickListener(view -> {
+                    saveCurrentPrompt.run();
+                    try {
+                        String incomingJson = LanguagePromptConfig.toJson(stylesDraft[0].defaultPrompts());
+                        String outboundJson = LanguagePromptConfig.toJson(outboundDraft);
+                        systemPromptInput.setText(incomingJson);
+                        incomingStylesInput.setText(stylesDraft[0].toJson());
+                        sendSystemPromptInput.setText(outboundJson);
+                        protectionPromptEnabledInput.setChecked(protectionPromptEnabledDraft[0]);
+                        markDirty();
+                        saveSelectedTextFields(Arrays.asList(
+                                systemPromptInput, incomingStylesInput, sendSystemPromptInput));
+                        dialog.dismiss();
+                    } catch (IllegalArgumentException invalid) {
+                        Toast.makeText(this, invalid.getMessage(), Toast.LENGTH_LONG).show();
+                    }
+                }));
+        dialog.show();
+        SettingsUiStyle.styleDialog(this, dialog);
+    }
+
     private void openAdvancedSettings() {
         if (!started || destroyed || !configurationLoaded || persistedConfigInvalid
                 || persistence.isLoading() || saveInProgress || syncInProgress
@@ -990,29 +1320,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         ScrollView scroll = new ScrollView(this);
         scroll.addView(form);
 
-        EditText incomingPrompt = addField(form,
-                getString(R.string.label_incoming_prompt),
-                getString(R.string.hint_system_prompt),
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        incomingPrompt.setMinLines(7);
-        incomingPrompt.setText(promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
-        Button resetIncoming = new Button(this);
-        resetIncoming.setText(getString(R.string.button_restore_incoming_prompt));
-        resetIncoming.setOnClickListener(v -> incomingPrompt.setText(Config.DEF_SYSTEM_PROMPT));
-        form.addView(resetIncoming, matchWrap());
-
-        EditText newButtonPrompt = addField(form,
-                getString(R.string.label_new_outbound_prompt),
-                getString(R.string.hint_default_outbound_prompt),
-                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_MULTI_LINE);
-        newButtonPrompt.setMinLines(7);
-        newButtonPrompt.setText(promptOrDefault(sendSystemPromptInput,
-                Config.DEF_SEND_SYSTEM_PROMPT));
-        Button resetOutbound = new Button(this);
-        resetOutbound.setText(getString(R.string.button_restore_outbound_prompt));
-        resetOutbound.setOnClickListener(v ->
-                newButtonPrompt.setText(Config.DEF_SEND_SYSTEM_PROMPT));
-        form.addView(resetOutbound, matchWrap());
+        TextView promptProtectionHint = new TextView(this);
+        promptProtectionHint.setTextSize(12f);
+        promptProtectionHint.setText("普通提示词与必要保护提示词分开管理。普通提示词可按语言编辑；必要保护提示词按目标语言单独生成，可在“管理语言提示词”中展开只读查看。必要保护提示词的启用开关也位于该管理页面；关闭它不会关闭程序对内部保护标记的强制完整性检查。");
+        form.addView(promptProtectionHint, matchWrap());
 
         TextView filterTitle = new TextView(this);
         filterTitle.setText(getString(R.string.label_translation_integrity));
@@ -1038,6 +1349,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         Switch retained = addDialogSwitch(form,
                 getString(R.string.validation_check_retained),
                 checkRetainedMarkersInput.isChecked());
+        TextView retainedWarning = new TextView(this);
+        retainedWarning.setTextSize(12f);
+        retainedWarning.setText("关闭此项会关闭普通保留节点的完整性校验，模型可能遗漏对应内容。Discord 提及、频道、链接及样式等程序保护标记仍会在恢复前强制检查是否完整、唯一且顺序正确，以避免静默丢失。建议保持开启。");
+        form.addView(retainedWarning, matchWrap());
         Switch length = addDialogSwitch(form,
                 getString(R.string.validation_check_length),
                 checkLengthInput.isChecked());
@@ -1078,8 +1393,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                         Toast.makeText(this, R.string.error_length_range, Toast.LENGTH_LONG).show();
                         return;
                     }
-                    systemPromptInput.setText(incomingPrompt.getText().toString());
-                    sendSystemPromptInput.setText(newButtonPrompt.getText().toString());
                     checkWrapperInput.setChecked(wrapper.isChecked());
                     stripOuterWrapperInput.setChecked(strip.isChecked());
                     checkSegmentMarkersInput.setChecked(segments.isChecked());
@@ -1092,7 +1405,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                     minLengthPercentInput.setText(String.valueOf(min));
                     maxLengthPercentInput.setText(String.valueOf(max));
                     markDirty();
-                    saveSelectedTextFields(Arrays.asList(systemPromptInput, sendSystemPromptInput));
+                    saveSelectedTextFields(Arrays.asList(minLengthPercentInput, maxLengthPercentInput));
                     dialog.dismiss();
                 }));
         advancedSettingsDialog = dialog;
@@ -1166,7 +1479,11 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         pendingScopeEditor = null;
         TranslationScope initial = restore == null ? scopeDraft
                 : TranslationScope.parse(restore.getString("scope"));
-        scopeDialog = TranslationScopeEditor.show(this, initial, updated -> {
+        IncomingPromptStyles promptStyles = IncomingPromptStyles.read(
+                incomingStylesInput.getText().toString(),
+                LanguagePromptConfig.read(systemPromptInput.getText().toString(),
+                        selectedTargetLanguage(), null, false));
+        scopeDialog = TranslationScopeEditor.show(this, initial, promptStyles, updated -> {
             scopeDraft = updated;
             updateScopeSummary();
             markDirty();
@@ -1179,14 +1496,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             if (started && !destroyed && pendingScopeEditor == null) startServiceSync();
         });
         updateSaveButtonState();
-    }
-
-    private Button addPromptResetButton(LinearLayout parent, EditText input, String defaultPrompt) {
-        Button button = new Button(this);
-        button.setText(getString(R.string.button_restore_default_prompt));
-        button.setOnClickListener(view -> input.setText(defaultPrompt));
-        parent.addView(button, matchWrap());
-        return button;
     }
 
     /** 每个文本配置项都有独立应用入口；输入内容在点击前只作为草稿显示。 */
@@ -1346,7 +1655,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private EditText[] configurationFields() {
         return new EditText[] {urlInput, keyInput, modelInput, headersInput,
-                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
+                systemPromptInput, incomingStylesInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
                 minLengthPercentInput, maxLengthPercentInput, testTextInput};
     }
 
@@ -1366,6 +1675,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             scopeSummary.setText("");
             loggingInput.setChecked(false);
             streamingInput.setChecked(false);
+            protectionPromptEnabledInput.setChecked(Config.DEF_PROTECTION_PROMPT_ENABLED);
             checkWrapperInput.setChecked(Config.DEF_CHECK_WRAPPER);
             stripOuterWrapperInput.setChecked(Config.DEF_STRIP_OUTER_WRAPPER);
             checkSegmentMarkersInput.setChecked(Config.DEF_CHECK_SEGMENT_MARKERS);
@@ -1459,6 +1769,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             updateCacheControls();
             protocolSpinner.setSelection(positionOf(snapshot.protocol));
             streamingInput.setChecked(snapshot.streaming);
+            protectionPromptEnabledInput.setChecked(snapshot.protectionPromptEnabled);
             updateStreamingAvailability();
             setTextOrPlaceholder(urlInput, snapshot.apiUrl, Config.DEF_API_URL);
             setTextOrPlaceholder(keyInput, snapshot.apiKey, Config.DEF_API_KEY);
@@ -1473,8 +1784,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             ensureTargetLanguageAvailable(firstSendLanguage);
             sendTargetLanguageSpinner.setSelection(targetLanguagePosition(firstSendLanguage));
             setTextOrPlaceholder(headersInput, snapshot.extraHeaders, Config.DEF_EXTRA_HEADERS);
-            systemPromptInput.setText(snapshot.systemPrompt);
-            sendSystemPromptInput.setText(snapshot.sendSystemPrompt);
+            systemPromptInput.setText(snapshot.incomingPromptsJson);
+            incomingStylesInput.setText(snapshot.incomingStylesJson);
+            sendSystemPromptInput.setText(snapshot.outboundPromptsJson);
             setTextOrPlaceholder(timeoutInput, String.valueOf(snapshot.timeoutMs),
                     String.valueOf(Config.DEF_TIMEOUT_MS));
             setTextOrPlaceholder(concurrencyInput, String.valueOf(snapshot.maxConcurrency),
@@ -1667,7 +1979,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
     /** 返回真正写入配置的文本项；测试输入框不属于持久化配置。 */
     private List<EditText> persistedTextFields() {
         return Arrays.asList(urlInput, keyInput, modelInput, headersInput,
-                systemPromptInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
+                systemPromptInput, incomingStylesInput, sendSystemPromptInput, timeoutInput, concurrencyInput,
                 minLengthPercentInput, maxLengthPercentInput, cacheLimitInput,
                 experimentalChunkThresholdInput);
     }
@@ -1680,8 +1992,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         committedTextValues.put(keyInput, snapshot.apiKey);
         committedTextValues.put(modelInput, snapshot.model.equals(Config.DEF_MODEL) ? "" : snapshot.model);
         committedTextValues.put(headersInput, snapshot.extraHeaders);
-        committedTextValues.put(systemPromptInput, snapshot.systemPrompt);
-        committedTextValues.put(sendSystemPromptInput, snapshot.sendSystemPrompt);
+        committedTextValues.put(systemPromptInput, snapshot.incomingPromptsJson);
+        committedTextValues.put(incomingStylesInput, snapshot.incomingStylesJson);
+        committedTextValues.put(sendSystemPromptInput, snapshot.outboundPromptsJson);
         committedTextValues.put(timeoutInput, snapshot.timeoutMs == Config.DEF_TIMEOUT_MS
                 ? "" : String.valueOf(snapshot.timeoutMs));
         committedTextValues.put(concurrencyInput, snapshot.maxConcurrency == Config.DEF_MAX_CONCURRENCY
@@ -1960,6 +2273,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (cacheSettingsButton != null) cacheSettingsButton.setEnabled(formAvailable);
         if (apiSettingsButton != null) apiSettingsButton.setEnabled(formAvailable);
         clearCacheButton.setEnabled(formAvailable && remotePrefs != null);
+        protectionPromptEnabledInput.setEnabled(formAvailable);
         checkWrapperInput.setEnabled(formAvailable);
         stripOuterWrapperInput.setEnabled(formAvailable);
         checkSegmentMarkersInput.setEnabled(formAvailable);
@@ -1988,8 +2302,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         for (EditText field : configurationFields()) {
             field.setEnabled(formAvailable);
         }
-        if (resetSystemPromptButton != null) resetSystemPromptButton.setEnabled(formAvailable);
-        if (resetSendSystemPromptButton != null) resetSendSystemPromptButton.setEnabled(formAvailable);
         updateStreamingAvailability();
         setTestButtonsEnabled(testFuture == null);
     }
@@ -2016,11 +2328,6 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         field.setText(def.equals(value) ? "" : value);
     }
 
-    private static String promptOrDefault(EditText editText, String defaultValue) {
-        String value = editText.getText().toString();
-        return value.trim().isEmpty() ? defaultValue : value;
-    }
-
 
     private Config.Snapshot snapshotFromUi() {
         if (persistedConfigInvalid) {
@@ -2035,6 +2342,8 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_PROTOCOL,
                 protocolAt(protocolSpinner.getSelectedItemPosition()));
         memoryPrefs.put(Config.KEY_STREAMING, streamingInput.isChecked());
+        memoryPrefs.put(Config.KEY_PROTECTION_PROMPT_ENABLED,
+                protectionPromptEnabledInput.isChecked());
         memoryPrefs.put(Config.KEY_API_URL, textOrDefault(urlInput, Config.DEF_API_URL));
         memoryPrefs.put(Config.KEY_API_KEY, keyInput.getText().toString().trim());
         memoryPrefs.put(Config.KEY_MODEL, textOrDefault(modelInput, Config.DEF_MODEL));
@@ -2043,10 +2352,9 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         memoryPrefs.put(Config.KEY_OUTBOUND_BUTTONS,
                 OutboundButtonConfig.toJson(outboundButtonsDraft));
         memoryPrefs.put(Config.KEY_EXTRA_HEADERS, headersInput.getText().toString());
-        memoryPrefs.put(Config.KEY_SYSTEM_PROMPT,
-                promptOrDefault(systemPromptInput, Config.DEF_SYSTEM_PROMPT));
-        memoryPrefs.put(Config.KEY_SEND_SYSTEM_PROMPT,
-                promptOrDefault(sendSystemPromptInput, Config.DEF_SEND_SYSTEM_PROMPT));
+        memoryPrefs.put(Config.KEY_INCOMING_PROMPTS, systemPromptInput.getText().toString());
+        memoryPrefs.put(Config.KEY_INCOMING_STYLES, incomingStylesInput.getText().toString());
+        memoryPrefs.put(Config.KEY_OUTBOUND_PROMPTS, sendSystemPromptInput.getText().toString());
         memoryPrefs.put(Config.KEY_TIMEOUT_MS, parseIntInput(timeoutInput, Config.DEF_TIMEOUT_MS));
         memoryPrefs.put(Config.KEY_MAX_CONCURRENCY,
                 parseIntInput(concurrencyInput, Config.DEF_MAX_CONCURRENCY));
@@ -2112,6 +2420,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
         final long generation = ++testGeneration;
         resultText.setText(R.string.status_requesting);
+        if (testDiagnosticLogText != null) testDiagnosticLogText.setText("测试已开始，正在记录处理阶段……");
         if (copyTestResultButton != null) copyTestResultButton.setEnabled(false);
         setTestButtonsEnabled(false);
 
@@ -2172,6 +2481,10 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
             resultText.setText(getString(R.string.status_test_failed_detail,
                     failure == null ? getString(R.string.unknown_error)
                             : failure.getClass().getSimpleName()));
+            String failureLine = "stage=future_delivery status=FAILED error="
+                    + (failure == null ? "unknown" : failure.getClass().getSimpleName());
+            if (testDiagnosticLogText != null) testDiagnosticLogText.setText(failureLine);
+            persistTestFailure(failureLine);
             if (copyTestResultButton != null) {
                 copyTestResultButton.setEnabled(resultText.length() > 0);
             }
@@ -2184,9 +2497,141 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
         if (resultText == null || resultText.length() == 0) return;
         ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
         if (clipboard == null) return;
+        String diagnostics = testDiagnosticLogText == null
+                ? "" : testDiagnosticLogText.getText().toString();
+        String combined = resultText.getText().toString()
+                + (diagnostics.isEmpty() ? "" : "\n\n--- Test diagnostics ---\n" + diagnostics);
         clipboard.setPrimaryClip(ClipData.newPlainText(
-                getString(R.string.button_copy_test_result), resultText.getText()));
+                "Boundless Chat test result and diagnostics", combined));
         Toast.makeText(this, R.string.toast_test_result_copied, Toast.LENGTH_SHORT).show();
+    }
+
+    private void showDiagnosticLogs() {
+        final android.content.Context appContext = getApplicationContext();
+        Toast.makeText(this, "正在读取诊断日志…", Toast.LENGTH_SHORT).show();
+        try {
+            saveExecutor.execute(() -> {
+                List<DiagnosticLogStore.Entry> entries = DiagnosticLogStore.read(appContext,
+                        DiagnosticLogStore.MAX_ENTRIES);
+                List<String> pages = new ArrayList<>();
+                StringBuilder page = new StringBuilder();
+                int pageEntries = 0;
+                for (DiagnosticLogStore.Entry entry : entries) {
+                    StringBuilder line = new StringBuilder();
+                    line.append(new Date(entry.timestamp)).append(" [")
+                            .append(entry.source).append("] ")
+                            .append(entry.tag).append(" priority=").append(entry.priority);
+                    if (!entry.processName.isEmpty()) line.append(" process=").append(entry.processName);
+                    if (!entry.requestId.isEmpty()) line.append(" request=").append(entry.requestId);
+                    line.append('\n').append(entry.message).append("\n\n");
+                    page.append(line);
+                    pageEntries++;
+                    if (pageEntries >= 100) {
+                        pages.add(page.toString());
+                        page.setLength(0);
+                        pageEntries = 0;
+                    }
+                }
+                if (page.length() > 0 || pages.isEmpty()) {
+                    pages.add(page.length() == 0
+                            ? "暂无诊断日志。请运行一次测试，或开启项目日志后触发 Discord 翻译。"
+                            : page.toString());
+                }
+                final List<String> logPages = pages;
+                mainHandler.post(() -> {
+                    if (destroyed || isFinishing()) return;
+                    final int[] currentPage = {0};
+                    LinearLayout content = new LinearLayout(this);
+                    content.setOrientation(LinearLayout.VERTICAL);
+                    int pad = (int) (12 * getResources().getDisplayMetrics().density);
+                    content.setPadding(pad, pad, pad, 0);
+                    TextView pageLabel = new TextView(this);
+                    EditText logView = new EditText(this);
+                    logView.setTextIsSelectable(true);
+                    logView.setFocusable(true);
+                    logView.setFocusableInTouchMode(true);
+                    logView.setTextSize(12);
+                    logView.setGravity(android.view.Gravity.TOP | android.view.Gravity.START);
+                    logView.setInputType(InputType.TYPE_CLASS_TEXT
+                            | InputType.TYPE_TEXT_FLAG_MULTI_LINE
+                            | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
+                    logView.setText(logPages.get(0));
+                    ScrollView scroll = new ScrollView(this);
+                    scroll.addView(logView, new ScrollView.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                    content.addView(pageLabel);
+                    content.addView(scroll, new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f));
+                    LinearLayout controls = new LinearLayout(this);
+                    controls.setOrientation(LinearLayout.HORIZONTAL);
+                    Button previous = new Button(this);
+                    previous.setText("上一页");
+                    Button next = new Button(this);
+                    next.setText("下一页");
+                    Button copyPage = new Button(this);
+                    copyPage.setText("复制本页");
+                    controls.addView(previous, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    controls.addView(next, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    controls.addView(copyPage, new LinearLayout.LayoutParams(0,
+                            ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+                    content.addView(controls);
+                    Runnable updatePage = () -> {
+                        pageLabel.setText("第 " + (currentPage[0] + 1) + " / "
+                                + logPages.size() + " 页（每页最多 100 条；可长按选择文本手动复制）");
+                        logView.setText(logPages.get(currentPage[0]));
+                        logView.setSelection(0);
+                        previous.setEnabled(currentPage[0] > 0);
+                        next.setEnabled(currentPage[0] + 1 < logPages.size());
+                        scroll.scrollTo(0, 0);
+                    };
+                    AlertDialog dialog = new AlertDialog.Builder(this)
+                            .setTitle("诊断日志（共 " + entries.size() + " 条）")
+                            .setView(content)
+                            .setNeutralButton("清空诊断日志", (ignored, which) -> {
+                                try {
+                                    saveExecutor.execute(() -> {
+                                        boolean cleared = DiagnosticLogStore.clear(appContext);
+                                        mainHandler.post(() -> Toast.makeText(this,
+                                                cleared ? "诊断日志已清空" : "清空诊断日志失败",
+                                                Toast.LENGTH_SHORT).show());
+                                    });
+                                } catch (RuntimeException rejected) {
+                                    Toast.makeText(this, "清空诊断日志失败", Toast.LENGTH_SHORT).show();
+                                }
+                            })
+                            .setNegativeButton("关闭", null)
+                            .create();
+                    previous.setOnClickListener(v -> {
+                        if (currentPage[0] > 0) { currentPage[0]--; updatePage.run(); }
+                    });
+                    next.setOnClickListener(v -> {
+                        if (currentPage[0] + 1 < logPages.size()) { currentPage[0]++; updatePage.run(); }
+                    });
+                    copyPage.setOnClickListener(v -> {
+                        ClipboardManager clipboard = (ClipboardManager) getSystemService(CLIPBOARD_SERVICE);
+                        if (clipboard == null) {
+                            Toast.makeText(this, "剪贴板不可用，请长按日志文本手动复制",
+                                    Toast.LENGTH_SHORT).show();
+                            return;
+                        }
+                        clipboard.setPrimaryClip(ClipData.newPlainText(
+                                "Boundless Chat diagnostic logs page " + (currentPage[0] + 1),
+                                logPages.get(currentPage[0])));
+                        Toast.makeText(this, "当前页已复制；也可长按文本手动选择复制",
+                                Toast.LENGTH_SHORT).show();
+                    });
+                    dialog.show();
+                    dialog.getWindow().setLayout(
+                            ViewGroup.LayoutParams.MATCH_PARENT,
+                            (int) (getResources().getDisplayMetrics().heightPixels * 0.82f));
+                    updatePage.run();
+                });
+            });
+        } catch (RuntimeException rejected) {
+            Toast.makeText(this, "诊断日志读取任务未能启动", Toast.LENGTH_SHORT).show();
+        }
     }
 
     private static void recordUnexpectedTestFailure(Throwable failure) {
@@ -2235,11 +2680,63 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
 
     private void showResult(ApiTester.Result result) {
         resultText.setText(ApiTestResultFormatter.format(result, this::getString));
+        if (testDiagnosticLogText != null) {
+            testDiagnosticLogText.setText(ApiTester.formatDiagnostics(result));
+        }
+        persistTestDiagnostics(result);
         if (copyTestResultButton != null) {
             copyTestResultButton.setEnabled(resultText.length() > 0);
         }
         updateStatus(getString(result.ok
                 ? R.string.status_test_passed : R.string.status_test_failed));
+    }
+
+    private void persistTestDiagnostics(ApiTester.Result result) {
+        final android.content.Context appContext = getApplicationContext();
+        final String processName = currentProcessName();
+        final int priority = result.ok ? android.util.Log.INFO : android.util.Log.WARN;
+        try {
+            saveExecutor.execute(() -> {
+                for (String line : result.diagnostics) {
+                    // Keep source and response previews in the live test panel only; persistent
+                    // history stores stages and error classifications, not message contents.
+                    if (line.startsWith("request_preview=")
+                            || line.startsWith("response_preview=")) continue;
+                    DiagnosticLogStore.append(appContext, System.currentTimeMillis(),
+                            "module_test", processName, priority, "ApiTester",
+                            line, result.requestId);
+                }
+                DiagnosticLogStore.append(appContext, System.currentTimeMillis(),
+                        "module_test", processName, priority, "ApiTester",
+                        "summary status=" + (result.ok ? "SUCCESS" : "FAILED")
+                                + " test=" + result.testKind
+                                + " elapsedMs=" + result.elapsedMs
+                                + (result.failure == null ? "" : " reason=" + result.failure.reason
+                                        + " httpStatus=" + result.failure.httpStatus
+                                        + " exception=" + result.failure.exceptionType),
+                        result.requestId);
+            });
+        } catch (RuntimeException ignored) {
+            // The live panel remains available even if the Activity is shutting down.
+        }
+    }
+
+    private static String currentProcessName() {
+        try {
+            String name = Application.getProcessName();
+            return name == null || name.isEmpty() ? "module" : name;
+        } catch (Throwable unavailable) {
+            return "module";
+        }
+    }
+
+    private void persistTestFailure(String detail) {
+        final android.content.Context appContext = getApplicationContext();
+        try {
+            saveExecutor.execute(() -> DiagnosticLogStore.append(appContext,
+                    System.currentTimeMillis(), "module_test", currentProcessName(),
+                    android.util.Log.ERROR, "ApiTester", detail, ""));
+        } catch (RuntimeException ignored) { }
     }
 
     private void updateStatus(String status) {

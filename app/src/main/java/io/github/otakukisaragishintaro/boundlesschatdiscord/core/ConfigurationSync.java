@@ -15,7 +15,8 @@ public final class ConfigurationSync {
             Config.KEY_API_KEY, Config.KEY_MODEL,
             Config.KEY_TARGET_LANG, Config.KEY_SEND_TARGET_LANG, Config.KEY_OUTBOUND_BUTTONS,
             Config.KEY_EXTRA_HEADERS, Config.KEY_SYSTEM_PROMPT, Config.KEY_SEND_SYSTEM_PROMPT,
-            Config.KEY_PROTOCOL, Config.KEY_STREAMING, Config.KEY_TIMEOUT_MS,
+            Config.KEY_INCOMING_PROMPTS, Config.KEY_INCOMING_STYLES, Config.KEY_OUTBOUND_PROMPTS, Config.KEY_PROTOCOL, Config.KEY_STREAMING,
+            Config.KEY_PROTECTION_PROMPT_ENABLED, Config.KEY_TIMEOUT_MS,
             Config.KEY_MAX_CONCURRENCY, Config.KEY_CHECK_WRAPPER,
             Config.KEY_STRIP_OUTER_WRAPPER, Config.KEY_CHECK_SEGMENT_MARKERS,
             Config.KEY_CHECK_PLACEHOLDERS, Config.KEY_CHECK_RETAINED_MARKERS,
@@ -226,6 +227,8 @@ public final class ConfigurationSync {
             }
             raw.put(Config.KEY_PROTOCOL, snapshot.protocol);
             raw.put(Config.KEY_STREAMING, snapshot.streaming);
+            putUnlessDefault(raw, Config.KEY_PROTECTION_PROMPT_ENABLED,
+                    snapshot.protectionPromptEnabled, Config.DEF_PROTECTION_PROMPT_ENABLED);
             putUnlessDefault(raw, Config.KEY_API_URL, snapshot.apiUrl, Config.DEF_API_URL);
             putUnlessDefault(raw, Config.KEY_API_KEY, snapshot.apiKey, Config.DEF_API_KEY);
             putUnlessDefault(raw, Config.KEY_MODEL, snapshot.model, Config.DEF_MODEL);
@@ -238,6 +241,9 @@ public final class ConfigurationSync {
                     Config.DEF_SYSTEM_PROMPT);
             putUnlessDefault(raw, Config.KEY_SEND_SYSTEM_PROMPT, snapshot.sendSystemPrompt,
                     Config.DEF_SEND_SYSTEM_PROMPT);
+            raw.put(Config.KEY_INCOMING_PROMPTS, snapshot.incomingPromptsJson);
+            raw.put(Config.KEY_INCOMING_STYLES, snapshot.incomingStylesJson);
+            raw.put(Config.KEY_OUTBOUND_PROMPTS, snapshot.outboundPromptsJson);
             raw.put(Config.KEY_OUTBOUND_BUTTONS,
                     OutboundButtonConfig.toJson(snapshot.outboundButtons));
             putUnlessDefault(raw, Config.KEY_TIMEOUT_MS, snapshot.timeoutMs, Config.DEF_TIMEOUT_MS);

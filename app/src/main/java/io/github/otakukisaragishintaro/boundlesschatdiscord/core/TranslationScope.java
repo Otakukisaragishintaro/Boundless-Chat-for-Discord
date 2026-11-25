@@ -38,8 +38,13 @@ public final class TranslationScope {
         public final String id;
         public final String label;
         public final boolean translate;
+        public final String promptStyleId;
 
         public Rule(String id, String label, boolean translate) {
+            this(id, label, translate, null);
+        }
+
+        public Rule(String id, String label, boolean translate, String promptStyleId) {
             if (!isValidId(id)) {
                 throw new IllegalArgumentException("Invalid rule ID");
             }
@@ -50,9 +55,13 @@ public final class TranslationScope {
             if (trimmedLabel.length() > MAX_LABEL_LENGTH) {
                 throw new IllegalArgumentException("Rule label exceeds " + MAX_LABEL_LENGTH + " characters");
             }
+            if (promptStyleId != null && !promptStyleId.matches("[A-Za-z0-9_-]{1,64}")) {
+                throw new IllegalArgumentException("Invalid prompt style ID");
+            }
             this.id = id;
             this.label = trimmedLabel;
             this.translate = translate;
+            this.promptStyleId = promptStyleId;
         }
 
         @Override
@@ -60,14 +69,16 @@ public final class TranslationScope {
             if (this == other) return true;
             if (!(other instanceof Rule)) return false;
             Rule that = (Rule) other;
-            return translate == that.translate && id.equals(that.id) && label.equals(that.label);
+            return translate == that.translate && id.equals(that.id) && label.equals(that.label)
+                    && java.util.Objects.equals(promptStyleId, that.promptStyleId);
         }
 
         @Override
         public int hashCode() {
             int result = id.hashCode();
             result = 31 * result + label.hashCode();
-            return 31 * result + Boolean.hashCode(translate);
+            result = 31 * result + Boolean.hashCode(translate);
+            return 31 * result + (promptStyleId == null ? 0 : promptStyleId.hashCode());
         }
     }
 
@@ -122,15 +133,20 @@ public final class TranslationScope {
                 throw new IllegalArgumentException(name + " rule must be an object");
             }
             JSONObject object = (JSONObject) item;
-            requireKeys(object, "id", "label", "translate");
+            if (object.length() != (object.has("promptStyleId") ? 4 : 3)
+                    || !object.has("id") || !object.has("label") || !object.has("translate")) {
+                throw new IllegalArgumentException(name + " rule has unknown or missing keys");
+            }
             Object id = object.get("id");
             Object label = object.get("label");
             Object translate = object.get("translate");
+            Object style = object.has("promptStyleId") ? object.get("promptStyleId") : null;
             if (!(id instanceof String) || !(label instanceof String)
-                    || !(translate instanceof Boolean)) {
-                throw new IllegalArgumentException("Rule requires string id/label and boolean translate");
+                    || !(translate instanceof Boolean)
+                    || (style != null && !(style instanceof String))) {
+                throw new IllegalArgumentException("Rule requires string id/label, boolean translate and optional string promptStyleId");
             }
-            rules.add(new Rule((String) id, (String) label, (Boolean) translate));
+            rules.add(new Rule((String) id, (String) label, (Boolean) translate, (String) style));
         }
         return rules;
     }
@@ -172,6 +188,21 @@ public final class TranslationScope {
         return Collections.unmodifiableList(copy);
     }
 
+    /** Resolve a style override with channel > server > global precedence. */
+    public String promptStyleId(String guildId, String channelId) {
+        if (channelId != null) {
+            for (Rule rule : channels) {
+                if (rule.id.equals(channelId) && rule.promptStyleId != null) return rule.promptStyleId;
+            }
+        }
+        if (guildId != null) {
+            for (Rule rule : servers) {
+                if (rule.id.equals(guildId) && rule.promptStyleId != null) return rule.promptStyleId;
+            }
+        }
+        return null;
+    }
+
     public boolean allows(String guildId, String channelId) {
         if (!isValidId(channelId) || (guildId != null && !isValidId(guildId))) {
             return false;
@@ -187,7 +218,14 @@ public final class TranslationScope {
         return defaultTranslate;
     }
 
-    /** Compare matching policy only: labels and rule order are display/serialization details. */
+    public boolean usesPromptStyle(String styleId) {
+        if (styleId == null) return false;
+        for (Rule rule : servers) if (styleId.equals(rule.promptStyleId)) return true;
+        for (Rule rule : channels) if (styleId.equals(rule.promptStyleId)) return true;
+        return false;
+    }
+
+    /** Compare translation decisions and style overrides; labels and rule order are display details. */
     public boolean sameMatchingPolicy(TranslationScope other) {
         return other != null && defaultTranslate == other.defaultTranslate
                 && sameRuleActions(servers, other.servers)
@@ -196,10 +234,12 @@ public final class TranslationScope {
 
     private static boolean sameRuleActions(List<Rule> rules, List<Rule> other) {
         if (rules.size() != other.size()) return false;
-        Map<String, Boolean> actions = new HashMap<>();
-        for (Rule rule : other) actions.put(rule.id, rule.translate);
+        Map<String, Rule> actions = new HashMap<>();
+        for (Rule rule : other) actions.put(rule.id, rule);
         for (Rule rule : rules) {
-            if (!Boolean.valueOf(rule.translate).equals(actions.get(rule.id))) return false;
+            Rule match = actions.get(rule.id);
+            if (match == null || rule.translate != match.translate
+                    || !java.util.Objects.equals(rule.promptStyleId, match.promptStyleId)) return false;
         }
         return true;
     }
@@ -221,7 +261,11 @@ public final class TranslationScope {
             Rule rule = rules.get(i);
             json.append("{\"id\":").append(JSONObject.quote(rule.id))
                     .append(",\"label\":").append(JSONObject.quote(rule.label))
-                    .append(",\"translate\":").append(rule.translate).append('}');
+                    .append(",\"translate\":").append(rule.translate);
+            if (rule.promptStyleId != null) {
+                json.append(",\"promptStyleId\":").append(JSONObject.quote(rule.promptStyleId));
+            }
+            json.append('}');
         }
         json.append(']');
     }

@@ -18,12 +18,12 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
 /**
- * One-way IPC endpoint for the Discord process to publish the persistent cache count.
+ * UID-checked IPC endpoint for cache-count publication and diagnostic log ingestion.
  *
- * <p>LibXposed remote preferences are intentionally read-only in hooked apps, so the target
- * process reports this non-sensitive integer through ContentProvider.call(). The provider
- * accepts writes only from the official Discord package UID and stores the count in this
- * module application's private preferences for the settings UI.</p>
+ * <p>LibXposed remote preferences are read-only in hooked apps. Discord therefore publishes
+ * the non-sensitive cache count and bounded diagnostic events through call(). Only the
+ * official Discord UID may publish; diagnostic records are stored in the module app's
+ * private SQLite database and are never mixed with the Discord translation cache.</p>
  */
 public final class CacheCountProvider extends ContentProvider {
     public static final String PREFERENCES_NAME = "boundless_cache_count";
@@ -33,6 +33,13 @@ public final class CacheCountProvider extends ContentProvider {
     private static final String METHOD_PUBLISH_COUNT = "publish_count";
     private static final String EXTRA_ENTRY_COUNT = "entry_count";
     private static final String EXTRA_PUBLISHED = "published";
+    private static final String METHOD_PUBLISH_LOG = "publish_log";
+    private static final String EXTRA_LOG_TIMESTAMP = "log_timestamp";
+    private static final String EXTRA_LOG_PROCESS = "log_process";
+    private static final String EXTRA_LOG_PRIORITY = "log_priority";
+    private static final String EXTRA_LOG_TAG = "log_tag";
+    private static final String EXTRA_LOG_MESSAGE = "log_message";
+    private static final String EXTRA_LOG_REQUEST_ID = "log_request_id";
     private static final String ALLOWED_CALLER_PACKAGE = "com.discord";
     private static final int MAX_ENTRY_COUNT = 1_000_000;
 
@@ -166,6 +173,25 @@ public final class CacheCountProvider extends ContentProvider {
         return published;
     }
 
+    /** Publish one diagnostic event from Discord through the same UID-checked Provider. */
+    public static boolean publishLog(@NonNull Context targetContext,
+                                     @NonNull String modulePackageName,
+                                     long timestamp, @NonNull String processName,
+                                     int priority, @NonNull String tag,
+                                     @NonNull String message, @Nullable String requestId) {
+        if (modulePackageName.isEmpty()) return false;
+        Bundle extras = new Bundle();
+        extras.putLong(EXTRA_LOG_TIMESTAMP, timestamp);
+        extras.putString(EXTRA_LOG_PROCESS, processName);
+        extras.putInt(EXTRA_LOG_PRIORITY, priority);
+        extras.putString(EXTRA_LOG_TAG, tag);
+        extras.putString(EXTRA_LOG_MESSAGE, message);
+        extras.putString(EXTRA_LOG_REQUEST_ID, requestId == null ? "" : requestId);
+        Bundle response = targetContext.getContentResolver().call(
+                modulePackageName + AUTHORITY_SUFFIX, METHOD_PUBLISH_LOG, null, extras);
+        return response != null && response.getBoolean(EXTRA_PUBLISHED, false);
+    }
+
     @NonNull
     private static String safeContextPackage(@NonNull Context context) {
         try {
@@ -202,6 +228,21 @@ public final class CacheCountProvider extends ContentProvider {
     @Nullable
     @Override
     public Bundle call(@NonNull String method, @Nullable String arg, @Nullable Bundle extras) {
+        if (METHOD_PUBLISH_LOG.equals(method)) {
+            if (!isDiscordCaller()) {
+                throw new SecurityException("Only the Discord package may publish diagnostic logs");
+            }
+            Context context = getContext();
+            if (context == null || extras == null) return publishResult(false);
+            boolean stored = DiagnosticLogStore.append(context,
+                    extras.getLong(EXTRA_LOG_TIMESTAMP, System.currentTimeMillis()),
+                    "discord", extras.getString(EXTRA_LOG_PROCESS, "unknown"),
+                    extras.getInt(EXTRA_LOG_PRIORITY, 0),
+                    extras.getString(EXTRA_LOG_TAG, "BoundlessChatDiscord"),
+                    extras.getString(EXTRA_LOG_MESSAGE, ""),
+                    extras.getString(EXTRA_LOG_REQUEST_ID, ""));
+            return publishResult(stored);
+        }
         if (!METHOD_PUBLISH_COUNT.equals(method)) {
             return null;
         }

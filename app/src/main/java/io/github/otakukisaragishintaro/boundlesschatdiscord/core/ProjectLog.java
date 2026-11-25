@@ -6,16 +6,18 @@ import android.os.Process;
 import androidx.annotation.Nullable;
 
 import java.util.HashSet;
+import java.util.UUID;
 import java.util.Set;
 
 /**
- * Project logging to Logcat and the LSPosed framework log.
- * No cross-process diagnostic provider or export buffer is maintained.
+ * Project logging to Logcat, the LSPosed framework log, and the module-owned
+ * diagnostic database through the UID-checked cache-count ContentProvider.
  */
 public final class ProjectLog {
     private static final String TAG = "BoundlessChatDiscord";
     private static final Set<String> REPORTED = new HashSet<>();
     private static boolean enabled;
+    private static final ThreadLocal<String> REQUEST_ID = new ThreadLocal<>();
     @Nullable private static Output framework;
 
     public interface Output {
@@ -77,6 +79,24 @@ public final class ProjectLog {
     private static synchronized void emit(int priority, @Nullable String key, String message) {
         if (!enabled || (key != null && !REPORTED.add(key))) return;
         write(priority, message);
+        TranslationCache.publishDiagnosticLog(priority, TAG, message, currentRequestId());
+    }
+
+    /** Attach one correlation ID to every ProjectLog entry emitted during a translation request. */
+    public static String beginRequest() {
+        String previous = REQUEST_ID.get();
+        REQUEST_ID.set(UUID.randomUUID().toString());
+        return previous;
+    }
+
+    public static void endRequest(@Nullable String previous) {
+        if (previous == null) REQUEST_ID.remove();
+        else REQUEST_ID.set(previous);
+    }
+
+    @Nullable
+    static String currentRequestId() {
+        return REQUEST_ID.get();
     }
 
     private static void write(int priority, String message) {

@@ -99,21 +99,105 @@ public final class ContentTree {
     public final Node root;
     public final List<Event> events;
     public final int segmentCount;
-    private ContentTree(Node root) {
+    /** True for each translatable segment whose preceding source boundary must not be inferred. */
+    public final List<Boolean> segmentBoundaryBefore;
+    /** Whether structural segment boundaries are emitted as explicit model-facing anchors. */
+    public final boolean explicitBoundaryMarkers;
+    private ContentTree(Node root, boolean explicitBoundaryMarkers) {
         this.root = root;
+        this.explicitBoundaryMarkers = explicitBoundaryMarkers;
         Emitter emitter = new Emitter();
         emitter.emit(root, false, new ArrayList<>());
         events = Collections.unmodifiableList(emitter.output);
         int count = 0;
         for (Event event : events) if (event.kind == EventKind.NODE) count += event.node.segmentCount;
         segmentCount = count;
+        List<Boolean> boundaries = explicitBoundaryMarkers
+                ? captureSegmentBoundaries(events) : new ArrayList<>();
+        if (!explicitBoundaryMarkers) {
+            for (int i = 0; i < segmentCount; i++) boundaries.add(false);
+        }
+        segmentBoundaryBefore = Collections.unmodifiableList(boundaries);
+        if (segmentBoundaryBefore.size() != segmentCount)
+            throw new IllegalStateException("Captured segment boundary count mismatch");
+    }
+
+    /**
+     * Capture the same structural boundary decisions used by ContentNodes' alignment plan.
+     * A marker is needed at list-item transitions, list exits, and heading transitions.
+     * Ordinary source newlines remain separators, not structural anchors. Keeping this data
+     * on the immutable tree prevents extraction and reconstruction from inventing different positions.
+     */
+    private static List<Boolean> captureSegmentBoundaries(List<Event> events) {
+        List<Boolean> boundaries = new ArrayList<>();
+        java.util.ArrayDeque<Integer> listStarts = new java.util.ArrayDeque<>();
+        int segments = 0;
+        boolean forceNewGroup = false;
+        boolean pendingStructuralBoundary = false;
+        for (Event event : events) {
+            if (event.headingBreakBefore) pendingStructuralBoundary = true;
+            switch (event.kind) {
+                case LIST_START:
+                    listStarts.push(segments);
+                    continue;
+                case ITEM_START:
+                    if (segments > 0) forceNewGroup = true;
+                    pendingStructuralBoundary = true;
+                    continue;
+                case ITEM_END:
+                    continue;
+                case LIST_END:
+                    if (segments > listStarts.pop()) {
+                        forceNewGroup = true;
+                        pendingStructuralBoundary = true;
+                    }
+                    continue;
+                case NODE:
+                    Node node = event.node;
+                    if (node.kind != Kind.TEXT || node.text == null) continue;
+                    if (BlankLines.isBlank(node.text)) continue;
+                    for (int i = 0; i < node.chunks.size(); i++) {
+                        if (i > 0 && containsParagraphBreak(node.separators.get(i - 1))) {
+                            pendingStructuralBoundary = true;
+                        }
+                        String chunk = node.chunks.get(i);
+                        if (BlankLines.isBlank(chunk) || TextExtractor.isUrlLike(chunk)) continue;
+                        boundaries.add(forceNewGroup || pendingStructuralBoundary);
+                        forceNewGroup = false;
+                        pendingStructuralBoundary = false;
+                        segments++;
+                    }
+                    continue;
+                default:
+                    continue;
+            }
+        }
+        return boundaries;
+    }
+
+    private static boolean containsParagraphBreak(String value) {
+        int newlines = 0;
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) == '\n' && ++newlines >= 2) return true;
+        }
+        return false;
     }
 
     /** Depth counts native semantic containers, never Java list/item wrappers. Invalid trees reject whole. */
     @Nullable public static ContentTree compile(List<?> nodes) {
         if (nodes == null) return null;
         try {
-            return new ContentTree(new Compiler().sequence(nodes, 0));
+            return new ContentTree(new Compiler().sequence(nodes, 0), false);
+        } catch (IllegalStateException invalid) {
+            return null;
+        }
+    }
+
+    /** Compile a runtime translation snapshot with explicit list/heading segment anchors. */
+    @Nullable public static ContentTree compileForTranslation(List<?> nodes) {
+        if (nodes == null) return null;
+        try {
+            return new ContentTree(new Compiler().sequence(nodes, 0), true);
         } catch (IllegalStateException invalid) {
             return null;
         }

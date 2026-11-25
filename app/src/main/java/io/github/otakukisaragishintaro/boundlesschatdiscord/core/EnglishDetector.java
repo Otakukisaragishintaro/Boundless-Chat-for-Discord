@@ -27,33 +27,6 @@ public final class EnglishDetector {
     private static final int MIN_LETTERS = 4;
     private static final float MIN_LETTER_RATIO = 0.5f;
     private static final float MIN_TARGET_SCRIPT_RATIO = 0.2f;
-    /** ASCII emoticons are presentation tokens, not prose or evidence of another script. */
-    private static final java.util.regex.Pattern EMOTICON = java.util.regex.Pattern.compile(
-            "(?i)(?<![A-Za-z0-9])(?:" + java.util.regex.Pattern.quote(">.<") + "|"
-                    + java.util.regex.Pattern.quote("<.<") + "|"
-                    + java.util.regex.Pattern.quote(">_<") + "|"
-                    + java.util.regex.Pattern.quote("<_<") + "|"
-                    + java.util.regex.Pattern.quote("T_T") + "|"
-                    + java.util.regex.Pattern.quote("T.T") + "|"
-                    + java.util.regex.Pattern.quote(";_;") + "|"
-                    + java.util.regex.Pattern.quote(":)") + "|"
-                    + java.util.regex.Pattern.quote(":-)") + "|"
-                    + java.util.regex.Pattern.quote(":(") + "|"
-                    + java.util.regex.Pattern.quote(":-(") + "|"
-                    + java.util.regex.Pattern.quote(":D") + "|"
-                    + java.util.regex.Pattern.quote(":-D") + "|"
-                    + java.util.regex.Pattern.quote(":P") + "|"
-                    + java.util.regex.Pattern.quote(":-P") + "|"
-                    + java.util.regex.Pattern.quote(":3") + "|"
-                    + java.util.regex.Pattern.quote(":-3") + "|"
-                    + java.util.regex.Pattern.quote("XD") + "|"
-                    + java.util.regex.Pattern.quote("^_^") + "|"
-                    + java.util.regex.Pattern.quote("^^") + "|"
-                    + java.util.regex.Pattern.quote("._.") + "|"
-                    + java.util.regex.Pattern.quote("-_-") + "|"
-                    + java.util.regex.Pattern.quote("O_O") + "|"
-                    + java.util.regex.Pattern.quote("<3") + ")(?![A-Za-z0-9])");
-
 
     private EnglishDetector() {
     }
@@ -64,8 +37,7 @@ public final class EnglishDetector {
         if (rawText == null || rawText.trim().isEmpty()) {
             return new Verdict(false, Reason.EMPTY);
         }
-        String text = EMOTICON.matcher(RetainedNodeMarkers.maskedForDetection(rawText))
-                .replaceAll(" ").replaceAll("https?://\\S+", " ")
+        String text = RetainedNodeMarkers.maskedForDetection(rawText).replaceAll("https?://\\S+", " ")
                 .replaceAll("`[^`]*`", " ")
                 .replaceAll(":([A-Za-z0-9_]+):", " ");
 

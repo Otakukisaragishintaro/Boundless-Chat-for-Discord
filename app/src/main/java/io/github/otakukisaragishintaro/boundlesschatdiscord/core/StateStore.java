@@ -2,7 +2,9 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Bounded translation records: content, source snapshot and active task share one lifetime. */
@@ -15,6 +17,11 @@ public final class StateStore {
         public volatile String translatedText;
         public volatile Status status = Status.IDLE;
         public volatile boolean showingOriginal;
+        /** True only when this message is rendered without its original rich formatting. */
+        public volatile boolean renderDegraded;
+        /** Cache persistence is pending until the outer native message render returns. */
+        private boolean cachePendingRender;
+        private boolean cacheCommitClaimed;
         public volatile String lastError;
         private TranslationTaskId task;
         private Source source;
@@ -119,6 +126,9 @@ public final class StateStore {
             entry.lastError = null;
             entry.status = Status.TRANSLATED;
             entry.showingOriginal = false;
+            entry.renderDegraded = false;
+            entry.cachePendingRender = false;
+            entry.cacheCommitClaimed = false;
         }
         return true;
     }
@@ -129,7 +139,38 @@ public final class StateStore {
         entry.translatedText = translated;
         entry.status = Status.TRANSLATED;
         entry.showingOriginal = false;
+        entry.renderDegraded = false;
+        entry.cachePendingRender = false;
+        entry.cacheCommitClaimed = false;
         return true;
+    }
+
+    /** Mark a successful text conversion; the outer message render must still complete. */
+    public synchronized boolean markCachePending(String id, String translated) {
+        Entry entry = entries.get(id);
+        if (entry == null || entry.status != Status.TRANSLATED || entry.showingOriginal
+                || translated == null || !translated.equals(entry.translatedText)
+                || entry.cacheCommitClaimed) return false;
+        entry.cachePendingRender = true;
+        return true;
+    }
+
+    /** Claim pending writes owned by one native message row after its render method returns. */
+    public synchronized List<Entry> claimCacheCommitsForRow(String rowMessageId) {
+        List<Entry> claimed = new ArrayList<>();
+        String cardPrefix = rowMessageId + "\u0000";
+        for (Map.Entry<String, Entry> record : entries.entrySet()) {
+            String key = record.getKey();
+            if (!key.equals(rowMessageId) && !key.startsWith(cardPrefix)) continue;
+            Entry entry = record.getValue();
+            if (!entry.cachePendingRender || entry.cacheCommitClaimed
+                    || entry.status != Status.TRANSLATED || entry.showingOriginal
+                    || entry.translatedText == null) continue;
+            entry.cachePendingRender = false;
+            entry.cacheCommitClaimed = true;
+            claimed.add(entry);
+        }
+        return claimed;
     }
 
     public synchronized boolean rejectRender(String id, String translated) {

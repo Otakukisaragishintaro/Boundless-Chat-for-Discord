@@ -11,14 +11,24 @@ import org.json.JSONObject;
 import org.junit.Test;
 
 public class RetainedNodeMarkersTest {
-    @Test public void exactSyntaxOrderAndMultiplicityAreRequired() {
-        assertTrue(RetainedNodeMarkers.matchesExpected("a<keep1/>b<keep2/>c", Arrays.asList("<keep1/>", "<keep2/>")));
-        for (String value : new String[]{"<keep1/><keep1/>", "<keep2/><keep1/>", "<keep1 />",
-                "<keep01/>", "<KEEP1/>", "<keep1>", "<keep", "</keep1/>", "< keep1/>", "<keep1/><keep999/>"}) {
-            assertFalse(value, RetainedNodeMarkers.matchesExpected(value, Collections.singletonList("<keep1/>")));
+    @Test public void exactIdentityAndMultiplicityAreRequiredButOrderMayChange() {
+        assertTrue(RetainedNodeMarkers.matchesExpected(
+                "a<keep1/>b<keep2/>c", Arrays.asList("<keep1/>", "<keep2/>")));
+        assertTrue("distinct native markers may follow translated phrase order",
+                RetainedNodeMarkers.matchesExpected(
+                        "译文乙<keep2/>译文甲<keep1/>",
+                        Arrays.asList("<keep1/>", "<keep2/>")));
+        for (String value : new String[]{"<keep1/><keep1/>", "<keep2/>", "<keep1 />",
+                "<keep01/>", "<KEEP1/>", "<keep1>", "<keep", "</keep1/>",
+                "< keep1/>", "<keep1/><keep999/>", "<keep2/><keep2/>"}) {
+            assertFalse(value, RetainedNodeMarkers.matchesExpected(
+                    value, Arrays.asList("<keep1/>", "<keep2/>")));
         }
         assertTrue(RetainedNodeMarkers.matchesExpected("hello", Collections.emptyList()));
         assertFalse(RetainedNodeMarkers.matchesExpected("<keep1/>", Collections.emptyList()));
+        assertFalse("duplicate source identities are invalid",
+                RetainedNodeMarkers.matchesExpected("<keep1/>",
+                        Arrays.asList("<keep1/>", "<keep1/>")));
     }
 
     @Test public void sourceAndTranslationShareOneGrammar() {
@@ -26,6 +36,10 @@ public class RetainedNodeMarkersTest {
         assertTrue(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", source));
         assertFalse(RetainedNodeMarkers.matchesSource("运行现在", source));
         assertFalse(RetainedNodeMarkers.matchesSource("运行<keep1/>现在", "run<keep1>now"));
+        assertTrue("native identity set survives translation reordering",
+                RetainedNodeMarkers.matchesSource(
+                        "第二项<keep2/>，第一项<keep1/>",
+                        "first<keep1/> then second<keep2/>"));
         assertNull(Segments.plainTextViolation("运行<keep1/>现在", source));
         assertEquals("保留节点定位标记无效", Segments.plainTextViolation("运行现在", source));
         assertEquals("保留节点定位标记无效", Segments.plainTextViolation("正文<keep1/>", "plain"));
@@ -43,7 +57,9 @@ public class RetainedNodeMarkersTest {
     }
 
     @Test public void lengthRatioDoesNotCountRetainedCodeMarkersAsNaturalLanguage() {
-        String markers = String.join("", Collections.nCopies(20, "<keep1/>"));
+        StringBuilder markerBuilder = new StringBuilder();
+        for (int i = 1; i <= 20; i++) markerBuilder.append("<keep").append(i).append("/>");
+        String markers = markerBuilder.toString();
         assertNull(Segments.plainTextViolation("你好" + markers, "hello" + markers));
         String source = String.join("", Collections.nCopies(50, "a")) + "<keep1/>";
         assertNotNull(Segments.plainTextViolation("短<keep1/>", source));
@@ -124,10 +140,16 @@ public class RetainedNodeMarkersTest {
         assertNull(Segments.plainTextViolation("你好<keep1/>世界", "hello<keep1/>world"));
     }
 
-    @Test public void reservedPrefixAssembledAcrossStyleTagsIsRejected() {
-        assertFalse(RetainedNodeMarkers.matchesExpected("<x1><ke</x1><x2>ep9/></x2>", Collections.emptyList()));
-        assertFalse(RetainedNodeMarkers.matchesExpected("<x1><ke</x1><x2>ep9</x2>", Collections.emptyList()));
-        assertFalse(RetainedNodeMarkers.matchesSource("正文", "<x1><ke</x1><x2>ep9/></x2>"));
+    @Test public void incompleteAngleTextAndEmoticonsDoNotConfuseReservedMarkerGrammar() {
+        for (String value : new String[]{"<3", ">.<", "<.<", ">_<", "<x1", "<x1 ", "literal <tag"}) {
+            assertTrue(value, RetainedNodeMarkers.matchesExpected(value, Collections.emptyList()));
+        }
+        // The reserved <keep namespace is intentionally strict: malformed or partial markers
+        // must fail validation instead of being silently accepted as ordinary text.
+        for (String value : new String[]{"<keep", "<keep1>", "</keep1"}) {
+            assertFalse(value, RetainedNodeMarkers.matchesExpected(value, Collections.emptyList()));
+        }
+        assertFalse(RetainedNodeMarkers.matchesSource("普通文本", "<x1><ke</x1><x2>ep9/></x2>"));
         assertTrue(RetainedNodeMarkers.matchesSource("<x1>正文</x1><keep1/>", "<x1>Body</x1><keep1/>"));
     }
 
@@ -139,10 +161,12 @@ public class RetainedNodeMarkersTest {
             String prompt = Config.PROTOCOL_OPENAI_COMPATIBLE.equals(protocol)
                     ? body.getJSONArray("messages").getJSONObject(0).getString("content")
                     : body.getString(Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol) ? "instructions" : "system");
-            assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE, prompt);
-            assertTrue(prompt.contains("<keep1/>"));
+            assertEquals("Custom prompt\n\n" + Protocols.WRAPPER_RULE + "\n\n"
+                    + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG), prompt);
+            assertTrue(prompt.contains("<keepN/>"));
+            assertFalse(prompt.contains("⟦BCP"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("original position and order"));
+            assertTrue(prompt.contains("may move with the same source phrase"));
         }
     }
 }

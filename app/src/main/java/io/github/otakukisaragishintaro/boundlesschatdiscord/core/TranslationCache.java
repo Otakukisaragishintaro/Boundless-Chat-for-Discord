@@ -42,6 +42,48 @@ public final class TranslationCache {
     }
 
     /**
+     * Forward an enabled Discord-process diagnostic event to the module app's private log store.
+     * The existing single worker serializes IPC writes and keeps provider calls off UI/render threads.
+     */
+    public static void publishDiagnosticLog(int priority, String tag, String message) {
+        publishDiagnosticLog(priority, tag, message, ProjectLog.currentRequestId());
+    }
+
+    public static void publishDiagnosticLog(int priority, String tag, String message,
+                                             @Nullable String requestId) {
+        TranslationCache cache = sInstance;
+        Context context = sContext;
+        String modulePackageName = sModulePackageName;
+        if (cache == null || context == null || modulePackageName == null
+                || modulePackageName.isEmpty()) return;
+        try {
+            cache.countPublisher.execute(() -> {
+                String processName = "unknown";
+                try {
+                    String current = android.app.Application.getProcessName();
+                    if (current != null && !current.isEmpty()) processName = current;
+                } catch (Throwable ignored) { }
+                try {
+                    CacheCountProvider.publishLog(context, modulePackageName,
+                            System.currentTimeMillis(), processName, priority, tag,
+                            message == null ? "" : message,
+                            requestId == null ? "" : requestId);
+                } catch (Throwable failure) {
+                    // Avoid ProjectLog here: reporting a failed log write through the same
+                    // transport would create a recursive IPC failure loop.
+                    android.util.Log.w("BoundlessChatDiscord",
+                            "diagnostic log IPC failed errorClass="
+                                    + failure.getClass().getSimpleName());
+                }
+            });
+        } catch (Throwable failure) {
+            android.util.Log.w("BoundlessChatDiscord",
+                    "diagnostic log IPC scheduling failed errorClass="
+                            + failure.getClass().getSimpleName());
+        }
+    }
+
+    /**
      * Publish only the persistent entry count to the module app. The ContentProvider call is
      * dispatched on a dedicated worker so a cache write never blocks Discord's main thread.
      */

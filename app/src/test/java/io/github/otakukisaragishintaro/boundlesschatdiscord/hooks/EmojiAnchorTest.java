@@ -188,6 +188,30 @@ public class EmojiAnchorTest {
     // ------------------------------------------------------------- 回填对齐
 
     @Test
+    public void reorderedNativeEmojiAnchorsAreRestoredByReturnedPosition() {
+        UnicodeEmojiContentNode firstEmoji =
+                new UnicodeEmojiContentNode("\uD83D\uDCE2", "x", false);
+        UnicodeEmojiContentNode secondEmoji =
+                new UnicodeEmojiContentNode("\u2764\uFE0F", "y", false);
+        TextContentNode first = new TextContentNode("first");
+        TextContentNode middle = new TextContentNode("middle");
+        TextContentNode last = new TextContentNode("last");
+        TextExtractor.Result extracted = TextExtractor.extract(new AnnotatedStructurableText(
+                list(first, firstEmoji, middle, secondEmoji, last)));
+
+        assertNotNull(extracted);
+        List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(
+                extracted.tree, "译文甲 \u2764\uFE0F 译文乙 \uD83D\uDCE2 译文丙");
+
+        assertNotNull(flattened);
+        assertSame("按译文位置恢复第二个原生 emoji", secondEmoji, flattened.get(1));
+        assertSame("按译文位置恢复第一个原生 emoji", firstEmoji, flattened.get(3));
+        assertTrue(((TextContentNode) flattened.get(0)).getContent().contains("译文甲"));
+        assertTrue(((TextContentNode) flattened.get(2)).getContent().contains("译文乙"));
+        assertTrue(((TextContentNode) flattened.get(4)).getContent().contains("译文丙"));
+    }
+
+    @Test
     public void translationKeepsEmojiPositionAndTextLandsOnBothSides() {
         TextContentNode first = new TextContentNode("Lower Rates");
         UnicodeEmojiContentNode emoji =

@@ -10,7 +10,7 @@ final class ContentPlanTestSupport {
     }
 
     static List<Object> replace(List<?> nodes, String translated) {
-        return ContentNodes.replacePlanned(ContentTree.compile(nodes), translated);
+        return ContentNodes.replacePlanned(ContentTree.compileForTranslation(nodes), translated);
     }
 
     static List<String> align(String span, List<Integer> groups,

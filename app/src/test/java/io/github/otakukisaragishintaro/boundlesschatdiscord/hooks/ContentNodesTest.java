@@ -665,7 +665,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(new TextContentNode(
                 "hello\n\nhttps://gofile.io/d/rfh2yimO\n\nworld"));
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "你好\n\nhttps://gofile.io/d/rfh2yimO\n\n世界");
+                "你好\n\nhttps://gofile.io/d/rfh2yimO\n\n<x1>世界</x1>");
 
         assertNotNull(out);
         assertEquals("URL 块逐字符保留，段落结构不变",
@@ -718,12 +718,41 @@ public class ContentNodesTest {
     }
 
     @Test
+    public void structuralBoundaryMarkerKeepsListAndHeadingSeparateWhenModelMergesLines() {
+        List<Object> firstItem = list(new TextContentNode("Install the driver"));
+        BulletListContentNode bullets = new BulletListContentNode(null, false,
+                itemLists(firstItem));
+        HeadingContentNode heading = new HeadingContentNode(
+                list(new TextContentNode("Important")), 2);
+        List<Object> nodes = list(bullets, heading);
+
+        TextExtractor.Result extracted = TextExtractor.extract(
+                new AnnotatedStructurableText(nodes));
+        assertNotNull(extracted);
+        assertTrue("标题前必须有内部边界标记",
+                extracted.requestText.contains("<x2>Important</x2>"));
+
+        String mergedTranslation = extracted.requestText
+                .replace("Install the driver", "安装驱动")
+                .replace("Important", "重要");
+        List<Object> out = ContentNodes.replacePlanned(extracted.tree, mergedTranslation);
+        assertNotNull("即使模型没有输出换行，也能按标记恢复两个结构槽位", out);
+        BulletListContentNode rebuiltList = (BulletListContentNode) out.get(0);
+        assertEquals("安装驱动",
+                ((TextContentNode) rebuiltList.getItems().get(0).get(0)).getContent());
+        HeadingContentNode rebuiltHeading = (HeadingContentNode) out.get(1);
+        assertEquals("重要",
+                ((TextContentNode) rebuiltHeading.getContent().get(0)).getContent());
+        assertEquals("标题级别保留", 2, rebuiltHeading.component2());
+    }
+
+    @Test
     public void handlesBulletListItems() {
         List<Object> firstItem = list(new TextContentNode("first"));
         List<Object> secondItem = list(new TextContentNode("second"));
         List<Object> nodes = list(new BulletListContentNode(
                 3L, false, itemLists(firstItem, secondItem)));
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "第一\n第二");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "<x1>第一</x1>\n<x2>第二</x2>");
         assertNotNull(out);
         BulletListContentNode b = (BulletListContentNode) out.get(0);
         assertEquals("start 必须保留", Long.valueOf(3L), b.component1());
@@ -753,7 +782,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(original);
 
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "first translated<keep1/><keep2/>\n<x1>styled translated</x1>\nnested translated\nsecond translated");
+                "<x1>first translated</x1><keep1/><keep2/><x2>styled translated</x2><x3>nested translated</x3><x4>second translated</x4>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -987,7 +1016,7 @@ public class ContentNodesTest {
         // 空行必须留在标记外，重建时按原位置拼回。
         List<Object> nodes = list(new TextContentNode("hello\n\nworld"));
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好\n\n世界");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "你好\n\n<x1>世界</x1>");
 
         assertNotNull(out);
         assertEquals(1, out.size());
@@ -1001,7 +1030,7 @@ public class ContentNodesTest {
         // 分隔符来自原节点，不是模型输出。
         List<Object> nodes = list(new TextContentNode("hello\n\nworld"));
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "  你好 \n\n 世界  ");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "  你好 \n\n <x1>世界</x1>  ");
 
         assertNotNull(out);
         assertEquals("你好\n\n世界", ((TextContentNode) out.get(0)).getContent());
@@ -1216,7 +1245,7 @@ public class ContentNodesTest {
                         list(new TextContentNode("item one"), new NewLineContentNode()))));
         List<Object> nodes = list(bullets);
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "第一项");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "<x1>第一项</x1>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -1244,4 +1273,19 @@ public class ContentNodesTest {
         assertEquals(2, tail.getContent().size());
         assertSame(emoji, tail.getContent().get(0));
     }
+    @Test
+    public void emptyStyledSpanKeepsSourceTextWithoutDowngradingOtherFormatting() {
+        StrongContentNode strong = new StrongContentNode(list(new TextContentNode("bold")));
+        List<Object> nodes = list(strong, new TextContentNode(" tail"));
+
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "<x1></x1> 尾巴");
+
+        assertNotNull("空样式片段不应导致整条富文本回填失败", out);
+        StrongContentNode rebuilt = (StrongContentNode) out.get(0);
+        assertEquals("空样式片段保留原文，避免丢字", "bold",
+                ((TextContentNode) rebuilt.getContent().get(0)).getContent());
+        assertEquals("其他普通片段仍正常翻译", " 尾巴",
+                ((TextContentNode) out.get(1)).getContent());
+    }
+
 }

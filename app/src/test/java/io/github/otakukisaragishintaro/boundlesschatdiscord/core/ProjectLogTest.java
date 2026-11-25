@@ -2,6 +2,9 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotEquals;
+import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -35,6 +38,25 @@ public class ProjectLogTest {
     public void tearDown() {
         ProjectLog.configure(snapshot(false));
         ProjectLog.attach(null);
+    }
+
+    @Test
+    public void requestCorrelationIdIsScopedAndRestoredAcrossNestedWork() {
+        assertNull(ProjectLog.currentRequestId());
+        String outerPrevious = ProjectLog.beginRequest();
+        String outer = ProjectLog.currentRequestId();
+        assertNotNull(outer);
+        assertFalse(outer.isEmpty());
+
+        String innerPrevious = ProjectLog.beginRequest();
+        String inner = ProjectLog.currentRequestId();
+        assertNotNull(inner);
+        assertNotEquals(outer, inner);
+        ProjectLog.endRequest(innerPrevious);
+        assertEquals(outer, ProjectLog.currentRequestId());
+
+        ProjectLog.endRequest(outerPrevious);
+        assertNull(ProjectLog.currentRequestId());
     }
 
     @Test

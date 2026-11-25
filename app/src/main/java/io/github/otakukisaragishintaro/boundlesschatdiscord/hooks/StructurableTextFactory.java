@@ -99,6 +99,15 @@ public final class StructurableTextFactory {
     @Nullable
     static Object forPlannedTranslation(@Nullable Object original, String translated,
                                        @Nullable TextExtractor.Result extracted) {
+        return forPlannedTranslation(original, translated, extracted, null);
+    }
+
+    /** The optional output flag identifies the one explicit formatting-degraded path. */
+    @Nullable
+    static Object forPlannedTranslation(@Nullable Object original, String translated,
+                                       @Nullable TextExtractor.Result extracted,
+                                       @Nullable boolean[] degradedOut) {
+        if (degradedOut != null && degradedOut.length > 0) degradedOut[0] = false;
         if (original == null || translated == null || extracted == null) {
             return rejectFactory("INVALID_INPUT");
         }
@@ -106,10 +115,30 @@ public final class StructurableTextFactory {
         // 1) 原始是 Annotated：尝试保留 Markdown 结构。
         if (ContentNodes.isAnnotated(original)) {
             if (extracted.tree == null) return rejectFactory("MISSING_TREE");
+            // A structure containing no translatable text (for example, emoji-only content)
+            // must never be overwritten by an unrelated model response.
+            if (extracted.tree.segmentCount == 0 || extracted.textNodeCount == 0) {
+                return rejectFactory("NO_TRANSLATABLE_TEXT");
+            }
             List<Object> replaced = ContentNodes.replacePlanned(extracted.tree, translated);
-            if (replaced == null) return null; // Already classified at the content replacement boundary.
-            Object out = annotated(replaced);
-            return out == null ? rejectFactory("ANNOTATED_CONSTRUCTOR") : out;
+            if (replaced != null) {
+                Object out = annotated(replaced);
+                if (out != null) return out;
+                ProjectLog.warn("annotated translation reconstruction failed; displaying translated text without rich formatting");
+            } else {
+                ProjectLog.warn("annotated translation alignment failed; displaying translated text without rich formatting");
+            }
+            // Formatting alignment failed, but protected Discord nodes must remain native.
+            // Build a flat Annotated tree from translated text plus the original protected
+            // URL/emoji/mention/code nodes. This removes Markdown formatting only; it does
+            // not discard protected content or expose internal anchors to the user.
+            List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(
+                    extracted.tree, translated);
+            Object plain = flattened == null ? null : annotated(flattened);
+            if (plain == null) return rejectFactory("PLAIN_NODE_RECONSTRUCTION");
+            if (degradedOut != null && degradedOut.length > 0) degradedOut[0] = true;
+            ProjectLog.warn("translation displayed with plain formatting; protected native nodes restored");
+            return plain;
         }
 
         // 2) 原始是 Primitive：直接给纯文本。

@@ -45,6 +45,9 @@ public class ApiTesterTest {
         assertNull(result.failure);
         assertNull(result.translated);
         assertTrue(result.elapsedMs >= 0);
+        assertTrue(result.diagnostics.toString().contains(
+                "stage=offline_configuration_validation status=SUCCESS"));
+        assertTrue(ApiTester.formatDiagnostics(result).contains("network=NOT_USED"));
     }
 
     @Test
@@ -58,6 +61,9 @@ public class ApiTesterTest {
             assertEquals(0, result.failure.httpStatus);
             assertNull(result.translated);
             assertTrue(result.elapsedMs >= 0);
+            if (result.testKind == ApiTester.TestKind.CONFIGURATION) {
+                assertTrue(result.diagnostics.toString().contains("status=FAILED"));
+            }
         }
     }
 
@@ -82,6 +88,10 @@ public class ApiTesterTest {
                 "hello " + mention).call();
         assertTrue(result.ok);
         assertEquals("你好 " + mention, result.translated);
+        assertTrue(result.diagnostics.toString().contains("stage=scope_filter status=PASSED"));
+        assertTrue(result.diagnostics.toString().contains("protectedTokens=1"));
+        assertTrue(result.diagnostics.toString().contains("production_translation_pipeline status=SUCCESS"));
+        assertTrue(ApiTester.formatDiagnostics(result).contains("summary status=SUCCESS"));
         assertTrue(connection.disconnected);
     }
 

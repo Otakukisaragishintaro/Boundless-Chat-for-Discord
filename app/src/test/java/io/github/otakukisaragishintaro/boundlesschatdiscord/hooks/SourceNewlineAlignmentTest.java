@@ -53,8 +53,8 @@ public class SourceNewlineAlignmentTest {
         HeadingContentNode heading = new HeadingContentNode(list(text("Lower Rates")), 2);
         TextContentNode lf = text("\n");
         TextContentNode body = text("Available today");
-        ContentTree tree = compiled(list(heading, lf, body));
-        assertEquals("Lower Rates\nAvailable today", extracted(tree));
+        ContentTree tree = ContentTree.compileForTranslation(list(heading, lf, body));
+        assertEquals("Lower Rates\nAvailable today", TextExtractor.extractTree(tree).requestText);
         assertEquals(2, tree.segmentCount);
 
         List<Object> out = replaced(tree, "优惠价格\n今日可用");
@@ -65,22 +65,22 @@ public class SourceNewlineAlignmentTest {
         assertEquals("今日可用", content(out.get(2)));
         assertEquals("Lower Rates", content(heading.getContent().get(0)));
         assertEquals("Available today", body.getContent());
+        assertEquals("Lower Rates\nAvailable today", extracted(tree));
     }
-
     @Test
     public void headingBlockBeforePlainTextKeepsInterveningSpaceAndAlignsAsTwoLines() {
-        // Exact heading occurrence transitions now supply a shared block LF, not same-line ambiguity.
+        // Heading transitions are represented by an explicit marker, not inferred from line count.
         HeadingContentNode heading = new HeadingContentNode(list(text("Heading")), 1);
         TextContentNode space = text(" ");
         TextContentNode body = text("Body");
-        ContentTree tree = compiled(list(heading, space, body));
-        assertEquals("Heading \nBody", extracted(tree));
+        ContentTree tree = ContentTree.compileForTranslation(list(heading, space, body));
+        assertEquals("Heading \n<x1>Body</x1>", TextExtractor.extractTree(tree).requestText);
         assertEquals(2, tree.segmentCount);
         assertFalse(tree.events.get(0).headingBreakBefore);
         assertFalse(tree.events.get(1).headingBreakBefore);
         assertTrue(tree.events.get(2).headingBreakBefore);
 
-        List<Object> out = replaced(tree, "标题\n正文");
+        List<Object> out = replaced(tree, "标题\n<x1>正文</x1>");
         assertEquals(3, out.size());
         HeadingContentNode rebuilt = (HeadingContentNode) out.get(0);
         assertEquals(1, rebuilt.component2());
@@ -88,27 +88,21 @@ public class SourceNewlineAlignmentTest {
         assertSame(space, out.get(1));
         assertEquals(" ", content(out.get(1)));
         assertEquals("正文", content(out.get(2)));
-        assertEquals("标题 \n正文", extracted(compiled(out)));
+        assertEquals("标题 \n<x1>正文</x1>", TextExtractor.extractTree(
+                ContentTree.compileForTranslation(out)).requestText);
         assertEquals("Heading", content(heading.getContent().get(0)));
         assertEquals("Body", body.getContent());
-        assertEquals("Heading \nBody", extracted(tree));
+        assertEquals("Heading \n<x1>Body</x1>", TextExtractor.extractTree(tree).requestText);
 
-        ContentNodes.Rejection merged = rejected(tree, "标题 正文", ContentNodes.RejectionReason.LINE_COUNT);
-        assertEquals(2, merged.expected);
-        assertEquals(1, merged.actual);
-        ContentNodes.Rejection split = rejected(tree, "标题\n\n正文", ContentNodes.RejectionReason.LINE_COUNT);
-        assertEquals(2, split.expected);
-        assertEquals(1, split.actual);
-        ContentNodes.Rejection extraLine = rejected(tree, "标题\n正文\n多余",
-                ContentNodes.RejectionReason.LINE_COUNT);
-        assertEquals(2, extraLine.expected);
-        assertEquals(3, extraLine.actual);
-        ContentNodes.Rejection extraParagraph = rejected(tree, "标题\n正文\n\n多余",
-                ContentNodes.RejectionReason.PARAGRAPH_EXTRA);
-        assertEquals(1, extraParagraph.expected);
-        assertEquals(2, extraParagraph.actual);
+        ContentNodes.Rejection missing = rejected(tree, "标题 正文",
+                ContentNodes.RejectionReason.STYLE_OPEN);
+        assertEquals("", missing.structure);
+        assertNotNull("保留边界标记后，即使译文合并成一行也能恢复标题和正文",
+                replaced(tree, "标题<x1>正文</x1>"));
+        rejected(tree, "标题\n\n正文", ContentNodes.RejectionReason.STYLE_OPEN);
+        rejected(tree, "标题\n正文\n多余", ContentNodes.RejectionReason.STYLE_OPEN);
+        rejected(tree, "标题\n正文\n\n多余", ContentNodes.RejectionReason.STYLE_OPEN);
     }
-
     @Test
     public void eitherTrailingOrLeadingLfProvesTheBoundaryAndIsPreserved() {
         for (boolean trailing : new boolean[]{true, false}) {
@@ -442,9 +436,11 @@ public class SourceNewlineAlignmentTest {
     public void multilineListItemContinuationAndNextItemRejoinSlotsAndKeepListMetadata() {
         TextContentNode lf = text("\n");
         BulletListContentNode bullets = multilineList(lf);
-        ContentTree tree = compiled(list(bullets));
+        ContentTree tree = ContentTree.compileForTranslation(list(bullets));
+        assertNotNull(tree);
         assertEquals(3, tree.segmentCount);
-        List<Object> out = replaced(tree, "7. 第一\n首项续行\n补充\n8. 第二\n次项续行");
+        List<Object> out = replaced(tree,
+                "7. <x1>第一\n首项续行</x1>\n补充\n8. <x2>第二\n次项续行</x2>");
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
         assertEquals(Long.valueOf(7L), rebuilt.component1());
         assertTrue(rebuilt.component2());
@@ -455,17 +451,17 @@ public class SourceNewlineAlignmentTest {
         assertEquals("第二\n次项续行", content(rebuilt.getItems().get(1).get(0)));
         assertEquals("first\ncontinuation", content(bullets.getItems().get(0).get(0)));
     }
-
     @Test
     public void multilineListRejectsMergedAndExtraContinuationLines() {
-        ContentTree tree = compiled(list(multilineList(text("\n"))));
-        for (String translated : new String[]{"• 第一\n补充\n• 第二\n续行",
-                "• 第一\n续行\n补充\n• 第二\n续行\n多余"}) {
-            ContentNodes.Rejection failure = rejected(tree, translated, ContentNodes.RejectionReason.LINE_COUNT);
-            assertEquals(5, failure.expected);
-        }
+        ContentTree tree = ContentTree.compileForTranslation(list(multilineList(text("\n"))));
+        assertNotNull(tree);
+        rejected(tree, "• 第一\n补充\n• 第二\n续行",
+                ContentNodes.RejectionReason.STYLE_OPEN);
+        List<Object> extra = replaced(tree,
+                "7. <x1>第一\n首项续行</x1>\n补充\n多余\n8. <x2>第二\n次项续行</x2>");
+        BulletListContentNode rebuilt = (BulletListContentNode) extra.get(0);
+        assertEquals("补充\n多余", content(rebuilt.getItems().get(0).get(2)));
     }
-
     @Test
     public void synthesizedAdFixtureKeepsHeadingPricesRepeatedUrlEmojiBracketAndInlineHash() {
         // Deliberately synthesized regression fixture, NOT an exact native-device tree capture.

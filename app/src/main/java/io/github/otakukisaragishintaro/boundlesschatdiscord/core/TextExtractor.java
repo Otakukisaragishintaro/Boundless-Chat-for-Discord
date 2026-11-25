@@ -23,14 +23,16 @@ public final class TextExtractor {
     /** 提取结果。 */
     public static final class Result {
         /**
-         * 统一翻译输入：自然语言、源换行、格式范围与保留叶节点 occurrence 锚点。
+         * 内部规范文本：自然语言、源换行、样式范围与保留叶节点 occurrence 锚点。
          *
-         * <p>它是单链路的正文，也用于语言检测与内容哈希。
+         * <p>用于语言检测与内容哈希，不包含仅供模型对齐的列表/标题边界标记。
          * URL 链接显示文本原样进入请求充当定位标记：模型必须原样保留它，
          * 回填按它切分对齐并删除回显，显示永远用原链接节点。URL 字符
          * 不会损坏，也不会重复显示。</p>
          */
         public final String text;
+        /** Model-facing text with explicit list/heading boundaries; never use for cache identity. */
+        public final String requestText;
         /**
          * 可翻译片段数（来自 ContentTree 捕获的分块，空白块与 URL 块不计）。
          * 仅用于把多片段消息的缓存条目与单片段
@@ -44,9 +46,10 @@ public final class TextExtractor {
         /** Captured occurrence plan; Primitive input does not have a node tree. */
         public final ContentTree tree;
 
-        Result(String text, int segmentCount, int textNodeCount,
+        Result(String text, String requestText, int segmentCount, int textNodeCount,
                int opaqueNodeCount, ContentTree tree) {
             this.text = text;
+            this.requestText = requestText;
             this.segmentCount = segmentCount;
             this.textNodeCount = textNodeCount;
             this.opaqueNodeCount = opaqueNodeCount;
@@ -54,7 +57,7 @@ public final class TextExtractor {
         }
     }
 
-    private static final Result EMPTY = new Result("", 0, 0, 0, null);
+    private static final Result EMPTY = new Result("", "", 0, 0, 0, null);
 
     /**
      * URL 形态判定：带 scheme 的完整 URL、www 前缀，或「无空白且以
@@ -151,7 +154,7 @@ public final class TextExtractor {
             }
             // Primitive 整体就是一个片段，不应用 Annotated 文本节点的分块规则。
             if (RetainedNodeMarkers.hasReservedPrefix(s)) return null;
-            return new Result(s, s.isEmpty() ? 0 : 1, s.isEmpty() ? 0 : 1, 0, null);
+            return new Result(s, s, s.isEmpty() ? 0 : 1, s.isEmpty() ? 0 : 1, 0, null);
         }
 
         if ("AnnotatedStructurableText".equals(cls)) {
@@ -159,7 +162,7 @@ public final class TextExtractor {
             if (!(list instanceof List)) {
                 return EMPTY;
             }
-            ContentTree tree = ContentTree.compile((List<?>) list);
+            ContentTree tree = ContentTree.compileForTranslation((List<?>) list);
             return tree == null ? null : extractTree(tree);
         }
 
@@ -243,12 +246,14 @@ public final class TextExtractor {
     public static Result extractTree(@Nullable ContentTree tree) {
         if (tree == null) return null;
         StringBuilder out = new StringBuilder();
-        int textNodes = 0, opaque = 0, styleSeq = 0;
+        StringBuilder request = new StringBuilder();
+        int textNodes = 0, opaque = 0, styleSeq = 0, segmentIndex = 0;
         java.util.List<String> retainedMarkers = new java.util.ArrayList<>();
         for (ContentTree.Event event : tree.events) {
-            if (event.headingBreakBefore) out.append('\n');
+            if (event.headingBreakBefore) { out.append('\n'); request.append('\n'); }
             if (event.kind == ContentTree.EventKind.ITEM_START) {
                 out.append("\n• ");
+                request.append("\n• ");
                 continue;
             }
             if (event.kind != ContentTree.EventKind.NODE) continue;
@@ -258,40 +263,60 @@ public final class TextExtractor {
                     String text = node.text;
                     if (text == null) break;
                     textNodes++;
-                    if (!event.styled || BlankLines.isBlank(text)) {
+                    if (BlankLines.isBlank(text)) {
                         out.append(text);
+                        request.append(text);
                         break;
                     }
                     int lead = node.leadingEnd;
                     int tail = node.trailingStart;
                     out.append(text, 0, lead);
+                    request.append(text, 0, lead);
                     for (int i = 0; i < node.chunks.size(); i++) {
-                        if (i > 0) out.append(node.separators.get(i - 1));
+                        if (i > 0) { out.append(node.separators.get(i - 1)); request.append(node.separators.get(i - 1)); }
                         String chunk = node.chunks.get(i);
-                        if (!node.translatable.get(i)) out.append(chunk);
-                        else {
-                            styleSeq++;
-                            out.append("<x").append(styleSeq).append('>').append(chunk)
-                                    .append("</x").append(styleSeq).append('>');
+                        if (!node.translatable.get(i)) {
+                            out.append(chunk);
+                            request.append(chunk);
+                        } else {
+                            boolean structuralBoundary = tree.segmentBoundaryBefore.get(segmentIndex++);
+                            if (event.styled) {
+                                styleSeq++;
+                                String marked = "<x" + styleSeq + ">" + chunk + "</x" + styleSeq + ">";
+                                out.append(marked);
+                                request.append(marked);
+                            } else if (tree.explicitBoundaryMarkers && structuralBoundary) {
+                                styleSeq++;
+                                out.append(chunk);
+                                request.append("<x").append(styleSeq).append('>').append(chunk)
+                                        .append("</x").append(styleSeq).append('>');
+                            } else {
+                                out.append(chunk);
+                                request.append(chunk);
+                            }
                         }
                     }
                     out.append(text, tail, text.length());
+                    request.append(text, tail, text.length());
                     break;
                 case URL: case EMOJI:
-                    opaque++; out.append(' ').append(node.text).append(' '); break;
+                    opaque++; out.append(' ').append(node.text).append(' '); request.append(' ').append(node.text).append(' '); break;
                 case INLINE_CODE: case OPAQUE: case CODE_BLOCK:
                     retainedMarkers.add(event.retainedMarker);
                     if (node.kind != ContentTree.Kind.CODE_BLOCK) opaque++;
                     out.append(event.retainedMarker);
+                    request.append(event.retainedMarker);
                     break;
                 case BREAK:
-                    out.append('\n'); break;
+                    out.append('\n'); request.append('\n'); break;
                 default: throw new IllegalStateException("Non-leaf content event");
             }
         }
         String extracted = out.toString();
+        String modelRequest = request.toString();
         // Also catches reserved syntax assembled across adjacent captured text occurrences.
-        if (!RetainedNodeMarkers.matchesExpected(extracted, retainedMarkers)) return null;
-        return new Result(extracted, tree.segmentCount, textNodes, opaque, tree);
+        if (!RetainedNodeMarkers.matchesExpected(extracted, retainedMarkers)
+                || !RetainedNodeMarkers.matchesExpected(modelRequest, retainedMarkers)) return null;
+        return new Result(extracted, modelRequest, tree.segmentCount, textNodes, opaque, tree);
     }
 }
