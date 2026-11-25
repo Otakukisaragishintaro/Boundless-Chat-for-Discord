@@ -503,10 +503,13 @@ public final class ContentNodes {
                 java.util.Collections.nCopies(plan.groupIds.size(), ""));
         List<Integer> pending = new ArrayList<>();
         int cursor = 0;
+        int anchorOrdinal = 0;
         for (PlanToken t : plan.tokens) {
             if (t.anchor != null) {
                 int at = plain.indexOf(t.anchor, cursor);
-                if (at < 0) throw reject(RejectionReason.ANCHOR_ORDER);
+                if (at < 0) throw anchorOrderFailure(plain, t.anchor, cursor,
+                        ++anchorOrdinal, plan);
+                anchorOrdinal++;
                 String prefix = itemPrefix(plain.substring(cursor, at), t);
                 assignRun(prefix, pending, parts, plan);
                 pending.clear();
@@ -562,6 +565,21 @@ public final class ContentNodes {
         }
     }
 
+    /** Safe diagnostics for an order mismatch; never logs the anchor or message content. */
+    private static Rejection anchorOrderFailure(String plain, String anchor, int cursor,
+                                                 int ordinal, AlignmentPlan plan) {
+        int earlier = plain.indexOf(anchor);
+        String type = plan.retainedMarkers.contains(anchor) ? "RETAINED"
+                : plan.urls.contains(anchor) ? "URL" : "EMOJI";
+        Rejection rejection = new Rejection(RejectionReason.ANCHOR_ORDER, ordinal, earlier);
+        rejection.structure = " anchorType=" + type
+                + " tokenOrdinal=" + ordinal
+                + " cursor=" + cursor
+                + " plainLength=" + plain.length()
+                + " earlierMatch=" + (earlier >= 0);
+        return rejection;
+    }
+
     /** Verify multiplicity without ever emitting the anchor itself. */
     private static void requireAnchorCounts(String plain, List<String> anchors,
                                              RejectionReason reason) {
@@ -590,13 +608,16 @@ public final class ContentNodes {
                 java.util.Collections.nCopies(plan.groupIds.size(), ""));
         int from = 0;
         int segStart = 0;
+        int anchorOrdinal = 0;
         for (PlanToken t : plan.tokens) {
             if (t.anchor == null) {
                 continue;
             }
             String anchor = t.anchor;
             int at = plain.indexOf(anchor, from);
-            if (at < 0) throw reject(RejectionReason.ANCHOR_ORDER);
+            if (at < 0) throw anchorOrderFailure(plain, anchor, from,
+                    ++anchorOrdinal, plan);
+            anchorOrdinal++;
             int segEnd = t.segIndex;
             String prefix = itemPrefix(plain.substring(from, at), t);
             List<String> spanParts = alignInterval(prefix, plan, segStart, segEnd);
