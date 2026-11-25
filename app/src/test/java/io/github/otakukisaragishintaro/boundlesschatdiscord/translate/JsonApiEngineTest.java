@@ -241,7 +241,7 @@ public class JsonApiEngineTest {
                         .stripOuterResponseWrapper(userContent, source));
         assertEquals(5, segmentRequest.getJSONArray("segments").length());
         assertTrue(request.getJSONArray("messages").getJSONObject(0).getString("content")
-                .contains("immutable IDs"));
+                .contains("original id"));
         assertTrue(connection.disconnected);
         assertTrue(active(engine).isEmpty());
     }
