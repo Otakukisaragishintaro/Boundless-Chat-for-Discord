@@ -402,4 +402,22 @@ public class BulletListAlignmentTest {
 
         assertNull(ContentPlanTestSupport.replace(nodes, "一\n二\n三\n四"));
     }
+
+    private static TextExtractor.Result capture(List<Object> nodes, String expected) {
+        ContentTree tree = ContentTree.compile(nodes);
+        assertNotNull("valid synthetic fixture must compile", tree);
+        TextExtractor.Result result = TextExtractor.extractTree(tree);
+        assertNotNull("compiled source must be extractable", result);
+        assertEquals("fixture extraction must match its declared source", expected, result.text);
+        return result;
+    }
+
+    private static String extracted(List<?> nodes) {
+        ContentTree tree = ContentTree.compile(nodes);
+        assertNotNull("rebuilt nodes must compile", tree);
+        TextExtractor.Result result = TextExtractor.extractTree(tree);
+        assertNotNull("rebuilt nodes must be extractable", result);
+        return result.text;
+    }
+
 }
