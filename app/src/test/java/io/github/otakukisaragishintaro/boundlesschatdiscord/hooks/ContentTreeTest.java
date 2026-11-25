@@ -350,7 +350,7 @@ public class ContentTreeTest {
 
         List<Object> rebuilt = ContentNodes.replacePlanned(tree, "• <x1>外层</x1>\n• <x2>内层</x2>\n• <x3>末项</x3>");
         assertNotNull(rebuilt);
-        assertEquals("\n• <x1>外层</x1>\n• <x2>内层</x2>\n• <x3>末项</x3>", extracted(compiled(rebuilt)).text);
+        assertEquals("\n• <x1>外层</x1>\n• <x2>内层</x2>\n• <x3>末项</x3>", TextExtractor.extractTree(ContentTree.compileForTranslation(rebuilt)).requestText);
         List<Object> cursor = rebuilt;
         for (int depth = 0; depth < 10; depth++) {
             assertEquals(1, cursor.size());
