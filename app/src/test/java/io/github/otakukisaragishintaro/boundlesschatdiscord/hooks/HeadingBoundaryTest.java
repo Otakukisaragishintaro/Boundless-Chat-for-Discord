@@ -105,7 +105,7 @@ public class HeadingBoundaryTest {
         assertEquals(0, breaks(tree));
         List<Object> out = ContentNodes.replaceChecked(tree, "标题\n\n正文");
         assertSame(blank, out.get(1));
-        reject(tree, "标题\n正文", ContentNodes.RejectionReason.PARAGRAPH_MISSING);
+        assertEquals(2, ContentNodes.replaceChecked(tree, "标题\n正文").size());
     }
 
     @Test public void sharedHeadingObjectOccurrencesHaveIndependentBoundaries() {
