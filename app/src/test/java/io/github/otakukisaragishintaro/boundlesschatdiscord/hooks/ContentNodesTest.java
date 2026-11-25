@@ -1257,7 +1257,7 @@ public class ContentNodesTest {
                         list(new TextContentNode("fifth"))));
         TextContentNode following = new TextContentNode("following body");
         // Discord may expose the list-to-body separator as a one-LF whitespace text node.
-        List<Object> nodes = list(bullets, new TextContentNode("\\n"), following);
+        List<Object> nodes = list(bullets, new TextContentNode("\n"), following);
 
         List<Object> out = ContentPlanTestSupport.replace(nodes,
                 "第一项\n第二项\n第三项\n第四项\n第五项\n\n后续正文");
@@ -1267,7 +1267,7 @@ public class ContentNodesTest {
         assertEquals(5, rebuilt.getItems().size());
         assertEquals("第一项", ((TextContentNode) rebuilt.getItems().get(0).get(0)).getContent());
         assertEquals("第五项", ((TextContentNode) rebuilt.getItems().get(4).get(0)).getContent());
-        assertEquals("\\n", ((TextContentNode) out.get(1)).getContent());
+        assertEquals("\n", ((TextContentNode) out.get(1)).getContent());
         assertEquals("后续正文", ((TextContentNode) out.get(2)).getContent());
         assertEquals("following body", following.getContent());
     }
