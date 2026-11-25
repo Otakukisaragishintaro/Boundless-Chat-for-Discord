@@ -420,9 +420,11 @@ public final class HookBridge {
 
     private void produceTranslation(String messageId, Object structurableText) {
         TextExtractor.Result ex = TextExtractor.extract(structurableText);
-        String nodeTypes = TextExtractor.typeSummary(structurableText, ex);
-        ProjectLog.infoOnce("translation.nodeTypes." + nodeTypes,
-                "translation content node types=" + nodeTypes);
+        if (ProjectLog.isEnabled()) {
+            String nodeTypes = TextExtractor.typeSummary(structurableText, ex);
+            ProjectLog.infoOnce("translation.nodeTypes." + nodeTypes,
+                    "translation content node types=" + nodeTypes);
+        }
         if (ex == null || ex.text.trim().isEmpty()) {
             ProjectLog.warnOnce("translation.noText", "translation skipped: extracted text is empty"
                     + " structurableClass=" + structurableText.getClass().getName());
