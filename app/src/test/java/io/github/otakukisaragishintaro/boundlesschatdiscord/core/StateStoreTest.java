@@ -8,6 +8,29 @@ public class StateStoreTest {
     private final StateStore store = StateStore.get();
     @Before public void reset() { store.onNewGeneration(); }
 
+    @Test public void cacheCommitWaitsForOuterRenderAndIsIdempotent() {
+        StateStore.Entry entry = store.obtain("row", "hash");
+        TranslationTaskId task = store.begin(entry);
+        assertTrue(store.complete(task, true, "译文", null));
+
+        assertTrue(store.markCachePending("row", "译文"));
+        assertSame("outer render completion claims the current entry", entry,
+                store.claimCacheCommit("row"));
+        assertNull("a duplicate outer render must not claim a second write",
+                store.claimCacheCommit("row"));
+    }
+
+    @Test public void changedContentCannotInheritPendingCacheCommit() {
+        StateStore.Entry old = store.obtain("row", "old");
+        TranslationTaskId task = store.begin(old);
+        assertTrue(store.complete(task, true, "旧译文", null));
+        assertTrue(store.markCachePending("row", "旧译文"));
+
+        StateStore.Entry current = store.obtain("row", "new");
+        assertNotSame(old, current);
+        assertNull(store.claimCacheCommit("row"));
+    }
+
     @Test public void rejectedOldContentCannotChangeNewAttempt() {
         StateStore.Entry old = store.obtain("row", "h1");
         TranslationTaskId a = store.begin(old);
