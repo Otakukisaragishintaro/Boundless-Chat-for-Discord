@@ -2,7 +2,9 @@ package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import androidx.annotation.Nullable;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /** Bounded translation records: content, source snapshot and active task share one lifetime. */
@@ -153,15 +155,22 @@ public final class StateStore {
         return true;
     }
 
-    /** Claim one cache write only after the enclosing Discord message render has returned. */
-    @Nullable public synchronized Entry claimCacheCommit(String id) {
-        Entry entry = entries.get(id);
-        if (entry == null || !entry.cachePendingRender || entry.cacheCommitClaimed
-                || entry.status != Status.TRANSLATED || entry.showingOriginal
-                || entry.translatedText == null) return null;
-        entry.cachePendingRender = false;
-        entry.cacheCommitClaimed = true;
-        return entry;
+    /** Claim pending writes owned by one native message row after its render method returns. */
+    public synchronized List<Entry> claimCacheCommitsForRow(String rowMessageId) {
+        List<Entry> claimed = new ArrayList<>();
+        String cardPrefix = rowMessageId + "\u0000";
+        for (Map.Entry<String, Entry> record : entries.entrySet()) {
+            String key = record.getKey();
+            if (!key.equals(rowMessageId) && !key.startsWith(cardPrefix)) continue;
+            Entry entry = record.getValue();
+            if (!entry.cachePendingRender || entry.cacheCommitClaimed
+                    || entry.status != Status.TRANSLATED || entry.showingOriginal
+                    || entry.translatedText == null) continue;
+            entry.cachePendingRender = false;
+            entry.cacheCommitClaimed = true;
+            claimed.add(entry);
+        }
+        return claimed;
     }
 
     public synchronized boolean rejectRender(String id, String translated) {
