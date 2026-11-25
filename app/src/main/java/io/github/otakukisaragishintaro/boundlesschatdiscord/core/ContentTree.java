@@ -99,6 +99,8 @@ public final class ContentTree {
     public final Node root;
     public final List<Event> events;
     public final int segmentCount;
+    /** True for each translatable segment whose preceding source boundary must not be inferred. */
+    public final List<Boolean> segmentBoundaryBefore;
     private ContentTree(Node root) {
         this.root = root;
         Emitter emitter = new Emitter();
@@ -107,6 +109,80 @@ public final class ContentTree {
         int count = 0;
         for (Event event : events) if (event.kind == EventKind.NODE) count += event.node.segmentCount;
         segmentCount = count;
+        segmentBoundaryBefore = Collections.unmodifiableList(captureSegmentBoundaries(events));
+        if (segmentBoundaryBefore.size() != segmentCount)
+            throw new IllegalStateException("Captured segment boundary count mismatch");
+    }
+
+    /**
+     * Capture the same structural boundary decisions used by ContentNodes' alignment plan.
+     * A marker is needed after any source LF, heading transition, list-item transition, or
+     * list close/open boundary. Keeping this data on the immutable tree prevents extraction
+     * and reconstruction from inventing different marker positions.
+     */
+    private static List<Boolean> captureSegmentBoundaries(List<Event> events) {
+        List<Boolean> boundaries = new ArrayList<>();
+        java.util.ArrayDeque<Integer> listStarts = new java.util.ArrayDeque<>();
+        int separatorNewlines = 0;
+        int segments = 0;
+        boolean forceNewGroup = false;
+        for (Event event : events) {
+            if (event.headingBreakBefore) separatorNewlines++;
+            switch (event.kind) {
+                case LIST_START:
+                    listStarts.push(segments);
+                    continue;
+                case ITEM_START:
+                    if (segments > 0) forceNewGroup = true;
+                    separatorNewlines++;
+                    continue;
+                case ITEM_END:
+                    continue;
+                case LIST_END:
+                    if (segments > listStarts.pop()) forceNewGroup = true;
+                    continue;
+                case NODE:
+                    Node node = event.node;
+                    if (node.kind == Kind.TEXT) {
+                        String text = node.text;
+                        if (text == null) continue;
+                        if (BlankLines.isBlank(text)) {
+                            separatorNewlines += countLf(text, 0, text.length());
+                            continue;
+                        }
+                        separatorNewlines += countLf(text, 0, node.leadingEnd);
+                        for (int i = 0; i < node.chunks.size(); i++) {
+                            if (i > 0) {
+                                String separator = node.separators.get(i - 1);
+                                separatorNewlines += countLf(separator, 0, separator.length());
+                            }
+                            String chunk = node.chunks.get(i);
+                            if (BlankLines.isBlank(chunk)) {
+                                separatorNewlines += countLf(chunk, 0, chunk.length());
+                                continue;
+                            }
+                            if (TextExtractor.isUrlLike(chunk)) continue;
+                            boundaries.add(forceNewGroup || separatorNewlines > 0);
+                            forceNewGroup = false;
+                            segments++;
+                            separatorNewlines = 0;
+                        }
+                        separatorNewlines += countLf(text, node.trailingStart, text.length());
+                    } else if (node.kind == Kind.BREAK) {
+                        separatorNewlines++;
+                    }
+                    continue;
+                default:
+                    continue;
+            }
+        }
+        return boundaries;
+    }
+
+    private static int countLf(String text, int start, int end) {
+        int count = 0;
+        for (int i = start; i < end; i++) if (text.charAt(i) == '\\n') count++;
+        return count;
     }
 
     /** Depth counts native semantic containers, never Java list/item wrappers. Invalid trees reject whole. */
