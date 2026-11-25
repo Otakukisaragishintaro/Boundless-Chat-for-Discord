@@ -127,6 +127,42 @@ public class JsonApiEngineTest {
     }
 
     @Test
+    public void failedProductionValidationLogsSourceAndReceivedProviderResponse() throws Exception {
+        List<String> messages = new ArrayList<>();
+        Config.Snapshot snapshot = Config.read(new MemoryPrefs()
+                .put(Config.KEY_API_URL, "https://fake.invalid/v1")
+                .put(Config.KEY_API_KEY, "key")
+                .put(Config.KEY_STREAMING, false)
+                .put(Config.KEY_LOGGING_ENABLED, true)
+                .put(Config.KEY_STRIP_OUTER_WRAPPER, false));
+        ProjectLog.attach((priority, tag, message) -> messages.add(message));
+        ProjectLog.configure(snapshot);
+        try {
+            JsonApiEngine engine = new JsonApiEngine(snapshot,
+                    http(url -> new FakeConnection(chatJson("provider returned bad wrapper"))));
+            try {
+                engine.translate("original source text");
+                fail("Invalid provider response must be rejected");
+            } catch (TranslationException expected) {
+                // The detailed source and provider response must remain available in diagnostics.
+            }
+            boolean sourceLogged = false;
+            boolean responseLogged = false;
+            for (String message : messages) {
+                sourceLogged |= message.contains("translation.content type=source")
+                        && message.contains("original source text");
+                responseLogged |= message.contains("translation.content type=provider_response")
+                        && message.contains("provider returned bad wrapper");
+            }
+            assertTrue("Failed request source must be logged", sourceLogged);
+            assertTrue("Received invalid provider response must be logged", responseLogged);
+        } finally {
+            ProjectLog.configure(Config.read(new MemoryPrefs()));
+            ProjectLog.attach(null);
+        }
+    }
+
+    @Test
     public void outerWrapperStrippingAndValidationSwitchesHaveIndependentEffects() throws Exception {
         JsonApiEngine stripped = new JsonApiEngine(wrapperConfig(true, true),
                 http(url -> new FakeConnection(chatJson("<translate>你好</translate>"))));
