@@ -1,13 +1,15 @@
 package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Shields Discord syntax, style boundaries, and optionally Unicode emoji with the same
- * <keepN/> markers used by retained content nodes. Markers are restored after validation.
+ * Protects literal Discord tokens with movable identity placeholders, while keeping
+ * native-node/style/paragraph anchors in the ordered <keepN/> namespace.
  */
 public final class DiscordTokenMarkers {
     private static final Pattern UNICODE_EMOJI = Pattern.compile(
@@ -19,46 +21,79 @@ public final class DiscordTokenMarkers {
                     + "|(<#[0-9]{15,22}>|<a?:[A-Za-z0-9_]{2,32}:[0-9]{15,22}>)"
                     + "|((?:https?://|www\\.)[^\\s<>]+)"
                     + "|(" + UNICODE_EMOJI.pattern() + ")"
-                    + "|((?-i:</?x[1-9][0-9]*>))",
+                    + "|((?-i:</?x[1-9][0-9]*>))"
+                    + "|(⟦BC_TOKEN_[^⟧\\r\\n]{1,48}⟧)",
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
+    private static final Pattern TOKEN_FAMILY =
+            Pattern.compile("⟦BC_TOKEN_[^⟧\\r\\n]{1,64}⟧");
 
     private DiscordTokenMarkers() { }
 
     public static final class Protection {
         public final String text;
-        private final List<String> markers;
-        private final List<String> originals;
+        private final List<String> movableMarkers;
+        private final List<String> movableOriginals;
+        private final List<String> orderedMarkers;
+        private final List<String> orderedOriginals;
 
-        private Protection(String text, List<String> markers, List<String> originals) {
+        private Protection(String text, List<String> movableMarkers,
+                           List<String> movableOriginals, List<String> orderedMarkers,
+                           List<String> orderedOriginals) {
             this.text = text;
-            this.markers = markers;
-            this.originals = originals;
+            this.movableMarkers = movableMarkers;
+            this.movableOriginals = movableOriginals;
+            this.orderedMarkers = orderedMarkers;
+            this.orderedOriginals = orderedOriginals;
         }
 
         /**
-         * Restore only markers introduced by this protection pass. Their presence, uniqueness,
-         * and order are a mandatory safety check even when the optional retained-node validator
-         * is disabled; otherwise a missing Discord mention or URL could be silently discarded.
+         * Movable placeholders are matched by identity, not position: translation may
+         * reorder them with the sentence. Structural <keepN/> anchors remain ordered.
          */
         public String restore(String translated) throws TranslationException {
-            if (!markers.isEmpty()) {
-                if (translated == null) {
+            if (translated == null) {
+                if (!movableMarkers.isEmpty() || !orderedMarkers.isEmpty()) {
                     throw invalidRestoration();
                 }
-                int previousPosition = -1;
-                for (String marker : markers) {
-                    int position = translated.indexOf(marker);
-                    if (position < 0 || position <= previousPosition
-                            || translated.indexOf(marker, position + marker.length()) >= 0) {
-                        throw invalidRestoration();
-                    }
-                    previousPosition = position;
-                }
+                return null;
             }
+
+            Map<String, Integer> expected = counts(movableMarkers);
+            Map<String, Integer> actual = new HashMap<>();
+            Matcher tokenMatcher = TOKEN_FAMILY.matcher(translated);
+            while (tokenMatcher.find()) {
+                String marker = tokenMatcher.group();
+                actual.put(marker, actual.containsKey(marker) ? actual.get(marker) + 1 : 1);
+            }
+            if (!expected.equals(actual)) {
+                throw invalidRestoration();
+            }
+
+            int previousPosition = -1;
+            for (String marker : orderedMarkers) {
+                int position = translated.indexOf(marker);
+                if (position < 0 || position <= previousPosition
+                        || translated.indexOf(marker, position + marker.length()) >= 0) {
+                    throw invalidRestoration();
+                }
+                previousPosition = position;
+            }
+
             String result = translated;
-            for (int i = 0; i < markers.size(); i++) {
-                result = result.replace(markers.get(i), originals.get(i));
+            for (int i = 0; i < movableMarkers.size(); i++) {
+                result = result.replace(movableMarkers.get(i), movableOriginals.get(i));
+            }
+            for (int i = 0; i < orderedMarkers.size(); i++) {
+                result = result.replace(orderedMarkers.get(i), orderedOriginals.get(i));
+            }
+            return result;
+        }
+
+        private static Map<String, Integer> counts(List<String> values) {
+            Map<String, Integer> result = new HashMap<>();
+            for (String value : values) {
+                result.put(value, result.containsKey(value) ? result.get(value) + 1 : 1);
             }
             return result;
         }
@@ -66,36 +101,29 @@ public final class DiscordTokenMarkers {
         private static TranslationException invalidRestoration() {
             return new TranslationException(TranslationException.Kind.PARSE,
                     TranslationException.Reason.TRANSLATION_INVALID,
-                    "译文未完整保留 Discord 保护标记，已拒绝恢复以避免内容丢失");
+                    "译文未完整保留保护占位符，或结构锚点顺序已损坏；已拒绝恢复");
         }
 
         public int tokenCount() {
-            return markers.size();
+            return movableMarkers.size() + orderedMarkers.size();
         }
     }
 
     /**
-     * Protect blank-line separators inside a grouped request. This lets multiple whole
-     * paragraphs share context without allowing the provider to normalize their spacing.
+     * Protect blank-line separators as ordered structural anchors. They are restored
+     * verbatim after translation and must not be moved or normalized by the provider.
      */
     public static Protection protectBlankLineSeparators(String source) {
         if (source == null || source.isEmpty()) {
-            return new Protection(source, new ArrayList<>(), new ArrayList<>());
+            return empty(source);
         }
         BlankLines.Split split = BlankLines.split(source);
         if (split.separators.isEmpty()) {
-            return new Protection(source, new ArrayList<>(), new ArrayList<>());
+            return empty(source);
         }
 
-        int next = 1;
-        Matcher existing = KEEP.matcher(source);
-        while (existing.find()) {
-            try {
-                next = Math.max(next, Integer.parseInt(existing.group(1)) + 1);
-            } catch (NumberFormatException exhausted) {
-                return new Protection(source, new ArrayList<>(), new ArrayList<>());
-            }
-        }
+        int next = nextKeepId(source);
+        if (next < 0) return empty(source);
 
         StringBuilder protectedText = new StringBuilder(source.length());
         List<String> markers = new ArrayList<>();
@@ -109,50 +137,73 @@ public final class DiscordTokenMarkers {
                 protectedText.append(marker);
             }
         }
-        return new Protection(protectedText.toString(), markers, originals);
+        return new Protection(protectedText.toString(), new ArrayList<>(),
+                new ArrayList<>(), markers, originals);
     }
 
-    /** Replace selected literal Discord syntax with unique keep markers before translation. */
+    /** Replace selected literal Discord syntax with movable identity placeholders. */
     public static Protection protect(String source) {
         return protect(source, true, true, true);
     }
 
     public static Protection protect(String source, boolean protectMentions,
                                      boolean protectChannelsAndEmojis, boolean protectUrls) {
-        if (source == null || source.isEmpty()) {
-            return new Protection(source, new ArrayList<>(), new ArrayList<>());
-        }
+        if (source == null || source.isEmpty()) return empty(source);
 
+        int nextKeep = nextKeepId(source);
+        if (nextKeep < 0) return empty(source);
+        String tokenPrefix = "⟦BC_TOKEN_";
+        while (source.contains(tokenPrefix)) tokenPrefix = tokenPrefix + "X_";
+
+        Matcher matcher = TOKEN.matcher(source);
+        StringBuffer protectedText = new StringBuffer(source.length());
+        List<String> movableMarkers = new ArrayList<>();
+        List<String> movableOriginals = new ArrayList<>();
+        List<String> orderedMarkers = new ArrayList<>();
+        List<String> orderedOriginals = new ArrayList<>();
+        int nextToken = 1;
+
+        while (matcher.find()) {
+            boolean styleBoundary = matcher.group(5) != null;
+            boolean selected = matcher.group(1) != null ? protectMentions
+                    : matcher.group(2) != null ? protectChannelsAndEmojis
+                    : matcher.group(3) != null ? protectUrls
+                    : matcher.group(4) != null || matcher.group(6) != null || styleBoundary;
+            if (!selected) {
+                matcher.appendReplacement(protectedText,
+                        Matcher.quoteReplacement(matcher.group()));
+            } else if (styleBoundary) {
+                String marker = "<keep" + nextKeep++ + "/>";
+                orderedMarkers.add(marker);
+                orderedOriginals.add(matcher.group());
+                matcher.appendReplacement(protectedText, Matcher.quoteReplacement(marker));
+            } else {
+                String marker = tokenPrefix + nextToken++ + "⟧";
+                movableMarkers.add(marker);
+                movableOriginals.add(matcher.group());
+                matcher.appendReplacement(protectedText, Matcher.quoteReplacement(marker));
+            }
+        }
+        matcher.appendTail(protectedText);
+        return new Protection(protectedText.toString(), movableMarkers, movableOriginals,
+                orderedMarkers, orderedOriginals);
+    }
+
+    private static int nextKeepId(String source) {
         int next = 1;
         Matcher existing = KEEP.matcher(source);
         while (existing.find()) {
             try {
                 next = Math.max(next, Integer.parseInt(existing.group(1)) + 1);
             } catch (NumberFormatException exhausted) {
-                // An impossibly large source marker is rejected by the normal integrity guard.
-                return new Protection(source, new ArrayList<>(), new ArrayList<>());
+                return -1;
             }
         }
+        return next;
+    }
 
-        Matcher matcher = TOKEN.matcher(source);
-        StringBuffer protectedText = new StringBuffer(source.length());
-        List<String> markers = new ArrayList<>();
-        List<String> originals = new ArrayList<>();
-        while (matcher.find()) {
-            boolean selected = matcher.group(1) != null ? protectMentions
-                    : matcher.group(2) != null ? protectChannelsAndEmojis
-                    : matcher.group(3) != null ? protectUrls
-                    : matcher.group(4) != null ? protectChannelsAndEmojis : true;
-            if (selected) {
-                String marker = "<keep" + next++ + "/>";
-                markers.add(marker);
-                originals.add(matcher.group());
-                matcher.appendReplacement(protectedText, Matcher.quoteReplacement(marker));
-            } else {
-                matcher.appendReplacement(protectedText, Matcher.quoteReplacement(matcher.group()));
-            }
-        }
-        matcher.appendTail(protectedText);
-        return new Protection(protectedText.toString(), markers, originals);
+    private static Protection empty(String source) {
+        return new Protection(source, new ArrayList<>(), new ArrayList<>(),
+                new ArrayList<>(), new ArrayList<>());
     }
 }
