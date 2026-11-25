@@ -82,9 +82,10 @@ public final class ContentNodes {
     }
 
     /**
-     * Flatten translated text while restoring every native node that was protected from
-     * translation. Present anchors are restored in place; anchors omitted by the model
-     * are retained at the end rather than silently discarded.
+     * Flatten translated text while restoring every native node at the position of its
+     * identity anchor. Native anchors may be reordered by translation; their occurrence
+     * identity is captured from the source tree, then their returned positions determine
+     * the order of the restored native nodes.
      */
     @Nullable
     public static List<Object> flattenPreservingNativeNodes(ContentTree tree, String translated) {
@@ -121,22 +122,34 @@ public final class ContentNodes {
         String plain = translated.replaceAll("</?x[0-9]+>", "");
         java.util.regex.Pattern reserved = java.util.regex.Pattern.compile(
                 "<\\s*/?\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
-        List<Object> result = new ArrayList<>();
-        int cursor = 0;
+        java.util.Map<String, Integer> nextSearch = new java.util.HashMap<>();
+        List<PositionedNativeToken> positioned = new ArrayList<>(tokens.size());
+        int ordinal = 0;
         for (NativeToken token : tokens) {
-            int at = plain.indexOf(token.anchor, cursor);
-            boolean anchorFound = at >= 0;
-            if (!anchorFound) {
-                // When the model omits an anchor, retain the native node near its source
-                // position: leading mentions stay before the translated body, trailing
-                // emoji/code/mentions stay after it, and interior nodes use a word boundary.
-                at = estimatedInsertionPoint(plain, cursor, token.beforeSegments,
+            int searchFrom = nextSearch.getOrDefault(token.anchor, 0);
+            int at = plain.indexOf(token.anchor, searchFrom);
+            boolean found = at >= 0;
+            if (found) {
+                nextSearch.put(token.anchor, at + token.anchor.length());
+            } else {
+                at = estimatedInsertionPoint(plain, 0, token.beforeSegments,
                         tree.segmentCount);
             }
+            positioned.add(new PositionedNativeToken(token, at, found, ordinal++));
+        }
+        positioned.sort((a, b) -> {
+            int byPosition = Integer.compare(a.position, b.position);
+            return byPosition != 0 ? byPosition : Integer.compare(a.ordinal, b.ordinal);
+        });
+
+        List<Object> result = new ArrayList<>();
+        int cursor = 0;
+        for (PositionedNativeToken item : positioned) {
+            int at = Math.max(cursor, Math.min(plain.length(), item.position));
             if (!appendPlainText(result, textPrototype,
                     reserved.matcher(plain.substring(cursor, at)).replaceAll(""))) return null;
-            result.add(token.original);
-            cursor = anchorFound ? at + token.anchor.length() : at;
+            result.add(item.token.original);
+            cursor = item.found ? Math.min(plain.length(), at + item.token.anchor.length()) : at;
         }
         if (!appendPlainText(result, textPrototype,
                 reserved.matcher(plain.substring(cursor)).replaceAll(""))) return null;
@@ -173,6 +186,19 @@ public final class ContentNodes {
             this.anchor = anchor;
             this.original = original;
             this.beforeSegments = beforeSegments;
+        }
+    }
+
+    private static final class PositionedNativeToken {
+        final NativeToken token;
+        final int position;
+        final boolean found;
+        final int ordinal;
+        PositionedNativeToken(NativeToken token, int position, boolean found, int ordinal) {
+            this.token = token;
+            this.position = position;
+            this.found = found;
+            this.ordinal = ordinal;
         }
     }
 
