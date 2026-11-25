@@ -711,7 +711,10 @@ public final class ContentNodes {
                             && !isLineBreakBefore(lineBreakBefore, i);
                     boolean nativeBreakParagraph = boundaryLineCounts != null
                             && i < boundaryLineCounts.size() && boundaryLineCounts.get(i) > 0;
-                    if (isLineBreakBefore(lineBreakBefore, i) || hardLineBoundary
+                    boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, i)
+                            && (groups.get(i).equals(groups.get(i - 1))
+                            || isListPrefix(listPrefixes, i));
+                    if (connectedLineBoundary || hardLineBoundary
                             || missingListParagraph || nativeBreakParagraph) {
                         remainingStructuralBoundary = true;
                         break;
@@ -735,9 +738,12 @@ public final class ContentNodes {
             int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
+                boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, end)
+                        && (groups.get(end).equals(groups.get(end - 1))
+                        || isListPrefix(listPrefixes, end));
                 boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, end)
                         && groups.get(end).equals(groups.get(end - 1));
-                if (isLineBreakBefore(lineBreakBefore, end) || hardLineBoundary) {
+                if (connectedLineBoundary || hardLineBoundary) {
                     int nextExpected = expectedSourceLines(segment, end + 1,
                             sourceLineCounts, boundaryLineCounts);
                     if (nextExpected <= availableLines) {
@@ -816,13 +822,17 @@ public final class ContentNodes {
     }
 
     private static int connectedRunEnd(int start, int segments, List<Integer> groups,
+                                       @Nullable List<Boolean> listPrefixes,
                                        @Nullable List<Boolean> lineBreakBefore,
                                        @Nullable List<Boolean> hardBoundaries) {
         int end = start;
         while (end < segments) {
+            boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, end)
+                    && (end > 0 && groups.get(end).equals(groups.get(end - 1))
+                    || isListPrefix(listPrefixes, end));
             boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, end)
                     && end > 0 && groups.get(end).equals(groups.get(end - 1));
-            if (!isLineBreakBefore(lineBreakBefore, end) && !hardLineBoundary) break;
+            if (!connectedLineBoundary && !hardLineBoundary) break;
             end++;
         }
         return end;
