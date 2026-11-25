@@ -68,7 +68,7 @@ public class SegmentsTest {
     @Test
     public void eachIntegritySwitchControlsOnlyItsOwnValidationRule() {
         assertNotNull(Segments.plainTextViolation("XXXX", "hello",
-                false, false, true, false, 0, 1000));
+                false, true, false, false, 0, 1000));
         assertNull(Segments.plainTextViolation("XXXX", "hello",
                 false, false, false, false, 0, 1000));
 
