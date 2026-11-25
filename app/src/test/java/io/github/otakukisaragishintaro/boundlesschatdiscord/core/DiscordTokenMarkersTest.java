@@ -28,18 +28,26 @@ public class DiscordTokenMarkersTest {
     }
 
     @Test
-    public void reorderedProtectedMarkersAreRejectedBeforeRestoration() throws Exception {
+    public void reorderedProtectedMarkersAreRestoredByIdentity() throws Exception {
         DiscordTokenMarkers.Protection protection =
                 DiscordTokenMarkers.protect("@everyone first @here second");
-        String reordered = protection.text.replace("<keep1/>", "<TEMP/>")
-                .replace("<keep2/>", "<keep1/>").replace("<TEMP/>", "<keep2/>");
-        assertInvalid(() -> protection.restore(reordered));
+        String reordered = protection.text
+                .replace("⟦BC_TOKEN_1⟧", "⟦TEMP_TOKEN⟧")
+                .replace("⟦BC_TOKEN_2⟧", "⟦BC_TOKEN_1⟧")
+                .replace("⟦TEMP_TOKEN⟧", "⟦BC_TOKEN_2⟧");
+        assertEquals("@here first @everyone second", protection.restore(reordered));
+    }
+
+    @Test
+    public void unknownProtectedPlaceholderIsRejected() throws Exception {
+        DiscordTokenMarkers.Protection protection = DiscordTokenMarkers.protect("@everyone hello");
+        assertInvalid(() -> protection.restore(protection.text + " ⟦BC_TOKEN_99⟧"));
     }
 
     private static void assertInvalid(CheckedAction action) throws Exception {
         try {
             action.run();
-            throw new AssertionError("Invalid protected marker sequence was accepted");
+            throw new AssertionError("Invalid protected placeholder set was accepted");
         } catch (TranslationException expected) {
             assertEquals(TranslationException.Kind.PARSE, expected.kind());
             assertEquals(TranslationException.Reason.TRANSLATION_INVALID, expected.reason());
