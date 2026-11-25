@@ -103,6 +103,9 @@ public final class InlineIconSpan extends ImageSpan {
     @Nullable private final String languageLabel;
     private final int languageTextSizePx;
     private final int languageGapPx;
+    private final int warningTextSizePx;
+    private final int warningGapPx;
+    private final boolean formattingWarning;
 
     /** 是否处于翻译中（决定要不要转动）。构造后不再变化：状态变化会重建 span。 */
     private final boolean spinning;
@@ -156,7 +159,7 @@ public final class InlineIconSpan extends ImageSpan {
             };
 
     private InlineIconSpan(Drawable drawable, float density, StateStore.Status status,
-                           @Nullable String languageLabel) {
+                           @Nullable String languageLabel, boolean formattingWarning) {
         super(drawable);
         this.iconPx = InlineIconGeometry.dpToPx(ICON_DP, density);
         this.leadingGapPx = InlineIconGeometry.dpToPxAllowZero(LEADING_GAP_DP, density);
@@ -164,6 +167,9 @@ public final class InlineIconSpan extends ImageSpan {
                 ? null : languageLabel.trim().toUpperCase(java.util.Locale.ROOT);
         this.languageTextSizePx = InlineIconGeometry.dpToPx(9, density);
         this.languageGapPx = InlineIconGeometry.dpToPxAllowZero(3, density);
+        this.warningTextSizePx = InlineIconGeometry.dpToPx(15, density);
+        this.warningGapPx = InlineIconGeometry.dpToPxAllowZero(2, density);
+        this.formattingWarning = formattingWarning;
         // 尾部留白 = 让 span 总宽达到最小点击宽度；至少保留 1dp 避免紧贴。
         this.trailingGapPx = InlineIconGeometry.trailingGapForTapTarget(
                 leadingGapPx, iconPx,
@@ -183,16 +189,23 @@ public final class InlineIconSpan extends ImageSpan {
     @Nullable
     static InlineIconSpan create(@Nullable Drawable icon, float density,
                                 StateStore.Status status) {
-        return create(icon, density, status, null);
+        return create(icon, density, status, null, false);
     }
 
     @Nullable
     static InlineIconSpan create(@Nullable Drawable icon, float density,
                                 StateStore.Status status, @Nullable String languageLabel) {
+        return create(icon, density, status, languageLabel, false);
+    }
+
+    @Nullable
+    static InlineIconSpan create(@Nullable Drawable icon, float density,
+                                StateStore.Status status, @Nullable String languageLabel,
+                                boolean formattingWarning) {
         if (icon == null || status == null) {
             return null;
         }
-        return new InlineIconSpan(icon, density, status, languageLabel);
+        return new InlineIconSpan(icon, density, status, languageLabel, formattingWarning);
     }
 
     /** 按状态给 Drawable 着色，并返回独立副本（模块缓存的 Drawable 会被多处复用）。 */
@@ -514,6 +527,12 @@ public final class InlineIconSpan extends ImageSpan {
             labelPaint.setFakeBoldText(true);
             width += languageGapPx + (int) Math.ceil(labelPaint.measureText(languageLabel));
         }
+        if (formattingWarning) {
+            Paint warningPaint = new Paint(paint);
+            warningPaint.setTextSize(warningTextSizePx);
+            warningPaint.setFakeBoldText(true);
+            width += warningGapPx + (int) Math.ceil(warningPaint.measureText("!"));
+        }
         return width;
     }
 
@@ -540,7 +559,8 @@ public final class InlineIconSpan extends ImageSpan {
             canvas.restore();
         }
 
-        // Keep the language tag inside the same ReplacementSpan and click target.
+        // Keep the language tag and degraded-format warning inside the same click target.
+        float suffixX = left + iconPx;
         if (languageLabel != null) {
             Paint labelPaint = new Paint(paint);
             labelPaint.setAntiAlias(true);
@@ -550,8 +570,20 @@ public final class InlineIconSpan extends ImageSpan {
             Paint.FontMetrics labelMetrics = labelPaint.getFontMetrics();
             float labelBaseline = centerY
                     - (labelMetrics.ascent + labelMetrics.descent) / 2f;
-            float labelX = left + iconPx + languageGapPx;
-            canvas.drawText(languageLabel, labelX, labelBaseline, labelPaint);
+            suffixX += languageGapPx;
+            canvas.drawText(languageLabel, suffixX, labelBaseline, labelPaint);
+            suffixX += labelPaint.measureText(languageLabel);
+        }
+        if (formattingWarning) {
+            Paint warningPaint = new Paint(paint);
+            warningPaint.setAntiAlias(true);
+            warningPaint.setTextSize(warningTextSizePx);
+            warningPaint.setFakeBoldText(true);
+            warningPaint.setColor(0xFFED4245);
+            Paint.FontMetrics warningMetrics = warningPaint.getFontMetrics();
+            float warningBaseline = centerY
+                    - (warningMetrics.ascent + warningMetrics.descent) / 2f;
+            canvas.drawText("!", suffixX + warningGapPx, warningBaseline, warningPaint);
         }
     }
 
