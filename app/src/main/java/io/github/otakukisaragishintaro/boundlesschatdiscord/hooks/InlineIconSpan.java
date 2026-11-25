@@ -126,6 +126,7 @@ public final class InlineIconSpan extends ImageSpan {
     private final List<WeakReference<android.widget.TextView>> spinTargets = new ArrayList<>();
     private WeakReference<android.widget.TextView> shadowTarget;
     private Object clickSpan;
+    private Object warningClickSpan;
     private WeakReference<android.text.Spannable> injectedText;
     private boolean targetsComplete = true;
     private int visitedViews;
@@ -282,8 +283,9 @@ public final class InlineIconSpan extends ImageSpan {
         startSpin();
     }
 
-    void ownText(android.text.Spannable text, Object clickSpan) {
+    void ownText(android.text.Spannable text, Object clickSpan, @Nullable Object warningClickSpan) {
         this.clickSpan = clickSpan;
+        this.warningClickSpan = warningClickSpan;
         this.injectedText = new WeakReference<>(text);
     }
 
@@ -342,6 +344,7 @@ public final class InlineIconSpan extends ImageSpan {
         for (InlineIconSpan icon : icons) {
             icon.clearInjectedBuffer();
             if (icon.clickSpan != null) mutable.removeSpan(icon.clickSpan);
+            if (icon.warningClickSpan != null) mutable.removeSpan(icon.warningClickSpan);
             mutable.removeSpan(icon);
         }
     }
@@ -350,6 +353,7 @@ public final class InlineIconSpan extends ImageSpan {
         android.text.Spannable text = injectedText == null ? null : injectedText.get();
         if (text == null) return;
         if (clickSpan != null) text.removeSpan(clickSpan);
+        if (warningClickSpan != null) text.removeSpan(warningClickSpan);
         text.removeSpan(this);
     }
 
@@ -527,12 +531,6 @@ public final class InlineIconSpan extends ImageSpan {
             labelPaint.setFakeBoldText(true);
             width += languageGapPx + (int) Math.ceil(labelPaint.measureText(languageLabel));
         }
-        if (formattingWarning) {
-            Paint warningPaint = new Paint(paint);
-            warningPaint.setTextSize(warningTextSizePx);
-            warningPaint.setFakeBoldText(true);
-            width += warningGapPx + (int) Math.ceil(warningPaint.measureText("!"));
-        }
         return width;
     }
 
@@ -573,17 +571,6 @@ public final class InlineIconSpan extends ImageSpan {
             suffixX += languageGapPx;
             canvas.drawText(languageLabel, suffixX, labelBaseline, labelPaint);
             suffixX += labelPaint.measureText(languageLabel);
-        }
-        if (formattingWarning) {
-            Paint warningPaint = new Paint(paint);
-            warningPaint.setAntiAlias(true);
-            warningPaint.setTextSize(warningTextSizePx);
-            warningPaint.setFakeBoldText(true);
-            warningPaint.setColor(0xFFED4245);
-            Paint.FontMetrics warningMetrics = warningPaint.getFontMetrics();
-            float warningBaseline = centerY
-                    - (warningMetrics.ascent + warningMetrics.descent) / 2f;
-            canvas.drawText("!", suffixX + warningGapPx, warningBaseline, warningPaint);
         }
     }
 
