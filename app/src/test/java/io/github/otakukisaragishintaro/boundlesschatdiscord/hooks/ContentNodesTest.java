@@ -1244,4 +1244,30 @@ public class ContentNodesTest {
         assertEquals(2, tail.getContent().size());
         assertSame(emoji, tail.getContent().get(0));
     }
+    @Test
+    public void listEndStartsNewParagraphBeforeFollowingRootText() {
+        // The list's five item lines and the following body paragraph are separate blocks.
+        // LIST_END must advance the paragraph group without joining the body to the list's line run.
+        BulletListContentNode bullets = new BulletListContentNode(null, false,
+                itemLists(
+                        list(new TextContentNode("first")),
+                        list(new TextContentNode("second")),
+                        list(new TextContentNode("third")),
+                        list(new TextContentNode("fourth")),
+                        list(new TextContentNode("fifth"))));
+        TextContentNode following = new TextContentNode("following body");
+        List<Object> nodes = list(bullets, following);
+
+        List<Object> out = ContentPlanTestSupport.replace(nodes,
+                "第一项\\n第二项\\n第三项\\n第四项\\n第五项\\n\\n后续正文");
+
+        assertNotNull("列表与后续正文应按两个段落块独立对齐", out);
+        BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
+        assertEquals(5, rebuilt.getItems().size());
+        assertEquals("第一项", ((TextContentNode) rebuilt.getItems().get(0).get(0)).getContent());
+        assertEquals("第五项", ((TextContentNode) rebuilt.getItems().get(4).get(0)).getContent());
+        assertEquals("后续正文", ((TextContentNode) out.get(1)).getContent());
+        assertEquals("following body", following.getContent());
+    }
+
 }
