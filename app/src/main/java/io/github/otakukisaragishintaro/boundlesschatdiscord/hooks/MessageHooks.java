@@ -365,6 +365,8 @@ public final class MessageHooks {
                                 "message.textConversion Discord callers="
                                         + discordCallers());
                         boolean replyTranslationApplied = false;
+                        String appliedTranslationId = null;
+                        String appliedTranslationText = null;
                         TextExtractor.Result extracted = null;
                         try {
                             String messageId = resolvedMessageId;
@@ -390,7 +392,8 @@ public final class MessageHooks {
                                                 + " sourceClass=" + original.getClass().getName()
                                                 + " replacementClass=" + replacement.getClass().getName());
                                         renderArgs[contentArgument] = replacement;
-                                        HookBridge.get().onTranslationRenderApplied(messageId, translated);
+                                        appliedTranslationId = messageId;
+                                        appliedTranslationText = translated;
                                         replyTranslationApplied = replyConversion;
                                     } else {
                                         ProjectLog.info("message translation replacement rejected"
@@ -410,6 +413,12 @@ public final class MessageHooks {
 
                         // 宿主渲染只执行一次；图标注入失败时保留原始渲染结果。
                         Object rendered = chain.proceed(renderArgs);
+                        // Persist only after both the native structure reconstruction and the
+                        // host's text conversion returned successfully.
+                        if (rendered != null && appliedTranslationId != null) {
+                            HookBridge.get().onTranslationRenderApplied(
+                                    appliedTranslationId, appliedTranslationText);
+                        }
                         if (replyTranslationApplied) {
                             // Native singleLine mode does not remove embedded LF or NewLine
                             // nodes. Project only after canonical alignment and rendering,
