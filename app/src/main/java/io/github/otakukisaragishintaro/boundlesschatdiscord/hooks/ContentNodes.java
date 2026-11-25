@@ -760,12 +760,24 @@ public final class ContentNodes {
                         rejection.paragraphGroups = paragraphGroups;
                         throw rejection;
                     }
-                } else if (groups.get(end).equals(groups.get(end - 1))) {
+                } else if (!groups.get(end).equals(groups.get(end - 1))) {
+                    // A paragraph boundary may be missing from the response. If the
+                    // block still has one line for each native slot, align those lines
+                    // to their original nodes and let native separators restore layout.
+                    // A list lead paragraph is stricter: its boundary must remain explicit.
+                    boolean requiredListParagraph = isListPrefix(listPrefixes, end)
+                            && !isLineBreakBefore(lineBreakBefore, end);
+                    int nextExpected = expectedSourceLines(segment, end + 1,
+                            sourceLineCounts, boundaryLineCounts);
+                    if (!requiredListParagraph && nextExpected <= availableLines) {
+                        end++;
+                    } else {
+                        break;
+                    }
+                } else {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
                     rejection.boundary = end;
                     throw rejection;
-                } else {
-                    break;
                 }
             }
 
