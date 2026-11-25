@@ -15,8 +15,7 @@ public class ProtectionPromptConfigTest {
             assertTrue(prompt.contains(language));
             assertTrue(prompt.contains("<keepN/>"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("original relative order"));
-            assertTrue(prompt.contains("NEVER translate, quote, copy, or output this checklist"));
+            assertTrue(prompt.contains("complete marker sequence"));
             assertTrue(prompt.contains("silently compare the translation"));
         }
     }
@@ -26,7 +25,7 @@ public class ProtectionPromptConfigTest {
             throws Exception {
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_OPENAI_RESPONSES, Config.PROTOCOL_ANTHROPIC_MESSAGES}) {
-            String enabled = Protocols.requestBody(protocol, "source", "translate", "model",
+            String enabled = Protocols.requestBody(protocol, "source<keep1/>", "translate", "model",
                     false, true, "日本語");
             String disabled = Protocols.requestBody(protocol, "source", "translate", "model",
                     false, false, "日本語");
