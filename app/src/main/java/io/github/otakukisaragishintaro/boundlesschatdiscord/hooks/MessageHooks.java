@@ -279,16 +279,16 @@ public final class MessageHooks {
                                 ? safeArg(chain, viewArgument) : chain.getThisObject();
                         View view = asView(viewObject);
                         Object content = safeArg(chain, contentArgument);
+                        Object configuredId = safeArg(chain, messageIdArgument);
+                        String messageId = configuredId instanceof String
+                                && HookBridge.looksLikeSnowflake((String) configuredId)
+                                ? (String) configuredId : null;
                         InlineIconInjector.HostScope hostScope = InlineIconInjector.enterHost(view, null);
                         try {
                             if (!RenderDispatcher.isRerendering() && view != null) {
                                 RerenderRegistry.unregister(view);
                                 HookBridge.get().unbindView(view);
                                 Object[] renderArgs = chain.getArgs().toArray();
-                                Object configuredId = safeArg(chain, messageIdArgument);
-                                String messageId = configuredId instanceof String
-                                        && HookBridge.looksLikeSnowflake((String) configuredId)
-                                        ? (String) configuredId : null;
                                 ProjectLog.infoOnce("message.render", "message.render invoked host="
                                         + (view != null) + " idResolved=" + (messageId != null)
                                         + " idSource=" + identitySource
@@ -309,7 +309,11 @@ public final class MessageHooks {
                                     + t.getClass().getName());
                         }
                         try {
-                            return chain.proceed();
+                            Object rendered = chain.proceed();
+                            if (messageId != null) {
+                                HookBridge.get().onMessageRenderCompleted(messageId);
+                            }
+                            return rendered;
                         } finally {
                             hostScope.close();
                         }
