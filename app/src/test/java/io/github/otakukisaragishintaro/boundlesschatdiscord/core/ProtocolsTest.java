@@ -145,7 +145,7 @@ public class ProtocolsTest {
     @Test
     public void requestPromptIncludesExactOrderedManifestForEveryRetainedMarker() throws Exception {
         String source = "A <keep13/> B <keep14/> C <keep1/> D";
-        String expectedManifest = "source contains exactly 3 protected markers, in this required order: "
+        String expectedManifest = "The source text contains exactly 3 protected markers, in this required order: "
                 + "[<keep13/>, <keep14/>, <keep1/>]";
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_OPENAI_RESPONSES, Config.PROTOCOL_ANTHROPIC_MESSAGES}) {
