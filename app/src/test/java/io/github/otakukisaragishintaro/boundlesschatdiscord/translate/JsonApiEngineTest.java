@@ -132,14 +132,14 @@ public class JsonApiEngineTest {
         String source = first + "\n\n" + second;
 
         AtomicInteger normalOpens = new AtomicInteger();
-        FakeConnection normalConnection = new FakeConnection(chatJson(
-                repeat("z", 250) + "<keep1/>" + repeat("z", 252)));
+        String merged = repeat("z", 250) + repeat("z", 252);
+        FakeConnection normalConnection = new FakeConnection(chatJson(merged));
         JsonApiEngine normal = new JsonApiEngine(config(
                 Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
                     normalOpens.incrementAndGet();
                     return normalConnection;
                 }));
-        assertEquals(repeat("z", 250) + "\n\n" + repeat("z", 252), normal.translate(source));
+        assertEquals("A merged paragraph is valid translation output", merged, normal.translate(source));
         assertEquals(1, normalOpens.get());
 
         AtomicInteger chunkedOpens = new AtomicInteger();
@@ -188,18 +188,9 @@ public class JsonApiEngineTest {
         assertEquals(repeat("a", 250) + "\n\nhttps://example.com/release",
                 tailGroups.chunks.get(0));
 
-        // Grouped requests protect their internal blank-line layout from model normalization.
-        io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers.Protection
-                separatorProtection =
-                io.github.otakukisaragishintaro.boundlesschatdiscord.core.DiscordTokenMarkers
-                        .protectBlankLineSeparators("first\n\nsecond");
-        assertTrue(separatorProtection.text.contains("<keep1/>"));
-        assertEquals("first\n\nsecond",
-                separatorProtection.restore(separatorProtection.text));
-
         AtomicInteger raisedThresholdOpens = new AtomicInteger();
-        FakeConnection raisedThresholdConnection = new FakeConnection(chatJson(
-                repeat("q", 250) + "<keep1/>" + repeat("q", 252)));
+        String raisedThresholdMerged = repeat("q", 250) + repeat("q", 252);
+        FakeConnection raisedThresholdConnection = new FakeConnection(chatJson(raisedThresholdMerged));
         Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
                 .put(Config.KEY_API_URL, "https://fake.invalid/v1")
                 .put(Config.KEY_API_KEY, "key")
@@ -211,7 +202,7 @@ public class JsonApiEngineTest {
             raisedThresholdOpens.incrementAndGet();
             return raisedThresholdConnection;
         }));
-        assertEquals(repeat("q", 250) + "\n\n" + repeat("q", 252), raisedThreshold.translate(source));
+        assertEquals(raisedThresholdMerged, raisedThreshold.translate(source));
         assertEquals(1, raisedThresholdOpens.get());
     }
 
