@@ -437,7 +437,8 @@ public class SourceNewlineAlignmentTest {
         BulletListContentNode bullets = multilineList(lf);
         ContentTree tree = compiled(list(bullets));
         assertEquals(3, tree.segmentCount);
-        List<Object> out = replaced(tree, "7. 第一\n首项续行\n补充\n8. 第二\n次项续行");
+        List<Object> out = replaced(tree,
+                "7. <x1>第一\n首项续行</x1>\n补充\n8. <x2>第二\n次项续行</x2>");
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
         assertEquals(Long.valueOf(7L), rebuilt.component1());
         assertTrue(rebuilt.component2());
@@ -448,17 +449,17 @@ public class SourceNewlineAlignmentTest {
         assertEquals("第二\n次项续行", content(rebuilt.getItems().get(1).get(0)));
         assertEquals("first\ncontinuation", content(bullets.getItems().get(0).get(0)));
     }
-
     @Test
     public void multilineListRejectsMergedAndExtraContinuationLines() {
         ContentTree tree = compiled(list(multilineList(text("\n"))));
-        for (String translated : new String[]{"• 第一\n补充\n• 第二\n续行",
-                "• 第一\n续行\n补充\n• 第二\n续行\n多余"}) {
-            ContentNodes.Rejection failure = rejected(tree, translated, ContentNodes.RejectionReason.LINE_COUNT);
-            assertEquals(5, failure.expected);
-        }
+        rejected(tree, "• 第一\n补充\n• 第二\n续行",
+                ContentNodes.RejectionReason.STYLE_OPEN);
+        ContentNodes.Rejection extra = rejected(tree,
+                "7. <x1>第一\n首项续行</x1>\n补充\n多余\n8. <x2>第二\n次项续行</x2>",
+                ContentNodes.RejectionReason.LINE_COUNT);
+        assertEquals(1, extra.expected);
+        assertEquals(2, extra.actual);
     }
-
     @Test
     public void synthesizedAdFixtureKeepsHeadingPricesRepeatedUrlEmojiBracketAndInlineHash() {
         // Deliberately synthesized regression fixture, NOT an exact native-device tree capture.
