@@ -195,15 +195,16 @@ public class BoundaryDiagnosticsTest {
         assertTrue(structure.contains("rightStyled=false"));
     }
 
-    @Test public void listSameLineSlotsKeepCapturedListPathAndDepth() {
+    @Test public void listItemAnchorDisambiguatesSameLineSlots() {
         BulletListContentNode list = new BulletListContentNode(null, false,
                 Arrays.asList(Arrays.asList(new TextContentNode("first"), new TextContentNode("second"))));
-        String structure = ambiguousTranslation(Arrays.asList(list), "• <x1>译文</x1>后续").structure;
-        assertTrue(structure.contains("leftPath=BulletListContentNode"));
-        assertTrue(structure.contains("rightListDepth=1"));
-        assertTrue(structure.contains("leftGapItemStarts=1"));
-        assertTrue(structure.contains("rightGapItemStarts=0"));
-        assertTrue(structure.contains("sameContainerPath=true"));
+        ContentTree tree = ContentTree.compileForTranslation(Arrays.asList(list));
+        assertNotNull(tree);
+        List<Object> restored = ContentNodes.replaceChecked(tree, "• <x1>第一</x1>第二");
+        assertNotNull("首项边界标记应使同一列表项内的两个文本槽可确定回填", restored);
+        BulletListContentNode rebuilt = (BulletListContentNode) restored.get(0);
+        assertEquals("第一", ((TextContentNode) rebuilt.getItems().get(0).get(0)).getContent());
+        assertEquals("第二", ((TextContentNode) rebuilt.getItems().get(0).get(1)).getContent());
     }
 
     @Test public void otherRejectionsDoNotAcquireUnrelatedStructureAndSuccessRemainsUnchanged() {
