@@ -279,8 +279,10 @@ public class ApiTestDiagnosticsTest {
                     });
                     assertSuccess(harness.call(ApiTester.TestKind.CONNECTION, PRIVATE_INPUT),
                             ApiTester.TestKind.CONNECTION, null);
-                    if ("<translate>你好</translate>".equals(text)) {
-                        // One exact outer wrapper pair is normalized before validation.
+                    if ("<translate>你好</translate>".equals(text)
+                            || "你好</translate>".equals(text)) {
+                        // One exact outer wrapper pair or one unambiguous trailing protocol
+                        // close tag is normalized before translation validation.
                         assertSuccess(harness.call(ApiTester.TestKind.TRANSLATION,
                                 ApiTester.DEFAULT_TEST_TEXT), ApiTester.TestKind.TRANSLATION, "你好");
                     } else {
