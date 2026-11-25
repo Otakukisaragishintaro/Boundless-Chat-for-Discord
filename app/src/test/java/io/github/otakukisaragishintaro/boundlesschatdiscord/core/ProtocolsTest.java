@@ -142,6 +142,35 @@ public class ProtocolsTest {
                 body.getJSONArray("messages").getJSONObject(0).getString("content"));
     }
 
+    @Test
+    public void requestPromptIncludesExactOrderedManifestForEveryRetainedMarker() throws Exception {
+        String source = "A <keep13/> B <keep14/> C <keep1/> D";
+        String expectedManifest = "3 markers are present, in this exact required order: "
+                + "[<keep13/>, <keep14/>, <keep1/>]";
+        for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
+                Config.PROTOCOL_OPENAI_RESPONSES, Config.PROTOCOL_ANTHROPIC_MESSAGES}) {
+            JSONObject body = new JSONObject(Protocols.requestBody(protocol, source,
+                    "prompt", "model", false, true, "Chinese"));
+            String system = Config.PROTOCOL_OPENAI_COMPATIBLE.equals(protocol)
+                    ? body.getJSONArray("messages").getJSONObject(0).getString("content")
+                    : Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol)
+                    ? body.getString("instructions") : body.getString("system");
+            assertTrue(system.contains("You MUST copy every marker verbatim"));
+            assertTrue(system.contains(expectedManifest));
+            assertTrue(system.contains("Do not skip a marker because the target-language"));
+        }
+    }
+
+    @Test
+    public void disabledProtectionPromptDoesNotAppendMarkerManifest() throws Exception {
+        JSONObject body = new JSONObject(Protocols.requestBody(
+                Config.PROTOCOL_OPENAI_COMPATIBLE, "A <keep1/> B", "prompt",
+                "model", false, false, "Chinese"));
+        String system = body.getJSONArray("messages").getJSONObject(0).getString("content");
+        assertFalse(system.contains("MANDATORY MARKER MANIFEST"));
+        assertTrue(system.contains(Protocols.WRAPPER_RULE));
+    }
+
     private static String expectedPrompt(String prompt) {
         return prompt + "\n\n" + Protocols.WRAPPER_RULE + "\n\n"
                 + Protocols.protectionPromptFor(Config.DEF_TARGET_LANG);
