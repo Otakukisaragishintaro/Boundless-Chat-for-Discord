@@ -132,7 +132,8 @@ public class JsonApiEngineTest {
         String source = first + "\n\n" + second;
 
         AtomicInteger normalOpens = new AtomicInteger();
-        FakeConnection normalConnection = new FakeConnection(chatJson(repeat("z", 250) + "<keep1/>" + repeat("z", 252)));
+        FakeConnection normalConnection = new FakeConnection(structuredChatJson(
+                "s0", repeat("z", 250), "s1", repeat("z", 252)));
         JsonApiEngine normal = new JsonApiEngine(config(
                 Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> {
                     normalOpens.incrementAndGet();
@@ -198,7 +199,8 @@ public class JsonApiEngineTest {
 
         AtomicInteger raisedThresholdOpens = new AtomicInteger();
         FakeConnection raisedThresholdConnection =
-                new FakeConnection(chatJson(repeat("q", 250) + "<keep1/>" + repeat("q", 252)));
+                new FakeConnection(structuredChatJson(
+                        "s0", repeat("q", 250), "s1", repeat("q", 252)));
         Config.Snapshot raisedThresholdConfig = Config.read(new MemoryPrefs()
                 .put(Config.KEY_API_URL, "https://fake.invalid/v1")
                 .put(Config.KEY_API_KEY, "key")
@@ -218,8 +220,8 @@ public class JsonApiEngineTest {
     public void literalDiscordMentionsChannelTokensAndUrlsAreShieldedAndRestored() throws Exception {
         String source = "Please contact <@403924274437685248> and visit "
                 + "<#1570408648533082167> @everyone https://github.com/YusufOzmen01/openhouse/releases/tag/v1.0.4";
-        FakeConnection connection = new FakeConnection(chatJson(
-                "请联系 <keep1/> 并访问 <keep2/> <keep3/> <keep4/>"));
+        FakeConnection connection = new FakeConnection(structuredChatJson(
+                "s0", "请联系 ", "s1", " 并访问 ", "s2", " ", "s3", " ", "s4", ""));
         JsonApiEngine engine = new JsonApiEngine(
                 config(Config.PROTOCOL_OPENAI_COMPATIBLE, false), http(url -> connection));
 
@@ -229,12 +231,17 @@ public class JsonApiEngineTest {
 
         JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
         String userContent = request.getJSONArray("messages").getJSONObject(1).getString("content");
-        for (int i = 1; i <= 4; i++) assertTrue(userContent.contains("<keep" + i + "/>"));
+        assertFalse(userContent.contains("<keep"));
         assertFalse(userContent.contains("403924274437685248"));
-        assertFalse(userContent.contains("⟦BCP"));
         assertFalse(userContent.contains("1570408648533082167"));
         assertFalse(userContent.contains("@everyone"));
         assertFalse(userContent.contains("github.com/YusufOzmen01"));
+        JSONObject segmentRequest = new JSONObject(
+                io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments
+                        .stripOuterResponseWrapper(userContent, source));
+        assertEquals(5, segmentRequest.getJSONArray("segments").length());
+        assertTrue(request.getJSONArray("messages").getJSONObject(0).getString("content")
+                .contains("immutable IDs"));
         assertTrue(connection.disconnected);
         assertTrue(active(engine).isEmpty());
     }
@@ -429,6 +436,18 @@ public class JsonApiEngineTest {
     private static String chatJson(String text) {
         return "{\"choices\":[{\"finish_reason\":\"stop\",\"message\":{\"role\":\"assistant\","
                 + "\"content\":" + JSONObject.quote(text) + "}}]}";
+    }
+
+    private static String structuredJson(String... idAndText) throws Exception {
+        JSONArray segments = new JSONArray();
+        for (int i = 0; i < idAndText.length; i += 2) {
+            segments.put(new JSONObject().put("id", idAndText[i]).put("text", idAndText[i + 1]));
+        }
+        return new JSONObject().put("segments", segments).toString();
+    }
+
+    private static String structuredChatJson(String... idAndText) throws Exception {
+        return chatJson("<translate>" + structuredJson(idAndText) + "</translate>");
     }
 
     private static String anthropicJson(String text) {
