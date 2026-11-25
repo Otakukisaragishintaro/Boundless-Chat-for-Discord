@@ -390,6 +390,7 @@ public final class MessageHooks {
                                                 + " sourceClass=" + original.getClass().getName()
                                                 + " replacementClass=" + replacement.getClass().getName());
                                         renderArgs[contentArgument] = replacement;
+                                        HookBridge.get().onTranslationRenderApplied(messageId, translated);
                                         replyTranslationApplied = replyConversion;
                                     } else {
                                         ProjectLog.info("message translation replacement rejected"
