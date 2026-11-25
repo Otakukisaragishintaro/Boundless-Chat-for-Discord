@@ -17,6 +17,9 @@ public final class StateStore {
         public volatile boolean showingOriginal;
         /** True only when this message is rendered without its original rich formatting. */
         public volatile boolean renderDegraded;
+        /** Cache persistence is pending until the outer native message render returns. */
+        private boolean cachePendingRender;
+        private boolean cacheCommitClaimed;
         public volatile String lastError;
         private TranslationTaskId task;
         private Source source;
@@ -122,6 +125,8 @@ public final class StateStore {
             entry.status = Status.TRANSLATED;
             entry.showingOriginal = false;
             entry.renderDegraded = false;
+            entry.cachePendingRender = false;
+            entry.cacheCommitClaimed = false;
         }
         return true;
     }
@@ -133,7 +138,30 @@ public final class StateStore {
         entry.status = Status.TRANSLATED;
         entry.showingOriginal = false;
         entry.renderDegraded = false;
+        entry.cachePendingRender = false;
+        entry.cacheCommitClaimed = false;
         return true;
+    }
+
+    /** Mark a successful text conversion; the outer message render must still complete. */
+    public synchronized boolean markCachePending(String id, String translated) {
+        Entry entry = entries.get(id);
+        if (entry == null || entry.status != Status.TRANSLATED || entry.showingOriginal
+                || translated == null || !translated.equals(entry.translatedText)
+                || entry.cacheCommitClaimed) return false;
+        entry.cachePendingRender = true;
+        return true;
+    }
+
+    /** Claim one cache write only after the enclosing Discord message render has returned. */
+    @Nullable public synchronized Entry claimCacheCommit(String id) {
+        Entry entry = entries.get(id);
+        if (entry == null || !entry.cachePendingRender || entry.cacheCommitClaimed
+                || entry.status != Status.TRANSLATED || entry.showingOriginal
+                || entry.translatedText == null) return null;
+        entry.cachePendingRender = false;
+        entry.cacheCommitClaimed = true;
+        return entry;
     }
 
     public synchronized boolean rejectRender(String id, String translated) {
