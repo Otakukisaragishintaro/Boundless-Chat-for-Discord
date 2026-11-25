@@ -665,7 +665,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(new TextContentNode(
                 "hello\n\nhttps://gofile.io/d/rfh2yimO\n\nworld"));
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "你好\n\nhttps://gofile.io/d/rfh2yimO\n\n世界");
+                "你好\n\nhttps://gofile.io/d/rfh2yimO\n\n<x1>世界</x1>");
 
         assertNotNull(out);
         assertEquals("URL 块逐字符保留，段落结构不变",
@@ -1030,7 +1030,7 @@ public class ContentNodesTest {
         // 分隔符来自原节点，不是模型输出。
         List<Object> nodes = list(new TextContentNode("hello\n\nworld"));
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "  你好 \n\n 世界  ");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "  你好 \n\n <x1>世界</x1>  ");
 
         assertNotNull(out);
         assertEquals("你好\n\n世界", ((TextContentNode) out.get(0)).getContent());
