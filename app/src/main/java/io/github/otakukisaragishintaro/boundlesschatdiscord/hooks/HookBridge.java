@@ -384,7 +384,10 @@ public final class HookBridge {
     }
 
     private String contentHashOf(TextExtractor.Result ex, Config.Snapshot cfg, String messageKey) {
-        String hashInput = ex.segmentCount >= 2 ? ex.text + SEGMENT_CACHE_SUFFIX : ex.text;
+        // Structural request anchors change the translation protocol; include them in the
+        // identity only when present so old list/heading cache entries cannot bypass them.
+        String identityText = ex.requestText.equals(ex.text) ? ex.text : ex.requestText;
+        String hashInput = ex.segmentCount >= 2 ? identityText + SEGMENT_CACHE_SUFFIX : identityText;
         return Scheduler.contentHash(hashInput, configForMessage(messageKey, cfg).version());
     }
 
