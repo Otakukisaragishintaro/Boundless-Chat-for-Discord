@@ -703,7 +703,7 @@ public final class ContentNodes {
             // source slots empty; native reconstruction then omits their separators.
             if (chunk >= chunks.size()) break;
             String block = chunks.get(chunk);
-            int availableLines = block.split("\\n", -1).length;
+            int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
                 if (isLineBreakBefore(lineBreakBefore, end)) {
