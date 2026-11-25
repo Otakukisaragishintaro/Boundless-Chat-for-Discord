@@ -124,9 +124,9 @@ public final class ContentTree {
 
     /**
      * Capture the same structural boundary decisions used by ContentNodes' alignment plan.
-     * A marker is needed after any source LF, heading transition, list-item transition, or
-     * list close/open boundary. Keeping this data on the immutable tree prevents extraction
-     * and reconstruction from inventing different marker positions.
+     * A marker is needed at list-item transitions, list exits, and heading transitions.
+     * Ordinary source newlines remain separators, not structural anchors. Keeping this data
+     * on the immutable tree prevents extraction and reconstruction from inventing different positions.
      */
     private static List<Boolean> captureSegmentBoundaries(List<Event> events) {
         List<Boolean> boundaries = new ArrayList<>();
