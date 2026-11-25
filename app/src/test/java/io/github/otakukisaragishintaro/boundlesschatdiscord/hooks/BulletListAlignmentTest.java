@@ -143,7 +143,6 @@ public class BulletListAlignmentTest {
             assertFalse(text.startsWith("•"));
         }
     }
-
     @Test
     public void explicitListMarkerAllowsMissingLeadBlankLine() {
         StringBuilder t = new StringBuilder();
@@ -161,7 +160,6 @@ public class BulletListAlignmentTest {
         assertNotNull("显式边界标记允许模型省略普通空行", out);
         assertEquals(5, ((BulletListContentNode) out.get(6)).getItems().size());
     }
-
     @Test
     public void listOnlyMessageAlignsEachItem() {
         List<List<Object>> items = new ArrayList<>();
@@ -185,7 +183,6 @@ public class BulletListAlignmentTest {
                     ((TextContentNode) bullets.getItems().get(i).get(0)).getContent());
         }
     }
-
     @Test
     public void mergedBulletParagraphKeepsOriginalInsteadOfClearingItems() {
         // 模型把 5 项合并成一行：无法确定每一项的对应关系，整条保留原文。
@@ -232,10 +229,9 @@ public class BulletListAlignmentTest {
         assertEquals("原节点尾随空白属于结构", "在此注册： ",
                 ((TextContentNode) out.get(10)).getContent());
     }
-
     @Test
     public void listItemsSeparatedByBlankParagraphsStillAlignByMarkers() {
-        // 原结构要求列表项逐行对应。模型在项目之间另插空段落，结构不再一致。
+        // 独立边界标记已明确每个列表项；模型额外输出空行不应使列表回填失败。
         StringBuilder t = new StringBuilder();
         t.append("Codex Relay — 面向编程的 AI API\n\n")
                 .append("<x1>如果你正在为 AI 编程工具寻找 API 提供商，可以看看 Codex Relay。</x1>\n\n")
@@ -251,7 +247,6 @@ public class BulletListAlignmentTest {
         assertNotNull("各列表项已有独立标记，额外空行不应破坏回填", out);
         assertEquals(5, ((BulletListContentNode) out.get(6)).getItems().size());
     }
-
     @Test
     public void orderedMarkersInListTranslationAreStripped() {
         // 列表项同样可能是有序列表：模型回显 "1. " 时也要剔除，
@@ -398,11 +393,10 @@ public class BulletListAlignmentTest {
             Object last = styled ? new StrongContentNode(list(body)) : body;
             TextExtractor.Result source = capture(list(new BulletListContentNode(null, false,
                     Arrays.asList(list(new TextContentNode("Earlier")), list(code, last)))),
-                    "\n• <x1>Earlier</x1>\n• <keep1/> <x2>
-                            + (styled ? "1. important thing</x2>" : "1. important thing</x2>"));
+                    "\n• <x1>Earlier</x1>\n• <keep1/> <x2>1. important thing</x2>");
 
             List<Object> out = ContentNodes.replacePlanned(source.tree,
-                    "• <x1>前项</x1>\n• <keep1/> <x2> + (styled ? "<x2>1. 重要事项</x2>" : "<x2>1. 重要事项</x2>"));
+                    "• <x1>前项</x1>\n• <keep1/> <x2>1. 重要事项</x2>");
 
             assertNotNull(out);
             BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -411,12 +405,10 @@ public class BulletListAlignmentTest {
             Object translated = rebuilt.getItems().get(1).get(1);
             if (styled) translated = ((StrongContentNode) translated).getContent().get(0);
             assertEquals(" 1. 重要事项", ((TextContentNode) translated).getContent());
-            assertEquals("\n• 前项\n• <keep1/> "
-                    + (styled ? "<x2>1. 重要事项</x2>" : "<x2>1. 重要事项</x2>"), extracted(out));
+            assertEquals("\n• <x1>前项</x1>\n• <keep1/> <x2>1. 重要事项</x2>", extracted(out));
             assertEquals(" 1. important thing", body.getContent());
         }
     }
-
     @Test
     public void plainParagraphMessageStillRejectsMismatchedStructure() {
         // 不含列表的消息保持严格校验：多出来的行不能被塞进节点。
