@@ -304,8 +304,14 @@ jobs:
           cp app/build/outputs/apk/release/app-release.apk "$APP_NAME.apk"
 
           git add app/build.gradle
-          git commit -m "chore(release): $TAG"
-          echo "版本号提交：$(git rev-parse --short HEAD)（仅被 tag $TAG 引用，main 不变）"
+          if git diff --cached --quiet; then
+            # The source commit may already contain the exact release version.
+            # In that case, tag the verified source commit instead of creating an empty commit.
+            echo "版本号已存在于来源 commit，跳过空提交：$(git rev-parse --short HEAD)"
+          else
+            git commit -m "chore(release): $TAG"
+            echo "版本号提交：$(git rev-parse --short HEAD)（仅被 tag $TAG 引用，main 不变）"
+          fi
 
           git tag -a "$TAG" -m "Release $TAG (versionCode $VERSION_CODE)"
           git push origin "refs/tags/$TAG"
