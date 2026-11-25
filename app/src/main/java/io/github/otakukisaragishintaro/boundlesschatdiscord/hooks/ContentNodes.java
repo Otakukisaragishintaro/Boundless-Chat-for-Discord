@@ -704,11 +704,17 @@ public final class ContentNodes {
             if (chunk >= chunks.size()) {
                 int runEnd = connectedRunEnd(segment, segments, groups,
                         lineBreakBefore, hardBoundaries);
-                if (runEnd > segment) {
+                boolean missingListParagraph = segment > 0
+                        && isListPrefix(listPrefixes, segment)
+                        && !groups.get(segment).equals(groups.get(segment - 1))
+                        && !isLineBreakBefore(lineBreakBefore, segment);
+                if (runEnd > segment || missingListParagraph) {
+                    int rejectedEnd = runEnd > segment ? runEnd : segment + 1;
                     Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
-                            expectedSourceLines(segment, runEnd, sourceLineCounts, boundaryLineCounts), 0);
+                            expectedSourceLines(segment, rejectedEnd,
+                                    sourceLineCounts, boundaryLineCounts), 0);
                     rejection.blockStart = segment;
-                    rejection.blockEnd = runEnd;
+                    rejection.blockEnd = rejectedEnd;
                     rejection.actualChunkIndex = Math.max(0, chunk - 1);
                     rejection.paragraphGroups = paragraphGroups;
                     throw rejection;
@@ -1169,7 +1175,10 @@ public final class ContentNodes {
         // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
         // Do not turn the latter into a line boundary or list lines get merged with following body text.
         boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
-        boolean lineBoundary = w.forceLineBoundary
+        boolean enteringList = w.forceLineBoundary && !w.plan.boundaries.isEmpty()
+                && w.plan.boundaries.get(w.plan.boundaries.size() - 1).listDepth < w.listLevel;
+        boolean listLeadParagraphBoundary = enteringList && separatorNewlines >= 3;
+        boolean lineBoundary = (w.forceLineBoundary && !listLeadParagraphBoundary)
                 || (separatorNewlines < 2 && !nativeBreakBoundary
                 && (w.headingBreaks > 0 || (!w.forceNewGroup && separatorNewlines == 1)));
         if (w.forceNewGroup) {
