@@ -2520,7 +2520,7 @@ public class SettingsActivity extends Activity implements XposedServiceConnectio
                             .append(entry.tag).append(" priority=").append(entry.priority);
                     if (!entry.processName.isEmpty()) output.append(" process=").append(entry.processName);
                     if (!entry.requestId.isEmpty()) output.append(" request=").append(entry.requestId);
-                    output.append("\\n").append(entry.message).append("\\n\\n");
+                    output.append('\n').append(entry.message).append('\n').append('\n');
                 }
                 if (output.length() == 0) {
                     output.append("暂无诊断日志。请运行一次测试，或开启项目日志后触发 Discord 翻译。");
