@@ -178,7 +178,7 @@ public final class ContentTree {
     private static boolean containsParagraphBreak(String value) {
         int newlines = 0;
         for (int i = 0; i < value.length(); i++) {
-            if (value.charAt(i) == '\\n' && ++newlines >= 2) return true;
+            if (value.charAt(i) == '\n' && ++newlines >= 2) return true;
         }
         return false;
     }
