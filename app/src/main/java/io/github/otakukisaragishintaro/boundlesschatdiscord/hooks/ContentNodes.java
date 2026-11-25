@@ -974,7 +974,7 @@ public final class ContentNodes {
                     }
                     boolean structuralBoundary = tree.segmentBoundaryBefore.get(segmentIndex++);
                     int styleId = 0;
-                    if (event.styled || structuralBoundary) {
+                    if (event.styled || (tree.explicitBoundaryMarkers && structuralBoundary)) {
                         styleId = ++w.plan.styleMarkers;
                     }
                     addSegment(w, event, node.chunkLineCounts.get(i), styleId);
