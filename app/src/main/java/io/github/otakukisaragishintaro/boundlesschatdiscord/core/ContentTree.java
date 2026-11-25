@@ -157,6 +157,9 @@ public final class ContentTree {
                     if (node.kind != Kind.TEXT || node.text == null) continue;
                     if (BlankLines.isBlank(node.text)) continue;
                     for (int i = 0; i < node.chunks.size(); i++) {
+                        if (i > 0 && containsParagraphBreak(node.separators.get(i - 1))) {
+                            pendingStructuralBoundary = true;
+                        }
                         String chunk = node.chunks.get(i);
                         if (BlankLines.isBlank(chunk) || TextExtractor.isUrlLike(chunk)) continue;
                         boundaries.add(forceNewGroup || pendingStructuralBoundary);
@@ -170,6 +173,14 @@ public final class ContentTree {
             }
         }
         return boundaries;
+    }
+
+    private static boolean containsParagraphBreak(String value) {
+        int newlines = 0;
+        for (int i = 0; i < value.length(); i++) {
+            if (value.charAt(i) == '\\n' && ++newlines >= 2) return true;
+        }
+        return false;
     }
 
     /** Depth counts native semantic containers, never Java list/item wrappers. Invalid trees reject whole. */
