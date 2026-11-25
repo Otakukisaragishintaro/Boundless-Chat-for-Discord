@@ -145,7 +145,8 @@ public class SourceNewlineAlignmentTest {
         assertSame(spaces, out.get(1));
         assertSame(lf, out.get(2));
         assertEquals("\n第二\n\n", content(out.get(3)));
-        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.LINE_COUNT);
+        List<Object> merged = replaced(tree, "第一\n第二");
+        assertTrue(extracted(compiled(merged)).contains("第一\n第二"));
         assertEquals("\n\nfirst\n \t\n\nsecond\n\n", extracted(tree));
     }
 
