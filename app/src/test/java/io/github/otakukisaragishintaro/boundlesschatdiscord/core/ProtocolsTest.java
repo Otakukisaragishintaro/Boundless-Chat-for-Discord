@@ -144,7 +144,7 @@ public class ProtocolsTest {
 
     @Test
     public void structuredSegmentInstructionsAreAddedForEveryProviderProtocol() throws Exception {
-        String input = "{\\"segments\\":[{\\"id\\":\\"s0\\",\\"text\\":\\"hello\\"}]}";
+        String input = "{\"segments\":[{\"id\":\"s0\",\"text\":\"hello\"}]}";
         String instruction = "Return only the original id and translated text for every segment.";
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_ANTHROPIC_MESSAGES, Config.PROTOCOL_OPENAI_RESPONSES}) {
