@@ -100,7 +100,16 @@ public final class JsonApiEngine implements Scheduler.Engine {
     private String translateInternal(String text, boolean logFailureDiagnostics) throws Exception {
         String previousRequestId = ProjectLog.beginRequest();
         try {
-            return translateWithRequestContext(text, logFailureDiagnostics);
+            String translated = translateWithRequestContext(text, logFailureDiagnostics);
+            if (logFailureDiagnostics) {
+                // Full bounded content previews are emitted only when the user's project-log
+                // switch is enabled; each side gets its own diagnostic record.
+                ProjectLog.info("translation.content type=source chars=" + codePointLength(text)
+                        + " preview=" + safeDiagnosticPreview(text, 3000));
+                ProjectLog.info("translation.content type=translated chars=" + codePointLength(translated)
+                        + " preview=" + safeDiagnosticPreview(translated, 3000));
+            }
+            return translated;
         } finally {
             ProjectLog.endRequest(previousRequestId);
         }
@@ -321,11 +330,15 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         + " errorReason=" + reason
                         + " httpStatus=" + status
                         + " sourceChars=" + codePointLength(text)
-                        + " sourcePreview=" + safeDiagnosticPreview(text, 200)
-                        + " sourceTail=" + safeDiagnosticTail(text, 100)
                         + " translatedChars=" + codePointLength(diagnosticTranslated)
-                        + " translatedPreview=" + safeDiagnosticPreview(diagnosticTranslated, 200)
                         + " detail=" + detail);
+                ProjectLog.warn("translation.content type=source chars=" + codePointLength(text)
+                        + " preview=" + safeDiagnosticPreview(text, 3000));
+                if (diagnosticTranslated != null && !diagnosticTranslated.isEmpty()) {
+                    ProjectLog.warn("translation.content type=provider_response chars="
+                            + codePointLength(diagnosticTranslated)
+                            + " preview=" + safeDiagnosticPreview(diagnosticTranslated, 3000));
+                }
             }
             if (captureFailureDiagnostics && !(e instanceof DiagnosticException)) {
                 TranslationException classified = e instanceof TranslationException
