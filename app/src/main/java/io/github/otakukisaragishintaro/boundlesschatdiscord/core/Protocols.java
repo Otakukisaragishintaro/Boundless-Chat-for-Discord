@@ -111,6 +111,15 @@ public final class Protocols {
                                      boolean streaming, boolean protectionPromptEnabled,
                                      String targetLanguage)
             throws TranslationException {
+        return requestBody(protocol, text, systemPrompt, model, streaming,
+                protectionPromptEnabled, targetLanguage, null);
+    }
+
+    public static String requestBody(String protocol, String text,
+                                     @Nullable String systemPrompt, String model,
+                                     boolean streaming, boolean protectionPromptEnabled,
+                                     String targetLanguage, @Nullable String additionalInstructions)
+            throws TranslationException {
         if (text == null || text.trim().isEmpty()) {
             throw new TranslationException(TranslationException.Kind.EMPTY, "原文为空，无需翻译");
         }
@@ -123,6 +132,9 @@ public final class Protocols {
         String prompt = systemPrompt.trim() + "\n\n" + WRAPPER_RULE;
         if (protectionPromptEnabled) {
             prompt += "\n\n" + protectionPromptFor(targetLanguage);
+        }
+        if (additionalInstructions != null && !additionalInstructions.trim().isEmpty()) {
+            prompt += "\n\n" + additionalInstructions.trim();
         }
         try {
             JSONObject body = new JSONObject();
