@@ -91,22 +91,25 @@ public final class ContentNodes {
         if (tree == null || translated == null) return null;
         Object textPrototype = null;
         List<NativeToken> tokens = new ArrayList<>();
+        int segmentsBefore = 0;
         for (ContentTree.Event event : tree.events) {
             if (event.kind != ContentTree.EventKind.NODE) continue;
             ContentTree.Node node = event.node;
-            if (node.kind == ContentTree.Kind.TEXT && textPrototype == null) {
-                textPrototype = node.original;
+            if (node.kind == ContentTree.Kind.TEXT) {
+                if (textPrototype == null) textPrototype = node.original;
+                segmentsBefore += node.segmentCount;
+                continue;
             }
             switch (node.kind) {
                 case INLINE_CODE:
                 case CODE_BLOCK:
                 case OPAQUE:
-                    tokens.add(new NativeToken(event.retainedMarker, node.original));
+                    tokens.add(new NativeToken(event.retainedMarker, node.original, segmentsBefore));
                     break;
                 case URL:
                 case EMOJI:
                     if (node.text != null && !node.text.isEmpty()) {
-                        tokens.add(new NativeToken(node.text, node.original));
+                        tokens.add(new NativeToken(node.text, node.original, segmentsBefore));
                     }
                     break;
                 default:
@@ -117,27 +120,41 @@ public final class ContentNodes {
 
         String plain = translated.replaceAll("</?x[0-9]+>", "");
         java.util.regex.Pattern reserved = java.util.regex.Pattern.compile(
-                "<\\s*/?\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
+                "<\\\\s*/?\\\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
         List<Object> result = new ArrayList<>();
-        List<Object> missing = new ArrayList<>();
         int cursor = 0;
         for (NativeToken token : tokens) {
             int at = plain.indexOf(token.anchor, cursor);
-            if (at < 0) {
-                missing.add(token.original);
-                continue;
+            boolean anchorFound = at >= 0;
+            if (!anchorFound) {
+                // When the model omits an anchor, retain the native node near its source
+                // position: leading mentions stay before the translated body, trailing
+                // emoji/code/mentions stay after it, and interior nodes use a word boundary.
+                at = estimatedInsertionPoint(plain, cursor, token.beforeSegments,
+                        tree.segmentCount);
             }
             if (!appendPlainText(result, textPrototype,
                     reserved.matcher(plain.substring(cursor, at)).replaceAll(""))) return null;
-            result.addAll(missing);
-            missing.clear();
             result.add(token.original);
-            cursor = at + token.anchor.length();
+            cursor = anchorFound ? at + token.anchor.length() : at;
         }
         if (!appendPlainText(result, textPrototype,
                 reserved.matcher(plain.substring(cursor)).replaceAll(""))) return null;
-        result.addAll(missing);
         return result;
+    }
+
+    private static int estimatedInsertionPoint(String text, int cursor, int beforeSegments,
+                                               int totalSegments) {
+        if (beforeSegments <= 0) return cursor;
+        if (beforeSegments >= totalSegments || totalSegments <= 0) return text.length();
+        int estimate = Math.max(cursor, Math.min(text.length(),
+                (int) (((long) text.length() * beforeSegments) / totalSegments)));
+        int after = estimate;
+        while (after < text.length() && !Character.isWhitespace(text.charAt(after))) after++;
+        int before = estimate;
+        while (before > cursor && !Character.isWhitespace(text.charAt(before - 1))) before--;
+        if (after >= text.length()) return before > cursor ? before : text.length();
+        return estimate - before <= after - estimate ? before : after;
     }
 
     private static boolean appendPlainText(List<Object> output, Object prototype, String text) {
@@ -151,9 +168,11 @@ public final class ContentNodes {
     private static final class NativeToken {
         final String anchor;
         final Object original;
-        NativeToken(String anchor, Object original) {
+        final int beforeSegments;
+        NativeToken(String anchor, Object original, int beforeSegments) {
             this.anchor = anchor;
             this.original = original;
+            this.beforeSegments = beforeSegments;
         }
     }
 
