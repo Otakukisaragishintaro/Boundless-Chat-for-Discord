@@ -53,8 +53,8 @@ public class SourceNewlineAlignmentTest {
         HeadingContentNode heading = new HeadingContentNode(list(text("Lower Rates")), 2);
         TextContentNode lf = text("\n");
         TextContentNode body = text("Available today");
-        ContentTree tree = compiled(list(heading, lf, body));
-        assertEquals("Lower Rates\n<x1>Available today</x1>", extracted(tree));
+        ContentTree tree = ContentTree.compileForTranslation(list(heading, lf, body));
+        assertEquals("Lower Rates\n<x1>Available today</x1>", TextExtractor.extractTree(tree).requestText);
         assertEquals(2, tree.segmentCount);
 
         List<Object> out = replaced(tree, "优惠价格\n<x1>今日可用</x1>");
@@ -73,8 +73,8 @@ public class SourceNewlineAlignmentTest {
         HeadingContentNode heading = new HeadingContentNode(list(text("Heading")), 1);
         TextContentNode space = text(" ");
         TextContentNode body = text("Body");
-        ContentTree tree = compiled(list(heading, space, body));
-        assertEquals("Heading \n<x1>Body</x1>", extracted(tree));
+        ContentTree tree = ContentTree.compileForTranslation(list(heading, space, body));
+        assertEquals("Heading \n<x1>Body</x1>", TextExtractor.extractTree(tree).requestText);
         assertEquals(2, tree.segmentCount);
         assertFalse(tree.events.get(0).headingBreakBefore);
         assertFalse(tree.events.get(1).headingBreakBefore);
@@ -88,7 +88,8 @@ public class SourceNewlineAlignmentTest {
         assertSame(space, out.get(1));
         assertEquals(" ", content(out.get(1)));
         assertEquals("正文", content(out.get(2)));
-        assertEquals("标题 \n<x1>正文</x1>", extracted(compiled(out)));
+        assertEquals("标题 \n<x1>正文</x1>", TextExtractor.extractTree(
+                ContentTree.compileForTranslation(out)).requestText);
         assertEquals("Heading", content(heading.getContent().get(0)));
         assertEquals("Body", body.getContent());
         assertEquals("Heading \n<x1>Body</x1>", extracted(tree));
@@ -561,7 +562,7 @@ public class SourceNewlineAlignmentTest {
     }
 
     private static ContentTree compiled(List<?> nodes) {
-        ContentTree tree = ContentTree.compileForTranslation(nodes);
+        ContentTree tree = ContentTree.compile(nodes);
         assertNotNull("valid synthetic fixture must compile", tree);
         return tree;
     }
@@ -570,7 +571,7 @@ public class SourceNewlineAlignmentTest {
         TextExtractor.Result result = TextExtractor.extractTree(tree);
         assertNotNull(result);
         assertEquals(tree.segmentCount, result.segmentCount);
-        return result.requestText;
+        return result.text;
     }
 
     private static List<Object> replaced(ContentTree tree, String translated) {
