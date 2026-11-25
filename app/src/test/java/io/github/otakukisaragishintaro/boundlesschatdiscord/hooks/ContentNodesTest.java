@@ -730,7 +730,7 @@ public class ContentNodesTest {
                 new AnnotatedStructurableText(nodes));
         assertNotNull(extracted);
         assertTrue("标题前必须有内部边界标记",
-                extracted.text.contains("<x1>Important</x1>"));
+                extracted.text.contains("<x2>Important</x2>"));
 
         String mergedTranslation = extracted.text
                 .replace("Install the driver", "安装驱动")
@@ -752,7 +752,7 @@ public class ContentNodesTest {
         List<Object> secondItem = list(new TextContentNode("second"));
         List<Object> nodes = list(new BulletListContentNode(
                 3L, false, itemLists(firstItem, secondItem)));
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "第一\n<x1>第二</x1>");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "<x1>第一</x1>\n<x2>第二</x2>");
         assertNotNull(out);
         BulletListContentNode b = (BulletListContentNode) out.get(0);
         assertEquals("start 必须保留", Long.valueOf(3L), b.component1());
@@ -782,7 +782,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(original);
 
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "first translated<keep1/><keep2/><x1>styled translated</x1><x2>nested translated</x2><x3>second translated</x3>");
+                "<x1>first translated</x1><keep1/><keep2/><x2>styled translated</x2><x3>nested translated</x3><x4>second translated</x4>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
@@ -1245,7 +1245,7 @@ public class ContentNodesTest {
                         list(new TextContentNode("item one"), new NewLineContentNode()))));
         List<Object> nodes = list(bullets);
 
-        List<Object> out = ContentPlanTestSupport.replace(nodes, "第一项");
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "<x1>第一项</x1>");
 
         assertNotNull(out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
