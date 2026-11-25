@@ -81,6 +81,82 @@ public final class ContentNodes {
         return new Rejection(reason, -1, -1);
     }
 
+    /**
+     * Flatten translated text while restoring every native node that was protected from
+     * translation. Present anchors are restored in place; anchors omitted by the model
+     * are retained at the end rather than silently discarded.
+     */
+    @Nullable
+    public static List<Object> flattenPreservingNativeNodes(ContentTree tree, String translated) {
+        if (tree == null || translated == null) return null;
+        Object textPrototype = null;
+        List<NativeToken> tokens = new ArrayList<>();
+        for (ContentTree.Event event : tree.events) {
+            if (event.kind != ContentTree.EventKind.NODE) continue;
+            ContentTree.Node node = event.node;
+            if (node.kind == ContentTree.Kind.TEXT && textPrototype == null) {
+                textPrototype = node.original;
+            }
+            switch (node.kind) {
+                case INLINE_CODE:
+                case CODE_BLOCK:
+                case OPAQUE:
+                    tokens.add(new NativeToken(event.retainedMarker, node.original));
+                    break;
+                case URL:
+                case EMOJI:
+                    if (node.text != null && !node.text.isEmpty()) {
+                        tokens.add(new NativeToken(node.text, node.original));
+                    }
+                    break;
+                default:
+                    break;
+            }
+        }
+        if (textPrototype == null) return null;
+
+        String plain = translated.replaceAll("</?x[0-9]+>", "");
+        java.util.regex.Pattern reserved = java.util.regex.Pattern.compile(
+                "<\\s*/?\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
+        List<Object> result = new ArrayList<>();
+        List<Object> missing = new ArrayList<>();
+        int cursor = 0;
+        for (NativeToken token : tokens) {
+            int at = plain.indexOf(token.anchor, cursor);
+            if (at < 0) {
+                missing.add(token.original);
+                continue;
+            }
+            if (!appendPlainText(result, textPrototype,
+                    reserved.matcher(plain.substring(cursor, at)).replaceAll(""))) return null;
+            result.addAll(missing);
+            missing.clear();
+            result.add(token.original);
+            cursor = at + token.anchor.length();
+        }
+        if (!appendPlainText(result, textPrototype,
+                reserved.matcher(plain.substring(cursor)).replaceAll(""))) return null;
+        result.addAll(missing);
+        return result;
+    }
+
+    private static boolean appendPlainText(List<Object> output, Object prototype, String text) {
+        if (text.isEmpty()) return true;
+        Object node = createTextNode(prototype, text);
+        if (node == null) return false;
+        output.add(node);
+        return true;
+    }
+
+    private static final class NativeToken {
+        final String anchor;
+        final Object original;
+        NativeToken(String anchor, Object original) {
+            this.anchor = anchor;
+            this.original = original;
+        }
+    }
+
     /** Rebuild only from the caller's captured, identity-verified occurrence plan. */
     @Nullable
     public static List<Object> replacePlanned(ContentTree tree, String translated) {
