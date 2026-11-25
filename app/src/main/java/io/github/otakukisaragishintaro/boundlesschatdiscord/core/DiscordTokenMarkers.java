@@ -26,7 +26,7 @@ public final class DiscordTokenMarkers {
             Pattern.CASE_INSENSITIVE);
     private static final Pattern KEEP = Pattern.compile("<keep([1-9][0-9]*)/>");
     private static final Pattern TOKEN_FAMILY =
-            Pattern.compile("⟦BC_TOKEN_[^⟧\\r\\n]{1,64}⟧");
+            Pattern.compile("⟦BC_TOKEN_[^⟧\\r\\n]{1,64}⟧", Pattern.CASE_INSENSITIVE);
 
     private DiscordTokenMarkers() { }
 
@@ -172,7 +172,8 @@ public final class DiscordTokenMarkers {
             boolean selected = matcher.group(1) != null ? protectMentions
                     : matcher.group(2) != null ? protectChannelsAndEmojis
                     : matcher.group(3) != null ? protectUrls
-                    : matcher.group(4) != null || matcher.group(6) != null || styleBoundary;
+                    : matcher.group(4) != null ? protectChannelsAndEmojis
+                    : matcher.group(6) != null || styleBoundary;
             if (!selected) {
                 matcher.appendReplacement(protectedText,
                         Matcher.quoteReplacement(matcher.group()));
@@ -198,7 +199,9 @@ public final class DiscordTokenMarkers {
         Matcher existing = KEEP.matcher(source);
         while (existing.find()) {
             try {
-                next = Math.max(next, Integer.parseInt(existing.group(1)) + 1);
+                int parsed = Integer.parseInt(existing.group(1));
+                if (parsed == Integer.MAX_VALUE) return -1;
+                next = Math.max(next, parsed + 1);
             } catch (NumberFormatException exhausted) {
                 return -1;
             }
