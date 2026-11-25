@@ -123,7 +123,8 @@ public final class ContentNodes {
         Replacement replacement = new Replacement(parts);
         List<Object> result = new ArrayList<>(tree.root.children.size());
         for (ContentTree.Node occurrence : tree.root.children) {
-            result.add(rebuild(occurrence, replacement));
+            Object rebuilt = rebuild(occurrence, replacement);
+            if (rebuilt != null) result.add(rebuilt);
         }
         // 容器复制失败可能丢弃已重建的子节点；不得把其他已清空的文本节点
         // 作为部分成功的结果交给宿主，必须整棵树替换成功。
@@ -165,7 +166,7 @@ public final class ContentNodes {
                 if (rebuiltChild != child.original) {
                     localChanged = true;
                 }
-                rebuiltChildren.add(rebuiltChild);
+                if (rebuiltChild != null) rebuiltChildren.add(rebuiltChild);
             }
             if (!localChanged && !ContentTree.retainedStructureMatches(occurrence))
                 throw reject(RejectionReason.RETAINED_STRUCTURE_CHANGED);
@@ -182,7 +183,18 @@ public final class ContentNodes {
             }
             int needed = occurrence.segmentCount;
             if (needed == 0) {
-                // 空白/空行结构节点：不参与翻译，原样保留。
+                // Keep opaque/non-whitespace nodes. A standalone blank-line node between
+                // a translated slot and an empty merged slot no longer represents a
+                // visible paragraph boundary, so omit it from the rebuilt tree.
+                if (BlankLines.isBlank(original)) {
+                    int previous = replacement.next - 1;
+                    int next = replacement.next;
+                    if (previous >= 0 && next < replacement.parts.size()
+                            && (replacement.parts.get(previous).isEmpty()
+                            || replacement.parts.get(next).isEmpty())) {
+                        return null;
+                    }
+                }
                 return node;
             }
             if (replacement.next + needed > replacement.parts.size()) {
@@ -220,6 +232,7 @@ public final class ContentNodes {
                 previousTranslated = translatedPart;
             }
             rebuilt.append(original, tail, original.length());
+            if (rebuilt.length() == 0) return null;
             Object created = createTextNode(node, rebuilt.toString());
             if (created != null) {
                 return created;
