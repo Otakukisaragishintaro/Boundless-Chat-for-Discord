@@ -704,33 +704,14 @@ public final class ContentNodes {
             if (chunk >= chunks.size()) {
                 boolean remainingStructuralBoundary = false;
                 for (int i = segment; i < segments; i++) {
-                    boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, i)
-                            && i > 0 && groups.get(i).equals(groups.get(i - 1));
-                    boolean missingListParagraph = i > 0 && isListPrefix(listPrefixes, i)
-                            && !groups.get(i).equals(groups.get(i - 1))
-                            && !isLineBreakBefore(lineBreakBefore, i);
-                    boolean nativeBreakParagraph = boundaryLineCounts != null
-                            && i < boundaryLineCounts.size() && boundaryLineCounts.get(i) > 0;
-                    boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, i)
-                            && ((i > 0 && groups.get(i).equals(groups.get(i - 1)))
-                            || isListPrefix(listPrefixes, i));
-                    if (connectedLineBoundary || hardLineBoundary
-                            || missingListParagraph || nativeBreakParagraph) {
+                    if (isLineBreakBefore(lineBreakBefore, i)
+                            || isHardBoundaryBefore(hardBoundaries, i)) {
                         remainingStructuralBoundary = true;
                         break;
                     }
                 }
                 if (remainingStructuralBoundary) {
-                    int runEnd = connectedRunEnd(segment, segments, groups,
-                            listPrefixes, lineBreakBefore, hardBoundaries);
-                    if (runEnd <= segment) runEnd = Math.min(segments, segment + 1);
-                    Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
-                            expectedSourceLines(segment, runEnd, sourceLineCounts, boundaryLineCounts), 0);
-                    rejection.blockStart = segment;
-                    rejection.blockEnd = runEnd;
-                    rejection.actualChunkIndex = Math.max(0, chunk - 1);
-                    rejection.paragraphGroups = paragraphGroups;
-                    throw rejection;
+                    throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
                 }
                 break;
             }
@@ -738,46 +719,30 @@ public final class ContentNodes {
             int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
-                boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, end)
-                        && (groups.get(end).equals(groups.get(end - 1))
-                        || isListPrefix(listPrefixes, end));
-                boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, end)
-                        && groups.get(end).equals(groups.get(end - 1));
-                if (connectedLineBoundary || hardLineBoundary) {
-                    int nextExpected = expectedSourceLines(segment, end + 1,
-                            sourceLineCounts, boundaryLineCounts);
-                    if (nextExpected <= availableLines) {
-                        end++;
-                    } else {
-                        int runEnd = connectedRunEnd(end, segments, groups,
-                                listPrefixes, lineBreakBefore, hardBoundaries);
-                        Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
-                                expectedSourceLines(segment, runEnd,
-                                        sourceLineCounts, boundaryLineCounts), availableLines);
-                        rejection.blockStart = segment;
-                        rejection.blockEnd = runEnd;
-                        rejection.actualChunkIndex = chunk;
-                        rejection.paragraphGroups = paragraphGroups;
-                        throw rejection;
-                    }
-                } else if (!groups.get(end).equals(groups.get(end - 1))) {
-                    // A paragraph boundary may be missing from the response. If the
-                    // block still has one line for each native slot, align those lines
-                    // to their original nodes and let native separators restore layout.
-                    // A list lead paragraph is stricter: its boundary must remain explicit.
-                    boolean requiredListParagraph = isListPrefix(listPrefixes, end)
-                            && !isLineBreakBefore(lineBreakBefore, end);
-                    int nextExpected = expectedSourceLines(segment, end + 1,
-                            sourceLineCounts, boundaryLineCounts);
-                    if (!requiredListParagraph && nextExpected <= availableLines) {
+                if (isLineBreakBefore(lineBreakBefore, end)) {
+                    // Do not let a short translated paragraph consume multiple source
+                    // slots. If it lacks the lines for the next slot, leave that slot
+                    // for the next translated paragraph chunk.
+                    if (expectedSourceLines(segment, end + 1, sourceLineCounts,
+                            boundaryLineCounts) <= availableLines) {
                         end++;
                     } else {
                         break;
                     }
-                } else {
+                } else if (chunks.size() < paragraphGroups
+                        && isHardBoundaryBefore(hardBoundaries, end)
+                        && expectedSourceLines(segment, end + 1, sourceLineCounts,
+                        boundaryLineCounts) <= availableLines) {
+                    // A smaller global chunk count does not prove that this particular
+                    // chunk merged later source slots. Only cross a hard boundary when
+                    // this chunk actually contains enough lines to represent every slot.
+                    end++;
+                } else if (groups.get(end).equals(groups.get(end - 1))) {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
                     rejection.boundary = end;
                     throw rejection;
+                } else {
+                    break;
                 }
             }
 
@@ -831,23 +796,6 @@ public final class ContentNodes {
             parts.set(last, existing.isEmpty() ? extra : existing + "\n\n" + extra);
         }
         return parts;
-    }
-
-    private static int connectedRunEnd(int start, int segments, List<Integer> groups,
-                                       @Nullable List<Boolean> listPrefixes,
-                                       @Nullable List<Boolean> lineBreakBefore,
-                                       @Nullable List<Boolean> hardBoundaries) {
-        int end = start;
-        while (end < segments) {
-            boolean connectedLineBoundary = isLineBreakBefore(lineBreakBefore, end)
-                    && (end > 0 && groups.get(end).equals(groups.get(end - 1))
-                    || isListPrefix(listPrefixes, end));
-            boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, end)
-                    && end > 0 && groups.get(end).equals(groups.get(end - 1));
-            if (!connectedLineBoundary && !hardLineBoundary) break;
-            end++;
-        }
-        return end;
     }
 
     private static int expectedSourceLines(int start, int end,
@@ -1203,20 +1151,13 @@ public final class ContentNodes {
         int separatorNewlines = w.separatorNewlines;
         // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
         // Do not turn the latter into a line boundary or list lines get merged with following body text.
-        boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
-        boolean sameListPath = w.plan.boundaries.size() > 1
-                && w.plan.boundaries.get(w.plan.boundaries.size() - 2).event.containers
-                .equals(event.containers);
-        boolean listItemLineBoundary = w.forceLineBoundary
-                && (sameListPath || separatorNewlines - 1 < 2);
-        boolean lineBoundary = listItemLineBoundary
-                || (separatorNewlines < 2 && !nativeBreakBoundary
-                && (w.headingBreaks > 0 || (!w.forceNewGroup && separatorNewlines == 1)));
+        boolean lineBoundary = separatorNewlines < 2
+                && (w.forceLineBoundary || w.headingBreaks > 0
+                || (!w.forceNewGroup && separatorNewlines == 1));
         if (w.forceNewGroup) {
             w.group++;
             w.forceNewGroup = false;
-        } else if (!w.plan.groupIds.isEmpty()
-                && (separatorNewlines >= 2 || (nativeBreakBoundary && separatorNewlines > 0))) {
+        } else if (!w.plan.groupIds.isEmpty() && separatorNewlines >= 2) {
             w.group++;
         }
         w.plan.groupIds.add(w.group);
@@ -1228,9 +1169,10 @@ public final class ContentNodes {
         boolean headingBoundary = w.headingBreaks > 0
                 || (w.plan.boundaries.size() > 1 && currentHeading != previousHeading);
         w.plan.headingBoundaries.add(headingBoundary);
+        boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
         w.plan.hardBoundaries.add(headingBoundary || nativeBreakBoundary);
         w.plan.boundaryLineCounts.add(nativeBreakBoundary && !headingBoundary
-                ? (w.separatorNewlines > 0 ? 1 : 0) : 0);
+                ? Math.max(0, w.separatorNewlines - 1) : 0);
         w.separatorNewlines = 0;
         w.headingBreaks = 0;
         w.forceLineBoundary = false;
