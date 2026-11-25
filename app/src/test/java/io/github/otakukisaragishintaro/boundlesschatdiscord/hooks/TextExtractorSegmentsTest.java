@@ -228,7 +228,7 @@ public class TextExtractorSegmentsTest {
                 new AnnotatedStructurableText(list(new BulletListContentNode(items))));
 
         assertNotNull(r);
-        assertEquals("\n• Read the guide\n• Follow the examples", r.text);
+        assertEquals("\n• <x1>Read the guide</x1>\n• <x2>Follow the examples</x2>", r.text);
         assertEquals(2, r.segmentCount);
     }
 
