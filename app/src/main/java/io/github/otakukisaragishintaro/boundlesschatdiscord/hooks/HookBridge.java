@@ -517,12 +517,8 @@ public final class HookBridge {
             return;
         }
         if (success) {
-            if (resultConfig.cacheEnabled) {
-                ProjectLog.info("translation result accepted; persistent cache write requested");
-                TranslationCache.get().put(task.contentHash, translated);
-            } else {
-                ProjectLog.info("translation result accepted; cache skipped reason=disabled");
-            }
+            ProjectLog.info("translation result accepted; cache write deferred until native reconstruction succeeds"
+                    + " cacheEnabled=" + resultConfig.cacheEnabled);
         }
         refreshTranslation(task.messageId);
     }
@@ -544,6 +540,23 @@ public final class HookBridge {
             return ((TranslationException) t).userMessage();
         }
         return t.getClass().getSimpleName();
+    }
+
+    /**
+     * Persist only after the Discord-native StructurableText has been reconstructed successfully.
+     * This is also called for validated cache hits, refreshing their LRU position.
+     */
+    public void onTranslationRenderApplied(String id, String translated) {
+        StateStore.Entry entry = StateStore.get().peek(id);
+        if (entry == null || entry.status != StateStore.Status.TRANSLATED
+                || translated == null || !translated.equals(entry.translatedText)) {
+            return;
+        }
+        if (!config.cacheEnabled) {
+            ProjectLog.info("translation cache write skipped reason=disabled after_render=accepted");
+            return;
+        }
+        TranslationCache.get().put(entry.contentHash, translated);
     }
 
     /** 富文本结构未能按严格规则重建时，将网络成功转换为可见翻译失败。 */
