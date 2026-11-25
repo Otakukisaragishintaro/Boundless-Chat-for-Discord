@@ -15,7 +15,7 @@ public class ProtectionPromptConfigTest {
             assertTrue(prompt.contains(language));
             assertTrue(prompt.contains("<keepN/>"));
             assertTrue(prompt.contains("exactly once"));
-            assertTrue(prompt.contains("same order"));
+            assertTrue(prompt.contains("may move with the same source phrase"));
         }
     }
 
