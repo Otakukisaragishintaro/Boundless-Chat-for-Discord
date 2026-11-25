@@ -89,7 +89,7 @@ public class BulletListAlignmentTest {
 
         assertNotNull(r);
         assertEquals(10, r.segmentCount);
-        assertTrue("列表符号进入请求正文", r.text.contains("• <x3>Support for Codex CLI"));
+        assertTrue("列表符号进入请求正文", r.text.contains("• <x1>Support for Codex CLI"));
     }
 
     @Test
