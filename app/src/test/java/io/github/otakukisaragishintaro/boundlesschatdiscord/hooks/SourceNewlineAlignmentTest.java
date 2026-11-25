@@ -457,11 +457,10 @@ public class SourceNewlineAlignmentTest {
         assertNotNull(tree);
         rejected(tree, "• 第一\n补充\n• 第二\n续行",
                 ContentNodes.RejectionReason.STYLE_OPEN);
-        ContentNodes.Rejection extra = rejected(tree,
-                "7. <x1>第一\n首项续行</x1>\n补充\n多余\n8. <x2>第二\n次项续行</x2>",
-                ContentNodes.RejectionReason.LINE_COUNT);
-        assertEquals(1, extra.expected);
-        assertEquals(2, extra.actual);
+        List<Object> extra = replaced(tree,
+                "7. <x1>第一\n首项续行</x1>\n补充\n多余\n8. <x2>第二\n次项续行</x2>");
+        BulletListContentNode rebuilt = (BulletListContentNode) extra.get(0);
+        assertEquals("补充\n多余", content(rebuilt.getItems().get(0).get(2)));
     }
     @Test
     public void synthesizedAdFixtureKeepsHeadingPricesRepeatedUrlEmojiBracketAndInlineHash() {
