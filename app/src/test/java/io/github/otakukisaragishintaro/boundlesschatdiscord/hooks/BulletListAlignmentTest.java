@@ -413,7 +413,7 @@ public class BulletListAlignmentTest {
     }
 
     private static String extracted(List<?> nodes) {
-        ContentTree tree = ContentTree.compile(nodes);
+        ContentTree tree = ContentTree.compileForTranslation(nodes);
         assertNotNull("rebuilt nodes must compile", tree);
         TextExtractor.Result result = TextExtractor.extractTree(tree);
         assertNotNull("rebuilt nodes must be extractable", result);
