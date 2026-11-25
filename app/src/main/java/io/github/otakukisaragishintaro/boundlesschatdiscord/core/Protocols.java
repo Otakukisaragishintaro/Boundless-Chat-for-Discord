@@ -92,13 +92,17 @@ public final class Protocols {
             count++;
         }
         if (count == 0) return prompt;
-        return prompt + "\n\n" + "MANDATORY MARKER MANIFEST FOR THIS REQUEST: "
-                + count + " markers are present, in this exact required order: ["
-                + manifest + "]. The output MUST contain all " + count
-                + " listed markers, each exactly once. This list is an explicit checklist, "
-                + "not optional guidance. Do not skip a marker because the target-language "
-                + "sentence structure or word order changes. Do not return a partial translation "
-                + "with any marker missing.";
+        return prompt + "\n\n" + "PRIVATE VALIDATION CHECKLIST — INSTRUCTIONS ONLY. "
+                + "NEVER translate, quote, copy, or output this checklist or its label. "
+                + "It is metadata for checking the source, not part of the translation. "
+                + "The source text contains exactly " + count + " protected markers, in this "
+                + "required order: [" + manifest + "]. This list only identifies markers "
+                + "already present in the source; it does not authorize inserting markers. "
+                + "Reproduce each marker only where its corresponding source content occurs. "
+                + "Return all source markers exactly once and in their original relative order. "
+                + "Do not omit a marker because the target-language sentence structure or word "
+                + "order changes. Before answering, silently compare the translation with the "
+                + "source marker sequence. Output only the translated source text.";
     }
 
     private static final String SUFFIX_CHAT_COMPLETIONS = "/chat/completions";
