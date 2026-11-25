@@ -1259,7 +1259,7 @@ public class ContentNodesTest {
         List<Object> nodes = list(bullets, following);
 
         List<Object> out = ContentPlanTestSupport.replace(nodes,
-                "第一项\\n第二项\\n第三项\\n第四项\\n第五项\\n\\n后续正文");
+                "第一项\n第二项\n第三项\n第四项\n第五项\n\n后续正文");
 
         assertNotNull("列表与后续正文应按两个段落块独立对齐", out);
         BulletListContentNode rebuilt = (BulletListContentNode) out.get(0);
