@@ -9,7 +9,7 @@ import java.util.regex.Pattern;
 
 /**
  * Protects literal Discord tokens with movable identity placeholders, while keeping
- * native-node/style/paragraph anchors in the ordered <keepN/> namespace.
+ * native-node/style anchors in the ordered <keepN/> namespace.
  */
 public final class DiscordTokenMarkers {
     private static final Pattern UNICODE_EMOJI = Pattern.compile(
