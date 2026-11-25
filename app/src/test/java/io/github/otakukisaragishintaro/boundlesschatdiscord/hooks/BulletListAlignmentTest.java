@@ -305,17 +305,17 @@ public class BulletListAlignmentTest {
         StrongContentNode strong = new StrongContentNode(list(new TextContentNode("1. important thing")));
         TextExtractor.Result source = capture(list(new BulletListContentNode(null, false,
                 Arrays.asList(list(new TextContentNode("Read "), strong)))),
-                "\n• <x1>Read </x1><x2>1. important thing</x2>");
+                "\n• <x1>Read</x1> <x2>1. important thing</x2>");
 
         List<Object> out = ContentNodes.replacePlanned(source.tree,
-                "• <x1>阅读 </x1><x2>1. 重要事项</x2>");
+                "• <x1>阅读</x1> <x2>1. 重要事项</x2>");
 
         assertNotNull(out);
         List<Object> item = ((BulletListContentNode) out.get(0)).getItems().get(0);
         assertEquals("阅读 ", ((TextContentNode) item.get(0)).getContent());
         assertEquals("1. 重要事项", ((TextContentNode)
                 ((StrongContentNode) item.get(1)).getContent().get(0)).getContent());
-        assertEquals("\n• <x1>阅读 </x1><x2>1. 重要事项</x2>", extracted(out));
+        assertEquals("\n• <x1>阅读</x1> <x2>1. 重要事项</x2>", extracted(out));
     }
 
     @Test
