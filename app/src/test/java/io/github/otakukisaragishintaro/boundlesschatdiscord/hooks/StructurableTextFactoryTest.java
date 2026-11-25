@@ -173,8 +173,9 @@ public class StructurableTextFactoryTest {
                 extracted.tree, "你好世界");
 
         assertNotNull(flattened);
-        assertEquals("你好世界", ((TextContentNode) flattened.get(0)).getContent());
-        assertSame(mention, flattened.get(1));
+        assertSame("A missing leading mention anchor must remain before translated text",
+                mention, flattened.get(0));
+        assertEquals("你好世界", ((TextContentNode) flattened.get(1)).getContent());
         assertSame(emoji, flattened.get(2));
     }
 
