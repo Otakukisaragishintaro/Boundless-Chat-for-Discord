@@ -82,6 +82,10 @@ public final class ProjectLog {
                 + (message == null ? "" : message);
     }
 
+    private static void emit(int priority, @Nullable String key, String message) {
+        emit(priority, key, () -> message);
+    }
+
     private static synchronized void emit(int priority, @Nullable String key,
                                           Supplier<String> messageSupplier) {
         if (!enabled || (key != null && REPORTED.contains(key))) return;
