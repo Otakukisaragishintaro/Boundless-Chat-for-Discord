@@ -965,7 +965,7 @@ public final class ContentNodes {
         // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
         // Do not turn the latter into a line boundary or list lines get merged with following body text.
         boolean lineBoundary = separatorNewlines < 2
-                && (w.forceLineBoundary || separatorNewlines == 1);
+                && (w.forceLineBoundary || (!w.forceNewGroup && separatorNewlines == 1));
         if (w.forceNewGroup) {
             w.group++;
             w.forceNewGroup = false;
