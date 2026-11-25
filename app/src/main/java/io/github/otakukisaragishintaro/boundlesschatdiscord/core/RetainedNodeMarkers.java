@@ -1,7 +1,9 @@
 package io.github.otakukisaragishintaro.boundlesschatdiscord.core;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -33,10 +35,19 @@ public final class RetainedNodeMarkers {
         return markers;
     }
 
-    /** Requires exact syntax, multiplicity and occurrence order, including rejection of extra markers. */
+    /**
+     * Requires exact syntax, identity and multiplicity while allowing occurrence order to
+     * change with translated sentence/phrase order. Every generated identity must occur
+     * exactly once; unknown, missing and duplicated identities remain invalid.
+     */
     public static boolean matchesExpected(String translated, List<String> expected) {
         List<String> actual = read(translated);
-        return actual != null && actual.equals(expected);
+        if (actual == null || expected == null || actual.size() != expected.size()) return false;
+        Set<String> expectedIdentities = new HashSet<>(expected);
+        Set<String> actualIdentities = new HashSet<>(actual);
+        return expectedIdentities.size() == expected.size()
+                && actualIdentities.size() == actual.size()
+                && expectedIdentities.equals(actualIdentities);
     }
 
     /** Analysis only: generated anchor characters are not natural-language text. */
