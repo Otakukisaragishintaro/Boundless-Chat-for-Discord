@@ -118,7 +118,7 @@ public final class ContentNodes {
         if (RetainedNodeMarkers.hasReservedPrefix(rebuiltPlain)) {
             Rejection mismatch = reject(RejectionReason.RETAINED_MARKER);
             mismatch.structure = " " + RetainedNodeMarkers.mismatchDiagnostic(
-                    rebuiltPlain, buildPlan(tree).retainedMarkers);
+                    rebuiltPlain, plan.retainedMarkers);
             throw mismatch;
         }
         // 按节点出现的位置分配片段，不能以实例身份为键：共享节点的后一次
