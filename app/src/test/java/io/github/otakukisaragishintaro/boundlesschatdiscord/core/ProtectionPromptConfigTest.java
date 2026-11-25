@@ -32,9 +32,13 @@ public class ProtectionPromptConfigTest {
             String disabledSystem = systemPrompt(protocol, disabled);
             assertTrue(enabledSystem.contains("protected marker"));
             assertTrue(enabledSystem.contains("<keepN/>"));
+            assertTrue(enabledSystem.contains("structural boundary tags"));
+            assertTrue(enabledSystem.contains("never merge text across pairs"));
             assertFalse(disabledSystem.contains("protected marker"));
             assertFalse(disabledSystem.contains("<keepN/>"));
             assertTrue(disabledSystem.contains("Translate only the text between"));
+            assertTrue("结构边界保护不受可选保护提示词开关影响",
+                    disabledSystem.contains("never merge text across pairs"));
         }
     }
 
