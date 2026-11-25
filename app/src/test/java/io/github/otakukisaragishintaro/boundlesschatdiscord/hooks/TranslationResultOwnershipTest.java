@@ -38,7 +38,7 @@ public class TranslationResultOwnershipTest {
         assertNull("text conversion alone must not persist", TranslationCache.get().get("new"));
         bridge.onMessageRenderCompleted("row", false);
         assertNull("detached message views must not commit pending cache", TranslationCache.get().get("new"));
-        onMessageRenderCompleted("row", true);
+        bridge.onMessageRenderCompleted("row", true);
         assertEquals("new result", TranslationCache.get().get("new"));
     }
 
