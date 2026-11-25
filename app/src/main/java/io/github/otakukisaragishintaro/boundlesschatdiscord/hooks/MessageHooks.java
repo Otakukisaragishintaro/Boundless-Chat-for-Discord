@@ -311,7 +311,7 @@ public final class MessageHooks {
                         try {
                             Object rendered = chain.proceed();
                             if (messageId != null) {
-                                HookBridge.get().onMessageRenderCompleted(messageId);
+                                HookBridge.get().onMessageRenderCompleted(messageId, view.isAttachedToWindow());
                             }
                             return rendered;
                         } finally {
