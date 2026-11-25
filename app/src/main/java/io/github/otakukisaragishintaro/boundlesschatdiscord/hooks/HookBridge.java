@@ -437,7 +437,7 @@ public final class HookBridge {
         }
         // The single captured request keeps style ranges and retained-node anchors.
         // The segment suffix is only a cache namespace, not another request protocol.
-        String requestText = ex.text;
+        String requestText = ex.requestText;
         Config.Snapshot requestConfig = configForMessage(messageId, cfg);
         String hash = contentHashOf(ex, requestConfig, messageId);
         StateStore.Entry entry = StateStore.get().obtain(messageId, hash);
