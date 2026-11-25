@@ -1273,4 +1273,19 @@ public class ContentNodesTest {
         assertEquals(2, tail.getContent().size());
         assertSame(emoji, tail.getContent().get(0));
     }
+    @Test
+    public void emptyStyledSpanKeepsSourceTextWithoutDowngradingOtherFormatting() {
+        StrongContentNode strong = new StrongContentNode(list(new TextContentNode("bold")));
+        List<Object> nodes = list(strong, new TextContentNode(" tail"));
+
+        List<Object> out = ContentPlanTestSupport.replace(nodes, "<x1></x1> 尾巴");
+
+        assertNotNull("空样式片段不应导致整条富文本回填失败", out);
+        StrongContentNode rebuilt = (StrongContentNode) out.get(0);
+        assertEquals("空样式片段保留原文，避免丢字", "bold",
+                ((TextContentNode) rebuilt.getContent().get(0)).getContent());
+        assertEquals("其他普通片段仍正常翻译", " 尾巴",
+                ((TextContentNode) out.get(1)).getContent());
+    }
+
 }
