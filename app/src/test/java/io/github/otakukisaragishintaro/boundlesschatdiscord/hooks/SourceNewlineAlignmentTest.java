@@ -66,6 +66,20 @@ public class SourceNewlineAlignmentTest {
     }
 
     @Test
+    public void paragraphBeforeMultilineListUsesSeparateAlignmentChunk() {
+        ContentTree tree = compiled(list(text("intro"), multilineList(text("\\n"))));
+        List<Object> out = replaced(tree,
+                "介绍\\n\\n• 第一\\n首项续行\\n补充\\n• 第二\\n次项续行");
+
+        assertEquals("介绍", content(out.get(0)));
+        BulletListContentNode rebuilt = (BulletListContentNode) out.get(1);
+        assertEquals(2, rebuilt.getItems().size());
+        assertEquals("第一\\n首项续行", content(rebuilt.getItems().get(0).get(0)));
+        assertEquals("补充", content(rebuilt.getItems().get(0).get(2)));
+        assertEquals("第二\\n次项续行", content(rebuilt.getItems().get(1).get(0)));
+    }
+
+    @Test
     public void headingThenWhitespaceTextLfThenPlainTextAlignsAsTwoLines() {
         HeadingContentNode heading = new HeadingContentNode(list(text("Lower Rates")), 2);
         TextContentNode lf = text("\n");
