@@ -702,16 +702,15 @@ public final class ContentNodes {
             // text in the corresponding leading slots and leave the remaining
             // source slots empty; native reconstruction then omits their separators.
             if (chunk >= chunks.size()) {
-                boolean remainingStructuralBoundary = false;
-                for (int i = segment; i < segments; i++) {
-                    if (isLineBreakBefore(lineBreakBefore, i)
-                            || isHardBoundaryBefore(hardBoundaries, i)) {
-                        remainingStructuralBoundary = true;
-                        break;
-                    }
-                }
-                if (remainingStructuralBoundary) {
-                    throw new Rejection(RejectionReason.LINE_COUNT, paragraphGroups, chunks.size());
+                int runEnd = connectedRunEnd(segment, segments, lineBreakBefore, hardBoundaries);
+                if (runEnd > segment) {
+                    Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
+                            expectedSourceLines(segment, runEnd, sourceLineCounts, boundaryLineCounts), 0);
+                    rejection.blockStart = segment;
+                    rejection.blockEnd = runEnd;
+                    rejection.actualChunkIndex = Math.max(0, chunk - 1);
+                    rejection.paragraphGroups = paragraphGroups;
+                    throw rejection;
                 }
                 break;
             }
@@ -719,24 +718,27 @@ public final class ContentNodes {
             int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
-                if (isLineBreakBefore(lineBreakBefore, end)) {
-                    // A captured source line break connects slots only when this
-                    // translated chunk actually contains a line for the added slot.
-                    // Otherwise the next translated paragraph chunk must consume it.
-                    if (expectedSourceLines(segment, end + 1, sourceLineCounts,
-                            boundaryLineCounts) <= availableLines) {
+                if (isLineBreakBefore(lineBreakBefore, end)
+                        || isHardBoundaryBefore(hardBoundaries, end)) {
+                    int nextExpected = expectedSourceLines(segment, end + 1,
+                            sourceLineCounts, boundaryLineCounts);
+                    if (nextExpected <= availableLines) {
                         end++;
                     } else {
-                        break;
+                        // Reject the complete connected source run, not just the first
+                        // boundary. This reports the true required line count even when
+                        // the model returns a one-line block for four native slots.
+                        int runEnd = connectedRunEnd(end, segments,
+                                lineBreakBefore, hardBoundaries);
+                        Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
+                                expectedSourceLines(segment, runEnd,
+                                        sourceLineCounts, boundaryLineCounts), availableLines);
+                        rejection.blockStart = segment;
+                        rejection.blockEnd = runEnd;
+                        rejection.actualChunkIndex = chunk;
+                        rejection.paragraphGroups = paragraphGroups;
+                        throw rejection;
                     }
-                } else if (chunks.size() < paragraphGroups
-                        && isHardBoundaryBefore(hardBoundaries, end)
-                        && expectedSourceLines(segment, end + 1, sourceLineCounts,
-                        boundaryLineCounts) <= availableLines) {
-                    // A smaller global chunk count does not prove that this particular
-                    // chunk merged later source slots. Only cross a hard boundary when
-                    // this chunk actually contains enough lines to represent every slot.
-                    end++;
                 } else if (groups.get(end).equals(groups.get(end - 1))) {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
                     rejection.boundary = end;
@@ -796,6 +798,17 @@ public final class ContentNodes {
             parts.set(last, existing.isEmpty() ? extra : existing + "\n\n" + extra);
         }
         return parts;
+    }
+
+    private static int connectedRunEnd(int start, int segments,
+                                       @Nullable List<Boolean> lineBreakBefore,
+                                       @Nullable List<Boolean> hardBoundaries) {
+        int end = start;
+        while (end < segments && (isLineBreakBefore(lineBreakBefore, end)
+                || isHardBoundaryBefore(hardBoundaries, end))) {
+            end++;
+        }
+        return end;
     }
 
     private static int expectedSourceLines(int start, int end,
