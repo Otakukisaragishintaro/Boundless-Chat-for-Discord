@@ -189,8 +189,8 @@ public final class ContentNodes {
                 throw new Rejection(RejectionReason.CONSUMPTION_COUNT,
                         replacement.parts.size(), replacement.next + needed);
             }
-            // 保留首尾空白，并按原空行位置拼回译文片段：
-            // 段落分隔由原节点提供，不依赖模型是否保留。
+            // 保留首尾空白，并按可用译文片段重建文本节点。
+            // 当模型合并段落时，空的源槽不会重新插入对应的空行分隔。
             int lead = occurrence.leadingEnd;
             int tail = occurrence.trailingStart;
             StringBuilder rebuilt = new StringBuilder();
@@ -592,8 +592,8 @@ public final class ContentNodes {
     }
 
     /**
-     * 按结构类型执行唯一切分：源换行/列表边界按每槽捕获行数，其余按段落块对应。
-     * 任一数量或结构不匹配都拒绝整条回填。
+     * 按结构类型切分：明确的源换行/列表边界仍按捕获行数校验；
+     * 普通段落块数量允许与源槽不同，缺少的源槽留空，多出的译文块追加到末槽。
      */
     static List<String> alignSpanToParts(String span, List<Integer> groups,
                                          @Nullable List<Boolean> listPrefixes,
