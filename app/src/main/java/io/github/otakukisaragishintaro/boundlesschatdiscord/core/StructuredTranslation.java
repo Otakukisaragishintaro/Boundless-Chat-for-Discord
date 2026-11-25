@@ -67,6 +67,10 @@ public final class StructuredTranslation {
         }
     }
 
+    public static boolean hasMarkers(String source) {
+        return source != null && MARKER.matcher(source).find();
+    }
+
     public static Source split(String source) throws TranslationException {
         if (source == null) throw invalid("源文本为空");
         Matcher matcher = MARKER.matcher(source);
