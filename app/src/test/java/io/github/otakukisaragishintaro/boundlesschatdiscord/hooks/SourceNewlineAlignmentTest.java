@@ -104,7 +104,7 @@ public class SourceNewlineAlignmentTest {
         assertEquals(2, extraLine.expected);
         assertEquals(3, extraLine.actual);
         ContentNodes.Rejection extraParagraph = rejected(tree, "标题\n正文\n\n多余",
-                ContentNodes.RejectionReason.PARAGRAPH_EXTRA);
+                ContentNodes.RejectionReason.LINE_COUNT);
         assertEquals(1, extraParagraph.expected);
         assertEquals(2, extraParagraph.actual);
     }
@@ -145,7 +145,7 @@ public class SourceNewlineAlignmentTest {
         assertSame(spaces, out.get(1));
         assertSame(lf, out.get(2));
         assertEquals("\n第二\n\n", content(out.get(3)));
-        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.PARAGRAPH_MISSING);
+        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.LINE_COUNT);
         assertEquals("\n\nfirst\n \t\n\nsecond\n\n", extracted(tree));
     }
 
@@ -156,7 +156,7 @@ public class SourceNewlineAlignmentTest {
         List<Object> out = replaced(tree, "第一\n\n第二");
         assertSame(lineBreak, out.get(2));
         assertEquals("第一\n\n第二", extracted(compiled(out)));
-        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.PARAGRAPH_MISSING);
+        rejected(tree, "第一\n第二", ContentNodes.RejectionReason.LINE_COUNT);
     }
 
     @Test
