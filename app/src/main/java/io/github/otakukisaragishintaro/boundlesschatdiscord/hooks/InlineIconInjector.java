@@ -6,6 +6,9 @@ import android.content.Context;
 import android.graphics.drawable.Drawable;
 import android.text.SpannableStringBuilder;
 import android.text.Spanned;
+import android.text.style.ForegroundColorSpan;
+import android.text.style.StyleSpan;
+import android.graphics.Typeface;
 import android.view.View;
 
 import androidx.annotation.Nullable;
@@ -109,6 +112,7 @@ public final class InlineIconInjector {
      * 由于这一格是我们自己插入的，不会影响任何真实内容的点击。</p>
      */
     private static final String CLICK_LEAD = "\uFEFF";
+    private static final String WARNING_LEAD = "\uFEFF";
 
     private InlineIconInjector() {
     }
@@ -213,7 +217,9 @@ public final class InlineIconInjector {
             }
 
             Object clickSpan = IconClickSpanFactory.create(hostCl, messageId);
-            if (clickSpan == null) {
+            Object warningClickSpan = formattingWarning
+                    ? IconClickSpanFactory.createFormattingRetry(hostCl, messageId) : null;
+            if (clickSpan == null || (formattingWarning && warningClickSpan == null)) {
                 ProjectLog.warnOnce("icon.clickCreation", "icon injection rejected: click span unavailable");
                 return rendered;
             }
@@ -221,17 +227,27 @@ public final class InlineIconInjector {
                 ProjectLog.warnOnce("icon.nativeBinding.missing", "icon injection rejected: native binding unavailable");
                 return rendered;
             }
-            icon.ownText(ssb, clickSpan);
-            // Both spans are ready before mutating the native builder.
+            icon.ownText(ssb, clickSpan, warningClickSpan);
+            // Keep the icon and warning as independent click targets.
             ssb.append(CLICK_LEAD);
             int start = ssb.length();
             ssb.append(PLACEHOLDER);
             int end = start + PLACEHOLDER.length();
             ssb.setSpan(icon, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
-            // Include only the injected lead character, never the preceding message character.
             int[] click = InlineIconGeometry.clickRange(start, end);
             ssb.setSpan(clickSpan, click[0], click[1], Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            if (formattingWarning) {
+                ssb.append(WARNING_LEAD);
+                int warningStart = ssb.length();
+                ssb.append("!");
+                int warningEnd = ssb.length();
+                ssb.setSpan(warningClickSpan, warningStart - 1, warningEnd,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb.setSpan(new ForegroundColorSpan(0xFFED4245), warningStart, warningEnd,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                ssb.setSpan(new StyleSpan(Typeface.BOLD), warningStart, warningEnd,
+                        Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            }
             // 启动/续接旋转动画（仅翻译中状态）。
             icon.bindHost(host);
             scope.recordInjection(messageId);
