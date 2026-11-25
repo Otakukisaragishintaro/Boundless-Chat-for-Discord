@@ -695,7 +695,8 @@ public final class ContentNodes {
             int end = segment + 1;
             while (end < segments) {
                 if (isLineBreakBefore(lineBreakBefore, end)
-                        || isHardBoundaryBefore(hardBoundaries, end)) {
+                        || (chunks.size() < paragraphGroups
+                        && isHardBoundaryBefore(hardBoundaries, end))) {
                     end++;
                 } else if (groups.get(end).equals(groups.get(end - 1))) {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
@@ -1110,8 +1111,8 @@ public final class ContentNodes {
         w.plan.sourceLineCounts.add(sourceLines);
         boolean headingBoundary = w.headingBreaks > 0
                 || containsHeading(event.containers)
-                || (!w.plan.boundaries.isEmpty()
-                && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 1).event.containers));
+                || (w.plan.boundaries.size() > 1
+                && containsHeading(w.plan.boundaries.get(w.plan.boundaries.size() - 2).event.containers));
         w.plan.headingBoundaries.add(headingBoundary);
         boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
         w.plan.hardBoundaries.add(headingBoundary || nativeBreakBoundary);
