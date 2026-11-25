@@ -107,9 +107,17 @@ public final class StructurableTextFactory {
         if (ContentNodes.isAnnotated(original)) {
             if (extracted.tree == null) return rejectFactory("MISSING_TREE");
             List<Object> replaced = ContentNodes.replacePlanned(extracted.tree, translated);
-            if (replaced == null) return null; // Already classified at the content replacement boundary.
-            Object out = annotated(replaced);
-            return out == null ? rejectFactory("ANNOTATED_CONSTRUCTOR") : out;
+            if (replaced != null) {
+                Object out = annotated(replaced);
+                if (out != null) return out;
+                ProjectLog.warn("annotated translation reconstruction failed; displaying translated text without rich formatting");
+            } else {
+                ProjectLog.warn("annotated translation alignment failed; displaying translated text without rich formatting");
+            }
+            // Translation visibility takes priority over preserving Markdown when native
+            // node alignment cannot represent the model output.
+            Object plain = primitive(translated);
+            return plain == null ? rejectFactory("PRIMITIVE_CONSTRUCTOR") : plain;
         }
 
         // 2) 原始是 Primitive：直接给纯文本。
