@@ -46,7 +46,7 @@ public class RetainedNodeMarkersTest {
         assertTrue(diagnostic, diagnostic.contains("actualSequence=[<keep2/>,<keep1/>,<keep4/>,<keep4/>]"));
         assertTrue(diagnostic, diagnostic.contains("missing=[<keep3/>x1]"));
         assertTrue(diagnostic, diagnostic.contains("unexpected=[<keep4/>x2]"));
-        assertTrue(diagnostic, diagnostic.contains("duplicated=[<keep4/>x2]"));
+        assertTrue(diagnostic, diagnostic.contains("duplicated=[<keep4/>x1]"));
         assertTrue(diagnostic, diagnostic.contains("malformed=[<keep5 >]"));
     }
 
