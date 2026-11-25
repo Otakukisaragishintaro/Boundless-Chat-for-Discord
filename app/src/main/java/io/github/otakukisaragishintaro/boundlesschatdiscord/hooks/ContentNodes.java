@@ -698,11 +698,19 @@ public final class ContentNodes {
             // text in the corresponding leading slots and leave the remaining
             // source slots empty; native reconstruction then omits their separators.
             if (chunk >= chunks.size()) break;
+            String block = chunks.get(chunk);
+            int availableLines = block.split("\\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
-                if (isLineBreakBefore(lineBreakBefore, end)
-                        || (chunks.size() < paragraphGroups
-                        && isHardBoundaryBefore(hardBoundaries, end))) {
+                if (isLineBreakBefore(lineBreakBefore, end)) {
+                    end++;
+                } else if (chunks.size() < paragraphGroups
+                        && isHardBoundaryBefore(hardBoundaries, end)
+                        && expectedSourceLines(segment, end + 1, sourceLineCounts,
+                        boundaryLineCounts) <= availableLines) {
+                    // A smaller global chunk count does not prove that this particular
+                    // chunk merged later source slots. Only cross a hard boundary when
+                    // this chunk actually contains enough lines to represent every slot.
                     end++;
                 } else if (groups.get(end).equals(groups.get(end - 1))) {
                     Rejection rejection = reject(RejectionReason.SOURCE_BOUNDARY_AMBIGUOUS);
@@ -713,7 +721,7 @@ public final class ContentNodes {
                 }
             }
 
-            String block = chunks.get(chunk++);
+            chunk++;
             if (end - segment > 1) {
                 String[] lines = block.split("\n", -1);
                 int expectedLines = 0;
@@ -761,6 +769,19 @@ public final class ContentNodes {
             parts.set(last, existing.isEmpty() ? extra : existing + "\n\n" + extra);
         }
         return parts;
+    }
+
+    private static int expectedSourceLines(int start, int end,
+                                           List<Integer> sourceLineCounts,
+                                           @Nullable List<Integer> boundaryLineCounts) {
+        int expected = 0;
+        for (int i = start; i < end; i++) {
+            expected += sourceLineCounts.get(i);
+            if (i > start && boundaryLineCounts != null && i < boundaryLineCounts.size()) {
+                expected += boundaryLineCounts.get(i);
+            }
+        }
+        return expected;
     }
 
     private static boolean isListPrefix(@Nullable List<Boolean> listPrefixes, int index) {
