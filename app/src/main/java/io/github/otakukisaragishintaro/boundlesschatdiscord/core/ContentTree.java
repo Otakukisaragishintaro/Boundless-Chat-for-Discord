@@ -101,15 +101,23 @@ public final class ContentTree {
     public final int segmentCount;
     /** True for each translatable segment whose preceding source boundary must not be inferred. */
     public final List<Boolean> segmentBoundaryBefore;
-    private ContentTree(Node root) {
+    /** Whether structural segment boundaries are emitted as explicit model-facing anchors. */
+    public final boolean explicitBoundaryMarkers;
+    private ContentTree(Node root, boolean explicitBoundaryMarkers) {
         this.root = root;
+        this.explicitBoundaryMarkers = explicitBoundaryMarkers;
         Emitter emitter = new Emitter();
         emitter.emit(root, false, new ArrayList<>());
         events = Collections.unmodifiableList(emitter.output);
         int count = 0;
         for (Event event : events) if (event.kind == EventKind.NODE) count += event.node.segmentCount;
         segmentCount = count;
-        segmentBoundaryBefore = Collections.unmodifiableList(captureSegmentBoundaries(events));
+        List<Boolean> boundaries = explicitBoundaryMarkers
+                ? captureSegmentBoundaries(events) : new ArrayList<>();
+        if (!explicitBoundaryMarkers) {
+            for (int i = 0; i < segmentCount; i++) boundaries.add(false);
+        }
+        segmentBoundaryBefore = Collections.unmodifiableList(boundaries);
         if (segmentBoundaryBefore.size() != segmentCount)
             throw new IllegalStateException("Captured segment boundary count mismatch");
     }
@@ -168,7 +176,17 @@ public final class ContentTree {
     @Nullable public static ContentTree compile(List<?> nodes) {
         if (nodes == null) return null;
         try {
-            return new ContentTree(new Compiler().sequence(nodes, 0));
+            return new ContentTree(new Compiler().sequence(nodes, 0), false);
+        } catch (IllegalStateException invalid) {
+            return null;
+        }
+    }
+
+    /** Compile a runtime translation snapshot with explicit list/heading segment anchors. */
+    @Nullable public static ContentTree compileForTranslation(List<?> nodes) {
+        if (nodes == null) return null;
+        try {
+            return new ContentTree(new Compiler().sequence(nodes, 0), true);
         } catch (IllegalStateException invalid) {
             return null;
         }
