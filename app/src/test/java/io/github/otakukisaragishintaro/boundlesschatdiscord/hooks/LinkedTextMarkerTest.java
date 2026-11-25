@@ -147,7 +147,9 @@ public class LinkedTextMarkerTest {
         ContentTree tree = tree(text("See "), link(new Object(), text("guide")));
         reject(tree, "参阅<x2>指南</x2>", ContentNodes.RejectionReason.STYLE_OPEN);
         reject(tree, "参阅<x1>指南", ContentNodes.RejectionReason.STYLE_CLOSE);
-        reject(tree, "参阅<x1></x1>", ContentNodes.RejectionReason.STYLE_EMPTY);
+        List<Object> emptyLabel = ContentNodes.replaceChecked(tree, "参阅<x1></x1>");
+        assertNotNull(emptyLabel);
+        assertEquals("guide", label(emptyLabel.get(1)));
     }
 
     @Test public void unexpectedNestedStyleTagsCannotLeakIntoLinkedText() {
