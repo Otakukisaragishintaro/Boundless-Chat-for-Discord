@@ -13,6 +13,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
@@ -57,6 +58,8 @@ public final class RerenderRegistry {
 
     /** messageId -> 承载它的视图集合。所有登记与容量变更由类锁串行化。 */
     private static final Map<String, List<Target>> TARGETS = new ConcurrentHashMap<>();
+    /** Weak reverse index: a view maps only to message keys, never to another strong view owner. */
+    private static final Map<View, Set<String>> VIEW_MESSAGES = new WeakHashMap<>();
     private static final java.util.concurrent.atomic.AtomicLong REGISTRATION_SEQUENCE =
             new java.util.concurrent.atomic.AtomicLong();
 
@@ -93,29 +96,44 @@ public final class RerenderRegistry {
                 if (existing.contentView.get() == contentView) {
                     // 同一视图再次渲染：以最新实参替换已登记记录。
                     list.set(i, new Target(contentView, invocationTarget, method, args.clone()));
+                    indexTarget(messageId, contentView);
                     return;
                 }
             }
             list.add(new Target(contentView, invocationTarget, method, args.clone()));
+            indexTarget(messageId, contentView);
+        }
+    }
+
+    private static void indexTarget(String messageId, View contentView) {
+        VIEW_MESSAGES.computeIfAbsent(contentView, ignored -> new HashSet<>()).add(messageId);
+    }
+
+    /** Remove the reverse entry only after this view has no remaining target for the key. */
+    private static void unindexIfUnused(String messageId, View contentView, List<Target> list) {
+        for (Target remaining : list) {
+            if (remaining.contentView.get() == contentView) return;
+        }
+        Set<String> messageIds = VIEW_MESSAGES.get(contentView);
+        if (messageIds != null) {
+            messageIds.remove(messageId);
+            if (messageIds.isEmpty()) VIEW_MESSAGES.remove(contentView);
         }
     }
 
     /** Remove every stale registration for a view before it is rebound to another message. */
     public static synchronized void unregister(View contentView) {
-        if (contentView == null) {
-            return;
-        }
-        for (Map.Entry<String, List<Target>> entry : TARGETS.entrySet()) {
-            List<Target> list = entry.getValue();
+        if (contentView == null) return;
+        Set<String> indexed = VIEW_MESSAGES.remove(contentView);
+        if (indexed == null || indexed.isEmpty()) return;
+        for (String messageId : new ArrayList<>(indexed)) {
+            List<Target> list = TARGETS.get(messageId);
+            if (list == null) continue;
             synchronized (list) {
                 for (Iterator<Target> it = list.iterator(); it.hasNext(); ) {
-                    if (it.next().contentView.get() == contentView) {
-                        it.remove();
-                    }
+                    if (it.next().contentView.get() == contentView) it.remove();
                 }
-                if (list.isEmpty()) {
-                    TARGETS.remove(entry.getKey(), list);
-                }
+                if (list.isEmpty()) TARGETS.remove(messageId, list);
             }
         }
     }
@@ -124,13 +142,17 @@ public final class RerenderRegistry {
     @Nullable
     private static Map.Entry<String, Target> latestRegistration(View host) {
         Map.Entry<String, Target> latest = null;
-        for (Map.Entry<String, List<Target>> entry : TARGETS.entrySet()) {
-            synchronized (entry.getValue()) {
-                for (Target target : entry.getValue()) {
+        Set<String> indexed = VIEW_MESSAGES.get(host);
+        if (indexed == null) return null;
+        for (String messageId : new ArrayList<>(indexed)) {
+            List<Target> list = TARGETS.get(messageId);
+            if (list == null) continue;
+            synchronized (list) {
+                for (Target target : list) {
                     if (target.contentView.get() == host
                             && (latest == null
                             || target.registration > latest.getValue().registration)) {
-                        latest = new java.util.AbstractMap.SimpleImmutableEntry<>(entry.getKey(), target);
+                        latest = new java.util.AbstractMap.SimpleImmutableEntry<>(messageId, target);
                     }
                 }
             }
@@ -171,6 +193,7 @@ public final class RerenderRegistry {
 
     public static synchronized void clear() {
         TARGETS.clear();
+        VIEW_MESSAGES.clear();
     }
 
     /**
@@ -221,13 +244,19 @@ public final class RerenderRegistry {
                 if (!stillBound(messageId, bound)) {
                     // Skip stale replay, but retain owned-host metadata until a real native rebind.
                     // Removing it here could expose older whole-row arguments as the latest bind.
-                    if (!InlineIconSpan.ownsHost(contentView)) it.remove();
+                    if (!InlineIconSpan.ownsHost(contentView)) {
+                        it.remove();
+                        unindexIfUnused(messageId, contentView, list);
+                    }
                     continue;
                 }
                 Object invocationTarget = target.invocationTarget.get();
                 if (!java.lang.reflect.Modifier.isStatic(target.method.getModifiers())
                         && invocationTarget == null) {
-                    if (!InlineIconSpan.ownsHost(contentView)) it.remove();
+                    if (!InlineIconSpan.ownsHost(contentView)) {
+                        it.remove();
+                        unindexIfUnused(messageId, contentView, list);
+                    }
                     continue;
                 }
                 RenderDispatcher.requestRerender(contentView, messageId,
@@ -235,6 +264,7 @@ public final class RerenderRegistry {
                         () -> isCurrentRegistration(messageId, target));
             }
             if (list.isEmpty()) {
+                unindexMessage(messageId, list);
                 TARGETS.remove(messageId, list);
             }
         }
@@ -248,6 +278,18 @@ public final class RerenderRegistry {
         }
         synchronized (current) {
             return current.contains(expected);
+        }
+    }
+
+    private static void unindexMessage(String messageId, List<Target> list) {
+        for (Target target : list) {
+            View view = target.contentView.get();
+            if (view == null) continue;
+            Set<String> messageIds = VIEW_MESSAGES.get(view);
+            if (messageIds != null) {
+                messageIds.remove(messageId);
+                if (messageIds.isEmpty()) VIEW_MESSAGES.remove(view);
+            }
         }
     }
 
@@ -269,6 +311,7 @@ public final class RerenderRegistry {
                     }
                 }
                 if (list.isEmpty()) {
+                    unindexMessage(entry.getKey(), list);
                     TARGETS.remove(entry.getKey(), list);
                 }
             }
@@ -298,7 +341,8 @@ public final class RerenderRegistry {
         }
         for (String key : TARGETS.keySet()) {
             if (!protectedKeys.contains(key)) {
-                TARGETS.remove(key);
+                List<Target> removed = TARGETS.remove(key);
+                if (removed != null) unindexMessage(key, removed);
                 if (TARGETS.size() < MAX_MESSAGES) return;
             }
         }

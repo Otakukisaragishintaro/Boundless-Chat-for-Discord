@@ -10,9 +10,11 @@ import androidx.annotation.Nullable;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
+import java.util.concurrent.LinkedBlockingDeque;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * 有容量上限的双层翻译缓存。
@@ -28,6 +30,8 @@ public final class TranslationCache {
     private static final int DEFAULT_DISK_ENTRIES = 100000;
     private static final String DATABASE_NAME = "boundless_translation_cache.db";
     private static final String TABLE = "translations";
+    private static final int DIAGNOSTIC_QUEUE_CAPACITY = 256;
+    private static final AtomicLong DROPPED_DIAGNOSTIC_LOGS = new AtomicLong();
 
     private static volatile Context sContext;
     @Nullable private static volatile String sModulePackageName;
@@ -57,25 +61,9 @@ public final class TranslationCache {
         if (cache == null || context == null || modulePackageName == null
                 || modulePackageName.isEmpty()) return;
         try {
-            cache.countPublisher.execute(() -> {
-                String processName = "unknown";
-                try {
-                    String current = android.app.Application.getProcessName();
-                    if (current != null && !current.isEmpty()) processName = current;
-                } catch (Throwable ignored) { }
-                try {
-                    CacheCountProvider.publishLog(context, modulePackageName,
-                            System.currentTimeMillis(), processName, priority, tag,
-                            message == null ? "" : message,
-                            requestId == null ? "" : requestId);
-                } catch (Throwable failure) {
-                    // Avoid ProjectLog here: reporting a failed log write through the same
-                    // transport would create a recursive IPC failure loop.
-                    android.util.Log.w("BoundlessChatDiscord",
-                            "diagnostic log IPC failed errorClass="
-                                    + failure.getClass().getSimpleName());
-                }
-            });
+            cache.countPublisher.execute(new DiagnosticLogTask(
+                    context, modulePackageName, priority, tag,
+                    message == null ? "" : message, requestId));
         } catch (Throwable failure) {
             android.util.Log.w("BoundlessChatDiscord",
                     "diagnostic log IPC scheduling failed errorClass="
@@ -154,7 +142,7 @@ public final class TranslationCache {
     }
 
     private final int maxMemoryEntries;
-    private final ExecutorService countPublisher;
+    private final ThreadPoolExecutor countPublisher;
     private volatile int maxDiskEntries = DEFAULT_DISK_ENTRIES;
     private int writesSincePrune;
     /** -1 means not loaded yet; after initialization this tracks SQLite rows incrementally. */
@@ -166,11 +154,34 @@ public final class TranslationCache {
 
     TranslationCache(int maxEntries) {
         maxMemoryEntries = Math.max(1, maxEntries);
-        countPublisher = Executors.newSingleThreadExecutor(runnable -> {
-            Thread thread = new Thread(runnable, "BoundlessChat-CacheCount");
-            thread.setDaemon(true);
-            return thread;
-        });
+        countPublisher = new ThreadPoolExecutor(1, 1, 0L, TimeUnit.MILLISECONDS,
+                new LinkedBlockingDeque<>(DIAGNOSTIC_QUEUE_CAPACITY), runnable -> {
+                    Thread thread = new Thread(runnable, "BoundlessChat-CacheCount");
+                    thread.setDaemon(true);
+                    return thread;
+                }, (rejected, executor) -> {
+                    if (executor.isShutdown()) {
+                        throw new RejectedExecutionException("Cache publisher is shut down");
+                    }
+                    if (rejected instanceof DiagnosticLogTask
+                            && ((DiagnosticLogTask) rejected).priority >= android.util.Log.WARN) {
+                        // Keep warnings/errors ahead of queued informational diagnostics.
+                        for (Runnable queued : executor.getQueue()) {
+                            if (queued instanceof DiagnosticLogTask
+                                    && ((DiagnosticLogTask) queued).priority < android.util.Log.WARN
+                                    && executor.getQueue().remove(queued)) {
+                                DROPPED_DIAGNOSTIC_LOGS.incrementAndGet();
+                                break;
+                            }
+                        }
+                    }
+                    if (executor.getQueue().offer(rejected)) return;
+                    if (rejected instanceof DiagnosticLogTask) {
+                        DROPPED_DIAGNOSTIC_LOGS.incrementAndGet();
+                        return;
+                    }
+                    throw new RejectedExecutionException("Cache publisher queue is full");
+                });
         memory = new LinkedHashMap<String, String>(16, 0.75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, String> eldest) {
@@ -428,6 +439,48 @@ public final class TranslationCache {
             }
         } catch (InterruptedException interrupted) {
             Thread.currentThread().interrupt();
+        }
+    }
+
+    /** One immutable diagnostic event; queue rejection never blocks a Discord render thread. */
+    private static final class DiagnosticLogTask implements Runnable {
+        final Context context;
+        final String modulePackageName;
+        final int priority;
+        final String tag;
+        final String message;
+        @Nullable final String requestId;
+
+        DiagnosticLogTask(Context context, String modulePackageName, int priority,
+                          String tag, String message, @Nullable String requestId) {
+            this.context = context;
+            this.modulePackageName = modulePackageName;
+            this.priority = priority;
+            this.tag = tag;
+            this.message = message;
+            this.requestId = requestId;
+        }
+
+        @Override public void run() {
+            String processName = "unknown";
+            try {
+                String current = android.app.Application.getProcessName();
+                if (current != null && !current.isEmpty()) processName = current;
+            } catch (Throwable ignored) { }
+            long dropped = DROPPED_DIAGNOSTIC_LOGS.getAndSet(0L);
+            String storedMessage = dropped == 0L ? message
+                    : "[diagnostic queue dropped " + dropped + " events] " + message;
+            try {
+                CacheCountProvider.publishLog(context, modulePackageName,
+                        System.currentTimeMillis(), processName, priority, tag,
+                        storedMessage, requestId == null ? "" : requestId);
+            } catch (Throwable failure) {
+                // Avoid ProjectLog here: reporting a failed log write through the same
+                // transport would create a recursive IPC failure loop.
+                android.util.Log.w("BoundlessChatDiscord",
+                        "diagnostic log IPC failed errorClass="
+                                + failure.getClass().getSimpleName());
+            }
         }
     }
 

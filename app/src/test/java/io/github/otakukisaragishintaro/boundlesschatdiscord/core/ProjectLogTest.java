@@ -240,6 +240,29 @@ public class ProjectLogTest {
         }
     }
 
+    @Test
+    public void onceOnlySupplierIsNotEvaluatedWhenDisabledOrAlreadyReported() {
+        AtomicInteger builds = new AtomicInteger();
+        ProjectLog.infoOnce("lazy-key", () -> {
+            builds.incrementAndGet();
+            return "hidden";
+        });
+        assertEquals(0, builds.get());
+
+        ProjectLog.configure(snapshot(true));
+        ProjectLog.infoOnce("lazy-key", () -> {
+            builds.incrementAndGet();
+            return "visible";
+        });
+        ProjectLog.infoOnce("lazy-key", () -> {
+            builds.incrementAndGet();
+            return "duplicate";
+        });
+        assertEquals(1, builds.get());
+        assertEquals(1, entries.size());
+        assertEntry(0, Log.INFO, "visible");
+    }
+
     private static Config.Snapshot snapshot(boolean enabled) {
         return Config.read(new MemoryPrefs().put(Config.KEY_LOGGING_ENABLED, enabled));
     }

@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /** Checks native restoration through captured methods and arguments, with real registry ownership. */
 public class RerenderRegistryTest {
@@ -58,6 +59,13 @@ public class RerenderRegistryTest {
         java.lang.reflect.Field field = RerenderRegistry.class.getDeclaredField("TARGETS");
         field.setAccessible(true);
         return (Map<String, List<RerenderRegistry.Target>>) field.get(null);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<View, Set<String>> viewMessages() throws Exception {
+        java.lang.reflect.Field field = RerenderRegistry.class.getDeclaredField("VIEW_MESSAGES");
+        field.setAccessible(true);
+        return (Map<View, Set<String>>) field.get(null);
     }
 
     private static RerenderRegistry.Target target(String key) throws Exception {
@@ -272,6 +280,22 @@ public class RerenderRegistryTest {
         assertTrue(current(primary, target(primary)));
         RerenderRegistry.unregister(host);
         assertFalse(current(primary, oldPrimary));
+    }
+
+    @Test public void weakViewIndexTracksAllMessageKeysAndClearsOnUnregister() throws Exception {
+        View host = new View(null);
+        NativeBinding receiver = new NativeBinding();
+        String first = "123456789012345678";
+        String second = "123456789012345679";
+        register(first, host, receiver, "first", "options");
+        register(second, host, receiver, "second", "options");
+        assertEquals(new java.util.HashSet<>(java.util.Arrays.asList(first, second)),
+                viewMessages().get(host));
+
+        RerenderRegistry.unregister(host);
+        assertFalse(viewMessages().containsKey(host));
+        assertFalse(targets().containsKey(first));
+        assertFalse(targets().containsKey(second));
     }
 
     @Test public void queuedReplyParametersAreInvalidatedForSameReference() throws Exception {

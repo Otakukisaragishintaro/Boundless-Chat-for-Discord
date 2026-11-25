@@ -6,6 +6,8 @@ import android.database.Cursor;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.sqlite.SQLiteOpenHelper;
 
+import androidx.annotation.Nullable;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -17,8 +19,19 @@ public final class DiagnosticLogStore {
     public static final int MAX_ENTRIES = 5000;
     public static final int DEFAULT_READ_LIMIT = MAX_ENTRIES;
     private static final int MAX_MESSAGE_LENGTH = 4000;
+    private static final int PRUNE_INTERVAL = 32;
+    @Nullable private static Helper sHelper;
 
     private DiagnosticLogStore() { }
+
+    /** Reuse one application-scoped helper instead of opening and closing SQLite per log. */
+    private static synchronized Helper helper(Context context) {
+        if (sHelper == null) {
+            Context appContext = context.getApplicationContext();
+            sHelper = new Helper(appContext == null ? context : appContext);
+        }
+        return sHelper;
+    }
 
     public static final class Entry {
         public final long id, timestamp;
@@ -32,7 +45,7 @@ public final class DiagnosticLogStore {
     }
 
     private static final class Helper extends SQLiteOpenHelper {
-        Helper(Context context) { super(context.getApplicationContext(), DATABASE_NAME, null, 1); }
+        Helper(Context context) { super(context, DATABASE_NAME, null, 1); }
         @Override public void onCreate(SQLiteDatabase db) {
             db.execSQL("CREATE TABLE " + TABLE + " (_id INTEGER PRIMARY KEY AUTOINCREMENT,"
                     + "timestamp INTEGER NOT NULL,source TEXT NOT NULL,process_name TEXT NOT NULL,"
@@ -45,13 +58,12 @@ public final class DiagnosticLogStore {
         }
     }
 
-    public static boolean append(Context context, long timestamp, String source,
-                                 String processName, int priority, String tag,
-                                 String message, String requestId) {
+    public static synchronized boolean append(Context context, long timestamp, String source,
+                                              String processName, int priority, String tag,
+                                              String message, String requestId) {
         if (context == null) return false;
-        Helper helper = new Helper(context);
         try {
-            SQLiteDatabase db = helper.getWritableDatabase();
+            SQLiteDatabase db = helper(context).getWritableDatabase();
             ContentValues values = new ContentValues();
             values.put("timestamp", Math.max(0L, timestamp));
             values.put("source", bounded(source, 32, "unknown"));
@@ -60,38 +72,43 @@ public final class DiagnosticLogStore {
             values.put("tag", bounded(tag, 120, "BoundlessChatDiscord"));
             values.put("message", sanitizeMessage(message));
             values.put("request_id", bounded(requestId, 80, ""));
-            if (db.insert(TABLE, null, values) < 0) return false;
-            db.execSQL("DELETE FROM " + TABLE + " WHERE _id NOT IN (SELECT _id FROM "
-                    + TABLE + " ORDER BY _id DESC LIMIT " + MAX_ENTRIES + ")");
+            long rowId = db.insert(TABLE, null, values);
+            if (rowId < 0) return false;
+
+            // The auto-increment ID makes pruning cadence survive process restarts.
+            if (rowId % PRUNE_INTERVAL == 0) {
+                db.execSQL("DELETE FROM " + TABLE + " WHERE _id NOT IN (SELECT _id FROM "
+                        + TABLE + " ORDER BY _id DESC LIMIT " + MAX_ENTRIES + ")");
+            }
             return true;
         } catch (Throwable failure) {
             return false;
-        } finally { helper.close(); }
+        }
     }
 
-    public static List<Entry> read(Context context, int requestedLimit) {
+    public static synchronized List<Entry> read(Context context, int requestedLimit) {
         if (context == null) return Collections.emptyList();
         int limit = Math.max(1, Math.min(requestedLimit, MAX_ENTRIES));
-        Helper helper = new Helper(context);
         List<Entry> entries = new ArrayList<>();
-        try (Cursor cursor = helper.getReadableDatabase().rawQuery(
+        try (Cursor cursor = helper(context).getReadableDatabase().rawQuery(
                 "SELECT _id,timestamp,source,process_name,priority,tag,message,request_id FROM "
                         + TABLE + " ORDER BY _id DESC LIMIT ?", new String[]{Integer.toString(limit)})) {
             while (cursor.moveToNext()) entries.add(new Entry(cursor.getLong(0), cursor.getLong(1),
                     cursor.getString(2), cursor.getString(3), cursor.getInt(4),
                     cursor.getString(5), cursor.getString(6), cursor.getString(7)));
         } catch (Throwable ignored) { entries.clear(); }
-        finally { helper.close(); }
         Collections.reverse(entries);
         return entries;
     }
 
-    public static boolean clear(Context context) {
+    public static synchronized boolean clear(Context context) {
         if (context == null) return false;
-        Helper helper = new Helper(context);
-        try { helper.getWritableDatabase().delete(TABLE, null, null); return true; }
-        catch (Throwable failure) { return false; }
-        finally { helper.close(); }
+        try {
+            helper(context).getWritableDatabase().delete(TABLE, null, null);
+            return true;
+        } catch (Throwable failure) {
+            return false;
+        }
     }
 
     /** Redact common credential formats before persisting or copying diagnostics. */

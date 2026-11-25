@@ -8,6 +8,7 @@ import androidx.annotation.Nullable;
 import java.util.HashSet;
 import java.util.UUID;
 import java.util.Set;
+import java.util.function.Supplier;
 
 /**
  * Project logging to Logcat, the LSPosed framework log, and the module-owned
@@ -50,11 +51,16 @@ public final class ProjectLog {
     }
 
     public static void infoOnce(String key, String message) {
-        emit(Log.INFO, key, message);
+        emit(Log.INFO, key, () -> message);
+    }
+
+    /** Build diagnostic detail only after logging is enabled and the once-key is new. */
+    public static void infoOnce(String key, Supplier<String> messageSupplier) {
+        emit(Log.INFO, key, messageSupplier);
     }
 
     public static void warnOnce(String key, String message) {
-        emit(Log.WARN, key, message);
+        emit(Log.WARN, key, () -> message);
     }
 
     /** Startup and hook-installation failures remain visible even when optional logging is off. */
@@ -76,8 +82,15 @@ public final class ProjectLog {
                 + (message == null ? "" : message);
     }
 
-    private static synchronized void emit(int priority, @Nullable String key, String message) {
-        if (!enabled || (key != null && !REPORTED.add(key))) return;
+    private static void emit(int priority, @Nullable String key, String message) {
+        emit(priority, key, () -> message);
+    }
+
+    private static synchronized void emit(int priority, @Nullable String key,
+                                          Supplier<String> messageSupplier) {
+        if (!enabled || (key != null && REPORTED.contains(key))) return;
+        String message = messageSupplier.get();
+        if (key != null) REPORTED.add(key);
         write(priority, message);
         TranslationCache.publishDiagnosticLog(priority, TAG, message, currentRequestId());
     }
