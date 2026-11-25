@@ -143,10 +143,8 @@ public class ProtocolsTest {
     }
 
     @Test
-    public void requestPromptIncludesExactOrderedManifestForEveryRetainedMarker() throws Exception {
+    public void requestPromptUsesCompactImmutableMarkerRule() throws Exception {
         String source = "A <keep13/> B <keep14/> C <keep1/> D";
-        String expectedManifest = "The source text contains exactly 3 protected markers, in this required order: "
-                + "[<keep13/>, <keep14/>, <keep1/>]";
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
                 Config.PROTOCOL_OPENAI_RESPONSES, Config.PROTOCOL_ANTHROPIC_MESSAGES}) {
             JSONObject body = new JSONObject(Protocols.requestBody(protocol, source,
@@ -156,8 +154,9 @@ public class ProtocolsTest {
                     : Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol)
                     ? body.getString("instructions") : body.getString("system");
             assertTrue(system.contains("You MUST copy every marker verbatim"));
-            assertTrue(system.contains(expectedManifest));
-            assertTrue(system.contains("Do not omit a marker because the target-language"));
+            assertTrue(system.contains("exact original sequence"));
+            assertTrue(system.contains("without moving the token"));
+            assertFalse(system.contains("<keep13/>, <keep14/>"));
         }
     }
 
@@ -167,7 +166,7 @@ public class ProtocolsTest {
                 Config.PROTOCOL_OPENAI_COMPATIBLE, "A <keep1/> B", "prompt",
                 "model", false, false, "Chinese"));
         String system = body.getJSONArray("messages").getJSONObject(0).getString("content");
-        assertFalse(system.contains("MANDATORY MARKER MANIFEST"));
+        assertFalse(system.contains("PRIVATE VALIDATION CHECKLIST"));
         assertTrue(system.contains(Protocols.WRAPPER_RULE));
     }
 
