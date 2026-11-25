@@ -1186,7 +1186,7 @@ public final class ContentNodes {
                 && w.plan.boundaries.get(w.plan.boundaries.size() - 1).event.containers
                 .equals(event.containers);
         boolean listItemLineBoundary = w.forceLineBoundary
-                && (sameListPath || separatorNewlines < 2);
+                && (sameListPath || separatorNewlines - 1 < 2);
         boolean lineBoundary = listItemLineBoundary
                 || (separatorNewlines < 2 && !nativeBreakBoundary
                 && (w.headingBreaks > 0 || (!w.forceNewGroup && separatorNewlines == 1)));
