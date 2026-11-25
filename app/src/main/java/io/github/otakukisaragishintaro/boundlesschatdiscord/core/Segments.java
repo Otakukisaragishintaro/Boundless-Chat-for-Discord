@@ -110,7 +110,8 @@ public final class Segments {
             return "译文含模板占位符";
         }
         if (checkRetainedMarkers && !RetainedNodeMarkers.matchesSource(translated, source)) {
-            return "保留节点定位标记无效";
+            return "保留节点定位标记无效；"
+                    + RetainedNodeMarkers.mismatchDiagnostic(translated, source);
         }
         String sourceWithoutKeep = RetainedNodeMarkers.withoutMarkers(source);
         String translationWithoutKeep = RetainedNodeMarkers.withoutMarkers(translated);
