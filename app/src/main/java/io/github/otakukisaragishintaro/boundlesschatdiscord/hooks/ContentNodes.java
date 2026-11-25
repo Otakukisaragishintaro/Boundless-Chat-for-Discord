@@ -550,8 +550,10 @@ public final class ContentNodes {
                 int end = plain.indexOf(close, at + open.length());
                 if (end < 0) throw reject(RejectionReason.STYLE_CLOSE);
                 String styled = plain.substring(at + open.length(), end).trim();
-                if (styled.isEmpty()) throw reject(RejectionReason.STYLE_EMPTY);
-                parts.set(t.segIndex, styled);
+                // An empty style span must not downgrade the entire message. Preserve that
+                // source slot verbatim while translating and rebuilding all other slots.
+                // This is a local, non-lossy fallback: no text is silently discarded.
+                parts.set(t.segIndex, styled.isEmpty() ? t.sourceText : styled);
                 cursor = end + close.length();
             } else {
                 pending.add(t.segIndex);
@@ -938,6 +940,8 @@ public final class ContentNodes {
         final String anchor; // Non-null anchors consume no text slot.
         final int segIndex; // Anchor boundary or text-slot index, captured in tree order.
         final int styleId;
+        /** Original source chunk used only if the model returns an empty styled span. */
+        final String sourceText;
         /** True only for the first anchor or translatable slot after captured ITEM_START. */
         final boolean listPrefix;
 
@@ -945,13 +949,15 @@ public final class ContentNodes {
             this.anchor = anchor;
             this.segIndex = segIndex;
             this.styleId = 0;
+            this.sourceText = null;
             this.listPrefix = listPrefix;
         }
 
-        PlanToken(int segIndex, int styleId, boolean listPrefix) {
+        PlanToken(int segIndex, int styleId, boolean listPrefix, String sourceText) {
             this.anchor = null;
             this.segIndex = segIndex;
             this.styleId = styleId;
+            this.sourceText = sourceText;
             this.listPrefix = listPrefix;
         }
     }
@@ -1024,7 +1030,7 @@ public final class ContentNodes {
                     if (event.styled || (tree.explicitBoundaryMarkers && structuralBoundary)) {
                         styleId = ++w.plan.styleMarkers;
                     }
-                    addSegment(w, event, node.chunkLineCounts.get(i), styleId);
+                    addSegment(w, event, node.chunkLineCounts.get(i), styleId, chunk);
                 }
                 addSourceWhitespace(w, s, tail, s.length());
                 continue;
@@ -1098,8 +1104,10 @@ public final class ContentNodes {
      * <p>URL 与 emoji 都作为必须保留的定位标记；列表项按独立行分组。
      * {@code forceNewGroup} 由列表项边界推进段落组。</p>
      */
-    private static void addSegment(PlanWalk w, ContentTree.Event event, int sourceLines, int styleId) {
-        PlanToken token = new PlanToken(w.plan.groupIds.size(), styleId, w.pendingListPrefix);
+    private static void addSegment(PlanWalk w, ContentTree.Event event, int sourceLines,
+                                   int styleId, String sourceText) {
+        PlanToken token = new PlanToken(w.plan.groupIds.size(), styleId,
+                w.pendingListPrefix, styleId > 0 ? sourceText : null);
         w.plan.tokens.add(token);
         w.plan.listPrefixes.add(token.listPrefix);
         w.pendingListPrefix = false;
