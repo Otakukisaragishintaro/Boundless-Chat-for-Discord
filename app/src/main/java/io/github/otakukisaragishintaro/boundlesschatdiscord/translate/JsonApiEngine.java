@@ -125,8 +125,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
         if (paragraphs.size() <= 1) {
             ProjectLog.info("translation.chunking skipped reason=no_blank_line_boundary"
                     + " sourceChars=" + requestText.length());
-            return protection.restore(executeSingleRequestPreservingParagraphs(
-                    requestText, logFailureDiagnostics).translated);
+            return protection.restore(execute(requestText, true, logFailureDiagnostics,
+                    !logFailureDiagnostics).translated);
         }
 
         ParagraphGroups groups = groupParagraphs(paragraphs, separators,
