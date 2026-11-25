@@ -702,7 +702,8 @@ public final class ContentNodes {
             // text in the corresponding leading slots and leave the remaining
             // source slots empty; native reconstruction then omits their separators.
             if (chunk >= chunks.size()) {
-                int runEnd = connectedRunEnd(segment, segments, lineBreakBefore, hardBoundaries);
+                int runEnd = connectedRunEnd(segment, segments, groups,
+                        lineBreakBefore, hardBoundaries);
                 if (runEnd > segment) {
                     Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
                             expectedSourceLines(segment, runEnd, sourceLineCounts, boundaryLineCounts), 0);
@@ -718,8 +719,9 @@ public final class ContentNodes {
             int availableLines = block.split("\n", -1).length;
             int end = segment + 1;
             while (end < segments) {
-                if (isLineBreakBefore(lineBreakBefore, end)
-                        || isHardBoundaryBefore(hardBoundaries, end)) {
+                boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, end)
+                        && groups.get(end).equals(groups.get(end - 1));
+                if (isLineBreakBefore(lineBreakBefore, end) || hardLineBoundary) {
                     int nextExpected = expectedSourceLines(segment, end + 1,
                             sourceLineCounts, boundaryLineCounts);
                     if (nextExpected <= availableLines) {
@@ -728,7 +730,7 @@ public final class ContentNodes {
                         // Reject the complete connected source run, not just the first
                         // boundary. This reports the true required line count even when
                         // the model returns a one-line block for four native slots.
-                        int runEnd = connectedRunEnd(end, segments,
+                        int runEnd = connectedRunEnd(end, segments, groups,
                                 lineBreakBefore, hardBoundaries);
                         Rejection rejection = new Rejection(RejectionReason.LINE_COUNT,
                                 expectedSourceLines(segment, runEnd,
@@ -800,12 +802,14 @@ public final class ContentNodes {
         return parts;
     }
 
-    private static int connectedRunEnd(int start, int segments,
+    private static int connectedRunEnd(int start, int segments, List<Integer> groups,
                                        @Nullable List<Boolean> lineBreakBefore,
                                        @Nullable List<Boolean> hardBoundaries) {
         int end = start;
-        while (end < segments && (isLineBreakBefore(lineBreakBefore, end)
-                || isHardBoundaryBefore(hardBoundaries, end))) {
+        while (end < segments) {
+            boolean hardLineBoundary = isHardBoundaryBefore(hardBoundaries, end)
+                    && end > 0 && groups.get(end).equals(groups.get(end - 1));
+            if (!isLineBreakBefore(lineBreakBefore, end) && !hardLineBoundary) break;
             end++;
         }
         return end;
@@ -1164,13 +1168,15 @@ public final class ContentNodes {
         int separatorNewlines = w.separatorNewlines;
         // A list-item start is a line boundary; LIST_END only starts a new paragraph group.
         // Do not turn the latter into a line boundary or list lines get merged with following body text.
+        boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
         boolean lineBoundary = w.forceLineBoundary
-                || (separatorNewlines < 2 && (w.headingBreaks > 0
-                || (!w.forceNewGroup && separatorNewlines == 1)));
+                || (separatorNewlines < 2 && !nativeBreakBoundary
+                && (w.headingBreaks > 0 || (!w.forceNewGroup && separatorNewlines == 1)));
         if (w.forceNewGroup) {
             w.group++;
             w.forceNewGroup = false;
-        } else if (!w.plan.groupIds.isEmpty() && separatorNewlines >= 2) {
+        } else if (!w.plan.groupIds.isEmpty()
+                && (separatorNewlines >= 2 || (nativeBreakBoundary && separatorNewlines > 0))) {
             w.group++;
         }
         w.plan.groupIds.add(w.group);
@@ -1182,7 +1188,6 @@ public final class ContentNodes {
         boolean headingBoundary = w.headingBreaks > 0
                 || (w.plan.boundaries.size() > 1 && currentHeading != previousHeading);
         w.plan.headingBoundaries.add(headingBoundary);
-        boolean nativeBreakBoundary = w.gapKinds[ContentTree.Kind.BREAK.ordinal()] > 0;
         w.plan.hardBoundaries.add(headingBoundary || nativeBreakBoundary);
         w.plan.boundaryLineCounts.add(nativeBreakBoundary && !headingBoundary
                 ? Math.max(0, w.separatorNewlines - 1) : 0);
