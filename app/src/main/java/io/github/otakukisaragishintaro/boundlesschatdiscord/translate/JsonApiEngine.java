@@ -10,6 +10,7 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Protocols;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ProjectLog;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Scheduler;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments;
+import io.github.otakukisaragishintaro.boundlesschatdiscord.core.StructuredTranslation;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TranslationException;
 
 /**
@@ -152,7 +153,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
                     + " sourceChars=" + group.length()
                     + " paragraphsGrouped=" + groups.paragraphCounts.get(i));
             try {
-                String translated = execute(separatorProtection.text, true, logFailureDiagnostics, !logFailureDiagnostics).translated;
+                String translated = execute(separatorProtection.text, true, logFailureDiagnostics,
+                        !logFailureDiagnostics, true).translated;
                 combined.append(separatorProtection.restore(translated));
             } catch (Exception failure) {
                 ProjectLog.warn("translation.chunking failed index=" + (i + 1)
@@ -178,7 +180,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
         DiscordTokenMarkers.Protection separators =
                 DiscordTokenMarkers.protectBlankLineSeparators(source);
         Exchange exchange = execute(separators.text, true, logFailureDiagnostics,
-                !logFailureDiagnostics);
+                !logFailureDiagnostics, true);
         return new Exchange(separators.restore(exchange.translated), exchange.httpStatus);
     }
 
@@ -273,6 +275,13 @@ public final class JsonApiEngine implements Scheduler.Engine {
     private Exchange execute(String text, boolean validateTranslation,
                              boolean logFailureDiagnostics, boolean captureFailureDiagnostics)
             throws Exception {
+        return execute(text, validateTranslation, logFailureDiagnostics,
+                captureFailureDiagnostics, false);
+    }
+
+    private Exchange execute(String text, boolean validateTranslation,
+                             boolean logFailureDiagnostics, boolean captureFailureDiagnostics,
+                             boolean structuredSegments) throws Exception {
         Thread worker = Thread.currentThread();
         Http.Request request = new Http.Request();
         if (active.putIfAbsent(worker, request) != null) {
@@ -289,7 +298,8 @@ public final class JsonApiEngine implements Scheduler.Engine {
             }
             Http.Headers headers = validateConfig(cfg);
             failureStage = "http_response_decode";
-            Http.Response response = requestOnce(text, request, headers);
+            Http.Response response = requestOnce(text, request, headers,
+                    structuredSegments ? STRUCTURED_SEGMENT_INSTRUCTIONS : null);
             failureStage = "translation_validation";
             diagnosticTranslated = response.body;
             String translated = response.body;
@@ -298,10 +308,15 @@ public final class JsonApiEngine implements Scheduler.Engine {
                         "提取到的译文为空", response.status, null);
             }
             translated = translated.trim();
+            if (structuredSegments) {
+                // The wrapper is transport framing. Decode it before parsing the JSON segment
+                // envelope; marker positions are then rebuilt from the source, never the model.
+                translated = Segments.stripOuterResponseWrapper(translated, text);
+                translated = StructuredTranslation.split(text).restore(translated);
+            }
             if (validateTranslation) {
-                // Optional normalization: remove only one exact outer wrapper pair.
-                // Embedded, partial, and nested markers remain available to the checks below.
-                if (cfg.stripOuterWrapper) {
+                // Optional normalization for ordinary text responses.
+                if (!structuredSegments && cfg.stripOuterWrapper) {
                     translated = Segments.stripOuterResponseWrapper(translated, text);
                 }
                 String violation = Segments.plainTextViolation(translated, text,
@@ -395,9 +410,21 @@ public final class JsonApiEngine implements Scheduler.Engine {
     }
 
     /** Sends exactly once and retains the decoded response status for post-request validation. */
+    private static final String STRUCTURED_SEGMENT_INSTRUCTIONS =
+            "Translate each text field in the user's JSON segments array. Return only one JSON object "
+            + "with a segments array. Each item must contain exactly the original id and its translated "
+            + "text. Include every id exactly once; do not add, remove, rename, duplicate, or combine ids. "
+            + "Never output protected marker tokens. Segment order in your response may differ; the "
+            + "application restores source order.";
+
     private Http.Response requestOnce(String text, Http.Request request, Http.Headers headers)
             throws Exception {
-        // 1) 单一输入按协议构造请求体；保留节点统一使用 <keepN/> 标记。
+        return requestOnce(text, request, headers, null);
+    }
+
+    private Http.Response requestOnce(String text, Http.Request request, Http.Headers headers,
+                                      String additionalInstructions) throws Exception {
+        // Each source segment has an immutable ID. Providers never receive the protected marker tokens.
         boolean sse = cfg.streaming;
         String systemPrompt;
         if (cfg.systemPrompt.contains("{{target_language}}")) {
@@ -408,7 +435,7 @@ public final class JsonApiEngine implements Scheduler.Engine {
             systemPrompt = cfg.systemPrompt;
         }
         String body = Protocols.requestBody(cfg.protocol, text, systemPrompt, cfg.model,
-                sse, cfg.protectionPromptEnabled, cfg.targetLang);
+                sse, cfg.protectionPromptEnabled, cfg.targetLang, additionalInstructions);
         buildHeaders(headers);
 
         // Decoder selection is fixed for this request; no reparsing or mode detection.
