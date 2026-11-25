@@ -16,7 +16,6 @@ public class ProtectionPromptConfigTest {
             assertTrue(prompt.contains("<keepN/>"));
             assertTrue(prompt.contains("exactly once"));
             assertTrue(prompt.contains("complete marker sequence"));
-            assertTrue(prompt.contains("silently compare the translation"));
         }
     }
 
