@@ -99,6 +99,15 @@ public final class StructurableTextFactory {
     @Nullable
     static Object forPlannedTranslation(@Nullable Object original, String translated,
                                        @Nullable TextExtractor.Result extracted) {
+        return forPlannedTranslation(original, translated, extracted, null);
+    }
+
+    /** The optional output flag identifies the one explicit formatting-degraded path. */
+    @Nullable
+    static Object forPlannedTranslation(@Nullable Object original, String translated,
+                                       @Nullable TextExtractor.Result extracted,
+                                       @Nullable boolean[] degradedOut) {
+        if (degradedOut != null && degradedOut.length > 0) degradedOut[0] = false;
         if (original == null || translated == null || extracted == null) {
             return rejectFactory("INVALID_INPUT");
         }
@@ -119,16 +128,17 @@ public final class StructurableTextFactory {
             } else {
                 ProjectLog.warn("annotated translation alignment failed; displaying translated text without rich formatting");
             }
-            // Translation visibility takes priority over preserving Markdown when native
-            // node alignment cannot represent the model output.
-            // Structural anchors belong to Discord's native node tree, not visible text.
-            // Remove only the exact internal anchor grammars before using the plain-text
-            // representation; never expose <keepN/> or <xN> tokens to the user.
-            String visibleText = translated
-                    .replaceAll("</?x[0-9]+>", "")
-                    .replaceAll("<keep[0-9]+/>", "");
-            Object plain = primitive(visibleText);
-            return plain == null ? rejectFactory("PRIMITIVE_CONSTRUCTOR") : plain;
+            // Formatting alignment failed, but protected Discord nodes must remain native.
+            // Build a flat Annotated tree from translated text plus the original protected
+            // URL/emoji/mention/code nodes. This removes Markdown formatting only; it does
+            // not discard protected content or expose internal anchors to the user.
+            List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(
+                    extracted.tree, translated);
+            Object plain = flattened == null ? null : annotated(flattened);
+            if (plain == null) return rejectFactory("PLAIN_NODE_RECONSTRUCTION");
+            if (degradedOut != null && degradedOut.length > 0) degradedOut[0] = true;
+            ProjectLog.warn("translation displayed with plain formatting; protected native nodes restored");
+            return plain;
         }
 
         // 2) 原始是 Primitive：直接给纯文本。
