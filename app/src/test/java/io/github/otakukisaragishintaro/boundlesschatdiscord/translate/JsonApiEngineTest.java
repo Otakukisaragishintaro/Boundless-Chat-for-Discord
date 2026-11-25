@@ -307,12 +307,17 @@ public class JsonApiEngineTest {
                     .put(Config.KEY_PROTECT_URLS, option[2]));
             DiscordTokenMarkers.Protection expected = DiscordTokenMarkers.protect(
                     source, option[0], option[1], option[2]);
-            FakeConnection connection = new FakeConnection(chatJson(expected.text));
+            io.github.otakukisaragishintaro.boundlesschatdiscord.core.StructuredTranslation.Source
+                    structured = io.github.otakukisaragishintaro.boundlesschatdiscord.core.StructuredTranslation
+                            .split(expected.text);
+            FakeConnection connection = new FakeConnection(chatJson(
+                    Protocols.WRAPPER_OPEN + structured.requestJson + Protocols.WRAPPER_CLOSE));
             JsonApiEngine engine = new JsonApiEngine(snapshot, http(url -> connection));
             assertEquals(source, engine.translate(source));
             JSONObject request = new JSONObject(connection.output.toString("UTF-8"));
             String user = request.getJSONArray("messages").getJSONObject(1).getString("content");
-            assertEquals(Protocols.WRAPPER_OPEN + expected.text + Protocols.WRAPPER_CLOSE, user);
+            assertEquals(Protocols.WRAPPER_OPEN + structured.requestJson + Protocols.WRAPPER_CLOSE, user);
+            assertFalse(user.contains("<keep"));
         }
     }
 
