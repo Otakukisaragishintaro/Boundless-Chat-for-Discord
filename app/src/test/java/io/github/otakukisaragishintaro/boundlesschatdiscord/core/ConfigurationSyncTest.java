@@ -99,7 +99,7 @@ public class ConfigurationSyncTest {
                 Config.KEY_ENABLED, Config.KEY_LOGGING_ENABLED, Config.KEY_CACHE_ENABLED,
                 Config.KEY_STREAMING, Config.KEY_PROTECTION_PROMPT_ENABLED,
                 Config.KEY_CHECK_WRAPPER, Config.KEY_STRIP_OUTER_WRAPPER,
-                Config.KEY_CHECK_SEGMENT_MARKERS, Config.KEY_CHECK_PLACEHOLDERS,
+                Config.KEY_CHECK_PLACEHOLDERS,
                 Config.KEY_CHECK_RETAINED_MARKERS, Config.KEY_CHECK_LENGTH,
                 Config.KEY_PROTECT_MENTIONS, Config.KEY_PROTECT_CHANNELS_EMOJIS,
                 Config.KEY_PROTECT_URLS, Config.KEY_EXPERIMENTAL_LONG_MESSAGE_CHUNKING
@@ -116,7 +116,6 @@ public class ConfigurationSyncTest {
                 .put(Config.KEY_PROTECTION_PROMPT_ENABLED, false)
                 .put(Config.KEY_CHECK_WRAPPER, false)
                 .put(Config.KEY_STRIP_OUTER_WRAPPER, false)
-                .put(Config.KEY_CHECK_SEGMENT_MARKERS, false)
                 .put(Config.KEY_CHECK_PLACEHOLDERS, false)
                 .put(Config.KEY_CHECK_RETAINED_MARKERS, false)
                 .put(Config.KEY_CHECK_LENGTH, false)
@@ -137,7 +136,6 @@ public class ConfigurationSyncTest {
         assertFalse(restored.protectionPromptEnabled);
         assertFalse(restored.checkWrapper);
         assertFalse(restored.stripOuterWrapper);
-        assertFalse(restored.checkSegmentMarkers);
         assertFalse(restored.checkPlaceholders);
         assertFalse(restored.checkRetainedMarkers);
         assertFalse(restored.checkLength);
