@@ -543,10 +543,12 @@ public final class HookBridge {
             ProjectLog.info("local translation cache write skipped reason=disabled");
             return;
         }
-        StateStore.Entry entry = StateStore.get().claimCacheCommit(messageId);
-        if (entry == null) return;
-        ProjectLog.info("native message render completed; persistent cache write requested");
-        TranslationCache.get().put(entry.contentHash, entry.translatedText);
+        java.util.List<StateStore.Entry> entries =
+                StateStore.get().claimCacheCommitsForRow(messageId);
+        for (StateStore.Entry entry : entries) {
+            ProjectLog.info("native message render completed; persistent cache write requested");
+            TranslationCache.get().put(entry.contentHash, entry.translatedText);
+        }
     }
 
     /** A segment update also refreshes its card's aggregate progress/error icon. */
