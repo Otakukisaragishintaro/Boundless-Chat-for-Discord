@@ -25,9 +25,6 @@ public class StructuredTranslationTest {
     public void restoresSourceOrderWhenProviderReordersSegmentIds() throws Exception {
         StructuredTranslation.Source source =
                 StructuredTranslation.split("A<keep1/>B<keep2/>C");
-        assertEquals("ABC", source.restore(response(
-                "s2", "C2", "s0", "A2", "s1", "B2"))
-                .replace("<keep1/>", "").replace("<keep2/>", ""));
         assertEquals("A2<keep1/>B2<keep2/>C2",
                 source.restore(response("s2", "C2", "s0", "A2", "s1", "B2")));
     }
