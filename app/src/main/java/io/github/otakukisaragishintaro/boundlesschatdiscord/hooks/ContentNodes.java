@@ -9,7 +9,6 @@ import io.github.otakukisaragishintaro.boundlesschatdiscord.core.ContentTree;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.HookConfiguration;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.RetainedNodeMarkers;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Reflect;
-import io.github.otakukisaragishintaro.boundlesschatdiscord.core.Segments;
 import io.github.otakukisaragishintaro.boundlesschatdiscord.core.TextExtractor;
 
 import java.lang.reflect.Method;
@@ -51,9 +50,9 @@ public final class ContentNodes {
 
     /** Fixed classifications only; never carries source text, translation, anchors or identity. */
     enum RejectionReason {
-        INVALID_INPUT, NO_TRANSLATABLE_SEGMENTS, SEGMENT_MARKER, EMPTY_TRANSLATION,
+        INVALID_INPUT, NO_TRANSLATABLE_SEGMENTS, EMPTY_TRANSLATION,
         URL_COUNT, EMOJI_COUNT, RETAINED_MARKER, ANCHOR_ORDER, STYLE_OPEN, STYLE_CLOSE, STYLE_EMPTY,
-        UNASSIGNED_TEXT, PARAGRAPH_MISSING, PARAGRAPH_EXTRA, SOURCE_BOUNDARY_AMBIGUOUS,
+        UNASSIGNED_TEXT, SOURCE_BOUNDARY_AMBIGUOUS,
         LINE_COUNT, LINE_EMPTY, LIST_ITEM_EMPTY, PART_COUNT,
         RETAINED_STRUCTURE_CHANGED, TEXT_CONSTRUCTOR, CONTAINER_CONSTRUCTOR, CONSUMPTION_COUNT
     }
@@ -102,10 +101,8 @@ public final class ContentNodes {
         if (targetCount == 0) {
             throw reject(RejectionReason.NO_TRANSLATABLE_SEGMENTS);
         }
-        // 锚点必须按原数量及顺序出现；各间隔只执行所属结构的唯一切分规则。
-        if (Segments.hasSegmentMarkers(translated)) {
-            throw reject(RejectionReason.SEGMENT_MARKER);
-        }
+        // Registered structural anchors are checked below. Legacy JSON segment tags
+        // are no longer part of the request protocol and remain ordinary text.
         String plain = normalize(translated);
         if (plain.isEmpty()) throw reject(RejectionReason.EMPTY_TRANSLATION);
         AlignmentPlan plan = buildPlan(tree);
@@ -198,15 +195,29 @@ public final class ContentNodes {
             int tail = occurrence.trailingStart;
             StringBuilder rebuilt = new StringBuilder();
             rebuilt.append(original, 0, lead);
+            String previousTranslated = null;
+            boolean previousTranslatable = false;
             for (int i = 0; i < occurrence.chunks.size(); i++) {
-                if (i > 0) rebuilt.append(occurrence.separators.get(i - 1));
                 String chunk = occurrence.chunks.get(i);
-                if (!occurrence.translatable.get(i)) {
+                boolean translatable = occurrence.translatable.get(i);
+                String translatedPart = translatable
+                        ? replacement.parts.get(replacement.next++) : null;
+                if (i > 0) {
+                    // A merged paragraph is represented by an empty source slot.
+                    // Do not reinsert the original blank-line separator around that
+                    // empty slot; retain separators around opaque/non-translatable nodes.
+                    boolean keepSeparator = !previousTranslatable || !translatable
+                            || (!previousTranslated.isEmpty() && !translatedPart.isEmpty());
+                    if (keepSeparator) rebuilt.append(occurrence.separators.get(i - 1));
+                }
+                if (!translatable) {
                     // 空白块或 URL 块不消费片段，原样保留（与计数口径一致）。
                     rebuilt.append(chunk);
-                    continue;
+                } else {
+                    rebuilt.append(translatedPart);
                 }
-                rebuilt.append(replacement.parts.get(replacement.next++));
+                previousTranslatable = translatable;
+                previousTranslated = translatedPart;
             }
             rebuilt.append(original, tail, original.length());
             Object created = createTextNode(node, rebuilt.toString());
@@ -599,9 +610,10 @@ public final class ContentNodes {
         int segment = 0;
         int chunk = 0;
         while (segment < segments) {
-            if (chunk >= chunks.size()) {
-                throw new Rejection(RejectionReason.PARAGRAPH_MISSING, chunk + 1, chunks.size());
-            }
+            // A provider may merge adjacent source paragraphs. Keep the returned
+            // text in the corresponding leading slots and leave the remaining
+            // source slots empty; native reconstruction then omits their separators.
+            if (chunk >= chunks.size()) break;
             int end = segment + 1;
             while (end < segments) {
                 if (isLineBreakBefore(lineBreakBefore, end)) {
@@ -645,8 +657,13 @@ public final class ContentNodes {
             }
             segment = end;
         }
-        if (chunk != chunks.size()) {
-            throw new Rejection(RejectionReason.PARAGRAPH_EXTRA, chunk, chunks.size());
+        if (chunk < chunks.size()) {
+            // A provider may also split one source paragraph into several. Preserve
+            // every returned block by appending the extras to the final native text slot.
+            String extra = String.join("\n\n", chunks.subList(chunk, chunks.size()));
+            int last = segments - 1;
+            String existing = parts.get(last);
+            parts.set(last, existing.isEmpty() ? extra : existing + "\n\n" + extra);
         }
         return parts;
     }
