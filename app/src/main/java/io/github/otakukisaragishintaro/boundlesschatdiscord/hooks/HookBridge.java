@@ -638,6 +638,19 @@ public final class HookBridge {
         }
     }
 
+    /** Retry a successful translation whose rich formatting was degraded. */
+    public void onFormattingWarningClicked(String messageId) {
+        if (messageId == null || isCardKey(messageId)) return;
+        StateStore.Entry entry = StateStore.get().peek(messageId);
+        if (entry == null || entry.status != StateStore.Status.TRANSLATED
+                || !entry.renderDegraded || entry.translatedText == null) return;
+        String previous = entry.translatedText;
+        if (config.cacheEnabled) TranslationCache.get().remove(entry.contentHash);
+        if (!StateStore.get().rejectRender(messageId, previous)) return;
+        ProjectLog.info("formatting warning clicked; retrying translation without cached result");
+        retry(messageId);
+    }
+
     /** 失败后重试：由图标点击触发（需求 §2.6）。 */
     public void retry(String messageId) {
         if (!HookRuntime.isActive() || !translationAllowed(messageId, config)) return;
