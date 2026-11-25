@@ -250,9 +250,10 @@ public final class TextExtractor {
         int textNodes = 0, opaque = 0, styleSeq = 0, segmentIndex = 0;
         java.util.List<String> retainedMarkers = new java.util.ArrayList<>();
         for (ContentTree.Event event : tree.events) {
-            if (event.headingBreakBefore) out.append('\n');
+            if (event.headingBreakBefore) { out.append('\n'); request.append('\n'); }
             if (event.kind == ContentTree.EventKind.ITEM_START) {
                 out.append("\n• ");
+                request.append("\n• ");
                 continue;
             }
             if (event.kind != ContentTree.EventKind.NODE) continue;
@@ -307,7 +308,7 @@ public final class TextExtractor {
                     request.append(event.retainedMarker);
                     break;
                 case BREAK:
-                    out.append('\n'); break;
+                    out.append('\n'); request.append('\n'); break;
                 default: throw new IllegalStateException("Non-leaf content event");
             }
         }
