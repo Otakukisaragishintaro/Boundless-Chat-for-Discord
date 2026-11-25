@@ -124,12 +124,16 @@ public class RetainedNodeMarkersTest {
         assertNull(Segments.plainTextViolation("你好<keep1/>世界", "hello<keep1/>world"));
     }
 
-    @Test public void incompleteAngleTextAndEmoticonsAreNotInternalMarkers() {
-        for (String value : new String[]{"<3", ">.<", "<.<", ">_<", "<keep", "<keep1>", "</keep1",
-                "<x1", "<x1 ", "literal <tag"}) {
+    @Test public void incompleteAngleTextAndEmoticonsDoNotConfuseReservedMarkerGrammar() {
+        for (String value : new String[]{"<3", ">.<", "<.<", ">_<", "<x1", "<x1 ", "literal <tag"}) {
             assertTrue(value, RetainedNodeMarkers.matchesExpected(value, Collections.emptyList()));
         }
-        assertTrue(RetainedNodeMarkers.matchesSource("普通文本", "<x1><ke</x1><x2>ep9/></x2>"));
+        // The reserved <keep namespace is intentionally strict: malformed or partial markers
+        // must fail validation instead of being silently accepted as ordinary text.
+        for (String value : new String[]{"<keep", "<keep1>", "</keep1"}) {
+            assertFalse(value, RetainedNodeMarkers.matchesExpected(value, Collections.emptyList()));
+        }
+        assertFalse(RetainedNodeMarkers.matchesSource("普通文本", "<x1><ke</x1><x2>ep9/></x2>"));
         assertTrue(RetainedNodeMarkers.matchesSource("<x1>正文</x1><keep1/>", "<x1>Body</x1><keep1/>"));
     }
 
