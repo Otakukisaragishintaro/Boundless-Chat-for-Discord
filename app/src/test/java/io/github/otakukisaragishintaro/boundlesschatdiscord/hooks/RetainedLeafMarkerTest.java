@@ -82,7 +82,17 @@ public class RetainedLeafMarkerTest {
         assertSame(timestamp, out.get(3));
         assertSame(block, out.get(5));
         assertEquals("丁", content(out.get(6)));
-        reject(tree, "甲<keep1/>乙<keep3/>丙<keep2/>丁");
+        String reordered = "甲<keep3/>乙<keep1/>丙<keep2/>丁";
+        assertNull(ContentNodes.replacePlanned(tree, reordered));
+        List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(tree, reordered);
+        assertNotNull(flattened);
+        assertSame(block, flattened.get(1));
+        assertSame(inline, flattened.get(3));
+        assertSame(timestamp, flattened.get(5));
+        assertEquals("甲", content(flattened.get(0)));
+        assertEquals("乙", content(flattened.get(2)));
+        assertEquals("丙", content(flattened.get(4)));
+        assertEquals("丁", content(flattened.get(6)));
         reject(tree, "甲<keep1/>乙丙<keep3/>丁");
     }
 
