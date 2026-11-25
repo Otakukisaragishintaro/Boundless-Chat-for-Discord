@@ -65,15 +65,33 @@ public class InlineCodeMarkerTest {
         assertEquals("第三", content(out.get(4)));
     }
 
-    @Test public void missingDuplicateUnknownReorderedAndMalformedMarkersReject() {
+    @Test public void missingDuplicateUnknownAndMalformedMarkersReject() {
         ContentTree tree = tree(text("A"), new InlineCodeContentNode("one"), text("B"),
                 new InlineCodeContentNode("two"), text("C"));
         for (String response : new String[]{"甲乙丙", "甲<keep1/>乙丙", "甲<keep1/>乙<keep1/>丙",
-                "甲<keep2/>乙<keep1/>丙", "甲<keep1/>乙<keep3/>丙", "甲<keep1 />乙<keep2/>丙",
+                "甲<keep1/>乙<keep3/>丙", "甲<keep1 />乙<keep2/>丙",
                 "甲<keep1>乙<keep2/>丙", "甲<KEEP1/>乙<keep2/>丙", "甲<keep01/>乙<keep2/>丙",
                 "甲<keep1/>乙<keep2/>丙<keep", "甲<keep1/>乙<keep2/>丙</keep9>"}) {
             reject(tree, response, ContentNodes.RejectionReason.RETAINED_MARKER);
         }
+    }
+
+    @Test public void reorderedRetainedIdentitiesAreRestoredAtTranslatedPositions() {
+        InlineCodeContentNode firstCode = new InlineCodeContentNode("one");
+        InlineCodeContentNode secondCode = new InlineCodeContentNode("two");
+        ContentTree tree = tree(text("A"), firstCode, text("B"), secondCode, text("C"));
+        String translated = "甲<keep2/>乙<keep1/>丙";
+
+        assertNull("rich source-order alignment must not silently misplace native nodes",
+                ContentNodes.replacePlanned(tree, translated));
+        List<Object> flattened = ContentNodes.flattenPreservingNativeNodes(tree, translated);
+
+        assertNotNull(flattened);
+        assertSame(secondCode, flattened.get(1));
+        assertSame(firstCode, flattened.get(3));
+        assertEquals("甲", content(flattened.get(0)));
+        assertEquals("乙", content(flattened.get(2)));
+        assertEquals("丙", content(flattened.get(4)));
     }
 
     @Test public void noCodeTreeRejectsFabricatedMarkers() {
