@@ -139,7 +139,7 @@ public class JsonApiEngineTest {
         ProjectLog.configure(snapshot);
         try {
             JsonApiEngine engine = new JsonApiEngine(snapshot,
-                    http(url -> new FakeConnection(chatJson("provider returned bad wrapper"))));
+                    http(url -> new FakeConnection(chatJson("<translate>provider returned bad wrapper</translate>"))));
             try {
                 engine.translate("original source text");
                 fail("Invalid provider response must be rejected");
@@ -152,7 +152,7 @@ public class JsonApiEngineTest {
                 sourceLogged |= message.contains("translation.content type=source")
                         && message.contains("original source text");
                 responseLogged |= message.contains("translation.content type=provider_response")
-                        && message.contains("provider returned bad wrapper");
+                        && message.contains("<translate>provider returned bad wrapper</translate>");
             }
             assertTrue("Failed request source must be logged", sourceLogged);
             assertTrue("Received invalid provider response must be logged", responseLogged);
