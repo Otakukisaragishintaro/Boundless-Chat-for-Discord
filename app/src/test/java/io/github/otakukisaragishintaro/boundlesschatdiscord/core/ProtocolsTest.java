@@ -143,6 +143,32 @@ public class ProtocolsTest {
     }
 
     @Test
+    public void structuredSegmentInstructionsAreAddedForEveryProviderProtocol() throws Exception {
+        String input = "{\\"segments\\":[{\\"id\\":\\"s0\\",\\"text\\":\\"hello\\"}]}";
+        String instruction = "Return only the original id and translated text for every segment.";
+        for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
+                Config.PROTOCOL_ANTHROPIC_MESSAGES, Config.PROTOCOL_OPENAI_RESPONSES}) {
+            String body = Protocols.requestBody(protocol, input, "system prompt", "model",
+                    false, true, "Chinese", instruction);
+            JSONObject json = new JSONObject(body);
+            String user;
+            String system;
+            if (Config.PROTOCOL_OPENAI_RESPONSES.equals(protocol)) {
+                user = json.getString("input");
+                system = json.getString("instructions");
+            } else if (Config.PROTOCOL_ANTHROPIC_MESSAGES.equals(protocol)) {
+                user = json.getJSONArray("messages").getJSONObject(0).getString("content");
+                system = json.getString("system");
+            } else {
+                user = json.getJSONArray("messages").getJSONObject(1).getString("content");
+                system = json.getJSONArray("messages").getJSONObject(0).getString("content");
+            }
+            assertTrue(user.contains(input));
+            assertTrue(system.contains(instruction));
+        }
+    }
+
+    @Test
     public void requestPromptUsesCompactImmutableMarkerRule() throws Exception {
         String source = "A <keep13/> B <keep14/> C <keep1/> D";
         for (String protocol : new String[]{Config.PROTOCOL_OPENAI_COMPATIBLE,
