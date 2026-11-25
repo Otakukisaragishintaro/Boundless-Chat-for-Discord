@@ -566,7 +566,9 @@ public final class HookBridge {
                 || !translated.equals(entry.translatedText)) {
             return;
         }
-        if (config.cacheEnabled) TranslationCache.get().remove(entry.contentHash);
+        // A previously cached translation can become invalid after native structure changes
+        // or a renderer update. Invalidate it even if the user disabled cache after the lookup.
+        TranslationCache.get().remove(entry.contentHash);
         if (StateStore.get().rejectRender(id, translated)) {
             ProjectLog.info("translation render rejected: native structure reconstruction failed");
             refreshTranslation(id);
