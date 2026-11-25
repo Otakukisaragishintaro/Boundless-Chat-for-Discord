@@ -120,7 +120,7 @@ public final class ContentNodes {
 
         String plain = translated.replaceAll("</?x[0-9]+>", "");
         java.util.regex.Pattern reserved = java.util.regex.Pattern.compile(
-                "<\\\\s*/?\\\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
+                "<\\s*/?\\s*keep[^>]*>", java.util.regex.Pattern.CASE_INSENSITIVE);
         List<Object> result = new ArrayList<>();
         int cursor = 0;
         for (NativeToken token : tokens) {
